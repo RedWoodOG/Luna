@@ -106,6 +106,7 @@ const AFFECT_WORDS: &[(&str, f32)] = &[
     ("panicked", 0.95),
     ("furious", 0.9),
     ("devastated", 0.9),
+    ("freaking out", 0.95),
     ("burned out", 0.85),
     ("hated", 0.85),
     ("hate", 0.8),
@@ -113,6 +114,7 @@ const AFFECT_WORDS: &[(&str, f32)] = &[
     ("angry", 0.8),
     ("urgent", 0.85),
     ("stressed", 0.8),
+    ("stressful", 0.75),
     ("worried", 0.75),
     ("frustrated", 0.75),
     ("nervous", 0.75),
@@ -172,6 +174,7 @@ pub struct FirstPersonIdentityDetector {
 }
 
 const IDENTITY_PATTERNS: &[(&str, f32)] = &[
+    // Declarative identity (PR 0.4 baseline).
     ("my name is ", 0.95),
     ("i work as ", 0.9),
     ("i am a ", 0.85),
@@ -194,6 +197,37 @@ const IDENTITY_PATTERNS: &[(&str, f32)] = &[
     ("my background ", 0.75),
     ("i'm an only child", 0.95),
     ("i am an only child", 0.95),
+    // Aspirational identity — covers career_goal cases that describe
+    // who the speaker is becoming rather than who they are. Phrase-
+    // shaped, not bare. Bare "i want to be" would fire on "I want to
+    // be heard" / "I want to be done"; the "a/an" gating preserves
+    // the identity-claim intent without those false positives.
+    ("i want to be a ", 0.8),
+    ("i want to be an ", 0.8),
+    ("i want to become ", 0.8),
+    ("i'm trying to become ", 0.8),
+    ("i am trying to become ", 0.8),
+    ("i'm trying to move into ", 0.75),
+    ("i am trying to move into ", 0.75),
+    // Bare "becoming" is too broad ("the leaves are becoming yellow"),
+    // but "about becoming X" requires the verb-noun pair and rarely
+    // fires outside a first-person aspirational claim like "I care
+    // about becoming a better mentor" or "I think about becoming a
+    // teacher." The qualifier-tolerant form catches cases like "I
+    // care a lot about becoming X" where the literal
+    // "care about becoming" substring is broken by an intervening
+    // adverb. Two-source rule means the LLM must agree before this
+    // lifts a contour dimension; third-person prose like "stories
+    // about becoming heroes" never gets identity_relevance from the
+    // LLM and so this detector firing alone has no effect.
+    ("about becoming ", 0.7),
+    ("i'm shifting from ", 0.75),
+    ("i am shifting from ", 0.75),
+    // Paraphrastic identity — covers profession_paraphrase cases that
+    // avoid the canonical "I am a/an X" phrasing on purpose.
+    ("i make a living as ", 0.85),
+    ("professionally, i ", 0.8),
+    ("what i do professionally", 0.85),
 ];
 
 impl FirstPersonIdentityDetector {
@@ -237,6 +271,7 @@ pub struct GoalPhraseLexicon {
 }
 
 const GOAL_PHRASES: &[(&str, f32)] = &[
+    // Explicit deadline / urgency phrasings (PR 0.4 baseline).
     ("by tomorrow", 0.9),
     ("by friday", 0.85),
     ("by monday", 0.85),
@@ -246,6 +281,7 @@ const GOAL_PHRASES: &[(&str, f32)] = &[
     ("immediately", 0.85),
     ("hurry", 0.85),
     ("rush", 0.85),
+    // First-person obligation / intention.
     ("i need to ", 0.85),
     ("i have to ", 0.8),
     ("i must ", 0.85),
@@ -261,6 +297,20 @@ const GOAL_PHRASES: &[(&str, f32)] = &[
     ("pressure ", 0.7),
     ("under pressure", 0.85),
     ("running out of time", 0.9),
+    // Stress-as-pressure (PR 0.7). Cross-listed with the affect
+    // lexicon for phrases that signal both an emotional state and an
+    // active burden / pressure / proving-yourself dynamic. NOT every
+    // negative emotion — only language that implies burden, deadline,
+    // pressure, or proving.
+    ("stressing me", 0.7),
+    ("stressful thing", 0.7),
+    ("wearing me down", 0.7),
+    ("struggling with", 0.7),
+    ("had me tense", 0.7),
+    ("current pressure", 0.85),
+    ("need to prove", 0.9),
+    ("trying to prove", 0.85),
+    ("prove myself", 0.85),
 ];
 
 impl GoalPhraseLexicon {
@@ -408,5 +458,175 @@ mod tests {
     #[test]
     fn default_v1_sources_returns_four_detectors() {
         assert_eq!(default_v1_sources().len(), 4);
+    }
+
+    // PR 0.7 vocabulary expansion — tests for each failing-case phrase
+    // surfaced by the first real Stage 0 formation run. Each
+    // assertion is a regression guard: if a future detector edit
+    // narrows the lexicon, these break.
+
+    #[test]
+    fn identity_fires_on_im_trying_to_move_into() {
+        let signals =
+            FirstPersonIdentityDetector::new().detect(&user("I'm trying to move into management."));
+        assert!(signals.get("identity_relevance").is_some());
+    }
+
+    #[test]
+    fn identity_fires_on_i_want_to_become() {
+        let signals = FirstPersonIdentityDetector::new()
+            .detect(&user("I want to become a team lead this year."));
+        assert!(signals.get("identity_relevance").is_some());
+    }
+
+    #[test]
+    fn identity_fires_on_i_care_about_becoming() {
+        let signals = FirstPersonIdentityDetector::new()
+            .detect(&user("I care a lot about becoming a better mentor."));
+        assert!(signals.get("identity_relevance").is_some());
+    }
+
+    #[test]
+    fn identity_fires_on_im_shifting_from() {
+        let signals = FirstPersonIdentityDetector::new().detect(&user(
+            "I'm shifting from hands-on engineering toward strategy work.",
+        ));
+        assert!(signals.get("identity_relevance").is_some());
+    }
+
+    #[test]
+    fn identity_fires_on_i_make_a_living_as() {
+        let signals = FirstPersonIdentityDetector::new()
+            .detect(&user("I make a living as a mechanical engineer."));
+        assert!(signals.get("identity_relevance").is_some());
+    }
+
+    #[test]
+    fn identity_fires_on_professionally_i() {
+        let signals = FirstPersonIdentityDetector::new()
+            .detect(&user("Professionally, I do mechanical engineering."));
+        assert!(signals.get("identity_relevance").is_some());
+    }
+
+    #[test]
+    fn identity_fires_on_what_i_do_professionally() {
+        let signals = FirstPersonIdentityDetector::new()
+            .detect(&user("Engineering is what I do professionally, specifically mechanical engineering."));
+        assert!(signals.get("identity_relevance").is_some());
+    }
+
+    #[test]
+    fn identity_fires_on_i_want_to_be_a_or_an_role() {
+        let detector = FirstPersonIdentityDetector::new();
+        assert!(detector
+            .detect(&user("I want to be a doctor someday."))
+            .get("identity_relevance")
+            .is_some());
+        assert!(detector
+            .detect(&user("I want to be an architect eventually."))
+            .get("identity_relevance")
+            .is_some());
+    }
+
+    #[test]
+    fn identity_silent_on_bare_i_want_to_be() {
+        // Locks the tightening: bare "i want to be" is too broad; we
+        // only fire when followed by "a/an + role". Otherwise "I want
+        // to be heard" / "I want to be done" would falsely fire
+        // identity_relevance.
+        let detector = FirstPersonIdentityDetector::new();
+        assert!(detector
+            .detect(&user("I want to be heard at the meeting."))
+            .get("identity_relevance")
+            .is_none());
+        assert!(detector
+            .detect(&user("I want to be done with this project."))
+            .get("identity_relevance")
+            .is_none());
+    }
+
+    #[test]
+    fn goal_fires_on_struggling_with() {
+        let signals = GoalPhraseLexicon::new()
+            .detect(&user("Last week I was struggling with my job."));
+        assert!(signals.get("goal_pressure").is_some());
+    }
+
+    #[test]
+    fn goal_fires_on_wearing_me_down() {
+        let signals = GoalPhraseLexicon::new()
+            .detect(&user("Today the budget review is what's wearing me down."));
+        assert!(signals.get("goal_pressure").is_some());
+    }
+
+    #[test]
+    fn goal_fires_on_stressful_thing() {
+        let signals = GoalPhraseLexicon::new()
+            .detect(&user("This week the product launch is the stressful thing."));
+        assert!(signals.get("goal_pressure").is_some());
+    }
+
+    #[test]
+    fn goal_fires_on_stressing_me() {
+        let signals = GoalPhraseLexicon::new()
+            .detect(&user("Recently, what was stressing me?"));
+        assert!(signals.get("goal_pressure").is_some());
+    }
+
+    #[test]
+    fn goal_fires_on_had_me_tense() {
+        let signals = GoalPhraseLexicon::new()
+            .detect(&user("This morning the client deadline had me tense."));
+        assert!(signals.get("goal_pressure").is_some());
+    }
+
+    #[test]
+    fn goal_fires_on_prove_myself() {
+        let signals = GoalPhraseLexicon::new().detect(&user("I need to prove myself this quarter."));
+        assert!(signals.get("goal_pressure").is_some());
+    }
+
+    #[test]
+    fn goal_fires_on_need_to_prove_and_trying_to_prove() {
+        let detector = GoalPhraseLexicon::new();
+        assert!(detector
+            .detect(&user("I need to prove that the architecture works."))
+            .get("goal_pressure")
+            .is_some());
+        assert!(detector
+            .detect(&user("I'm trying to prove the hypothesis."))
+            .get("goal_pressure")
+            .is_some());
+    }
+
+    #[test]
+    fn affect_fires_on_stressful() {
+        let signals = AffectLexicon::new()
+            .detect(&user("This week the product launch is the stressful thing."));
+        assert!(signals.get("emotional_arousal").is_some());
+    }
+
+    #[test]
+    fn affect_fires_on_freaking_out() {
+        let signals = AffectLexicon::new().detect(&user("I was freaking out before the demo."));
+        assert!(signals.get("emotional_arousal").is_some());
+    }
+
+    #[test]
+    fn affect_and_goal_both_fire_on_wearing_me_down_when_cross_listed() {
+        // Documents the deliberate cross-listing of "wearing me down"
+        // in PR 0.7. Both detectors fire because the phrase carries
+        // both affect (emotional state) and burden (pressure).
+        // Downstream fusion gates each dimension on its own
+        // two-source rule, so this doesn't bypass anything.
+        let turn = user("The budget review is wearing me down today.");
+        assert!(AffectLexicon::new()
+            .detect(&turn)
+            .get("emotional_arousal")
+            .is_some());
+        assert!(GoalPhraseLexicon::new()
+            .detect(&turn)
+            .get("goal_pressure")
+            .is_some());
     }
 }
