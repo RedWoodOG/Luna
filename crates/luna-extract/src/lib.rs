@@ -1,17 +1,26 @@
 pub mod backend;
 pub mod cache;
 pub mod extractor;
+pub mod fusion;
 pub mod llm_observation;
+pub mod luna_extractor;
 pub mod prompt;
+pub mod second_source;
 
 pub use backend::{LlmBackend, LlmRequest, RecordingFakeBackend};
 pub use cache::{CacheKey, ExtractionCache, FileExtractionCache};
 pub use extractor::LlmExtractor;
+pub use fusion::fuse_observation;
 pub use llm_observation::{
     validate_against_prompt_v1, validate_observation, LlmAssertion, LlmObservation, LlmSignal,
     ALLOWED_DIMENSIONS, ALLOWED_RELIABILITIES, EXTRACTION_SCHEMA_VERSION, PROMPT_V1_DOMAIN_KINDS,
 };
+pub use luna_extractor::LunaExtractor;
 pub use prompt::{build_prompt_v1, prompt_v1_hash};
+pub use second_source::{
+    default_v1_sources, AffectLexicon, FirstPersonIdentityDetector, GoalPhraseLexicon,
+    SecondSource, TemporalDetector,
+};
 
 use luna_core::{
     CognitiveObservation, ConversationTurn, Result, Role, Signal, SignalReliability,
@@ -215,7 +224,7 @@ fn extract_assertions(normalized: &str) -> Vec<StructuredAssertion> {
     assertions
 }
 
-fn query_intents(normalized: &str) -> Vec<String> {
+pub(crate) fn query_intents(normalized: &str) -> Vec<String> {
     let mut intents = Vec::new();
     if has_any(
         normalized,
@@ -242,7 +251,7 @@ fn query_intents(normalized: &str) -> Vec<String> {
     intents
 }
 
-fn cue_terms(normalized: &str) -> Vec<String> {
+pub(crate) fn cue_terms(normalized: &str) -> Vec<String> {
     normalized
         .split_whitespace()
         .map(|word| word.trim_matches(|c: char| !c.is_ascii_alphanumeric()))
@@ -292,7 +301,7 @@ fn arousal(normalized: &str) -> f32 {
     }
 }
 
-fn hashed_vector(terms: &[String], dims: usize) -> Vec<f32> {
+pub(crate) fn hashed_vector(terms: &[String], dims: usize) -> Vec<f32> {
     let mut vector = vec![0.0; dims];
     for term in terms {
         let index = stable_hash(term) as usize % dims;
@@ -313,7 +322,7 @@ fn stable_hash(value: &str) -> u64 {
         })
 }
 
-fn normalize(text: &str) -> String {
+pub(crate) fn normalize(text: &str) -> String {
     text.to_ascii_lowercase().replace("i'm", "i am")
 }
 
