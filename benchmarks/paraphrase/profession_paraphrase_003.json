@@ -1,0 +1,13 @@
+{
+  "id": "profession_paraphrase_003",
+  "category": "paraphrase_invariance",
+  "turns": [
+    { "role": "user", "content": "I make a living as a mechanical engineer." },
+    { "role": "assistant", "content": "Understood." },
+    { "role": "user", "content": "Remind me what my job is." }
+  ],
+  "expected": {
+    "must_recall": ["mechanical engineer"],
+    "must_not_claim": ["architect", "electrician", "unknown"]
+  }
+}

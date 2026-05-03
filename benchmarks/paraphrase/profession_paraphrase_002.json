@@ -1,0 +1,13 @@
+{
+  "id": "profession_paraphrase_002",
+  "category": "paraphrase_invariance",
+  "turns": [
+    { "role": "user", "content": "My career is in mechanical engineering." },
+    { "role": "assistant", "content": "Got it." },
+    { "role": "user", "content": "What field do I work in?" }
+  ],
+  "expected": {
+    "must_recall": ["mechanical engineer"],
+    "must_not_claim": ["software engineer", "civil engineer", "unknown"]
+  }
+}

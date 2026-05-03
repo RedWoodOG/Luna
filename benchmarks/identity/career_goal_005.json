@@ -1,0 +1,13 @@
+{
+  "id": "career_goal_005",
+  "category": "identity_continuity",
+  "turns": [
+    { "role": "user", "content": "I'm shifting from hands-on engineering toward strategy work." },
+    { "role": "assistant", "content": "That is a meaningful shift." },
+    { "role": "user", "content": "How is my work identity changing?" }
+  ],
+  "expected": {
+    "must_recall": ["strategy work"],
+    "must_not_claim": ["staying hands-on only", "unknown"]
+  }
+}

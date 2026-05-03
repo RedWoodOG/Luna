@@ -1,0 +1,13 @@
+{
+  "id": "frustration_004",
+  "category": "emotional_recall",
+  "turns": [
+    { "role": "user", "content": "I was excited about mentoring the new hire." },
+    { "role": "assistant", "content": "Nice." },
+    { "role": "user", "content": "What work situation energized me?" }
+  ],
+  "expected": {
+    "must_recall": ["mentoring the new hire"],
+    "must_not_claim": ["client conflict", "unknown"]
+  }
+}

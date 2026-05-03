@@ -1,0 +1,13 @@
+{
+  "id": "frustration_002",
+  "category": "emotional_recall",
+  "turns": [
+    { "role": "user", "content": "I felt burned out after the release planning meeting." },
+    { "role": "assistant", "content": "That sounds draining." },
+    { "role": "user", "content": "What's been draining me?" }
+  ],
+  "expected": {
+    "must_recall": ["release planning meeting"],
+    "must_not_claim": ["exercise", "vacation", "unknown"]
+  }
+}

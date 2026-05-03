@@ -1,0 +1,12 @@
+[package]
+name = "luna-metrics"
+version.workspace = true
+edition.workspace = true
+description = "Metrics and reports for Luna benchmarks."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+serde.workspace = true

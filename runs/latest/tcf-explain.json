@@ -1,0 +1,1710 @@
+{
+  "engine": "tcf",
+  "cases": [
+    {
+      "id": "frustration_001",
+      "category": "emotional_recall",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What situations frustrate me?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "client"
+        ],
+        "must_not_claim": [
+          "commute",
+          "family",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "client",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "commute",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "family",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "frustration_002",
+      "category": "emotional_recall",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What's been draining me?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "release planning meeting"
+        ],
+        "must_not_claim": [
+          "exercise",
+          "vacation",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "release planning meeting",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "exercise",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "vacation",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "frustration_003",
+      "category": "emotional_recall",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What kind of thing upset me?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "vendor call"
+        ],
+        "must_not_claim": [
+          "budget review",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "vendor call",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "budget review",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "frustration_004",
+      "category": "emotional_recall",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What work situation energized me?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "mentoring the new hire"
+        ],
+        "must_not_claim": [
+          "client conflict",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "mentoring the new hire",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "client conflict",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "frustration_005",
+      "category": "emotional_recall",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What had me worried?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "audit prep"
+        ],
+        "must_not_claim": [
+          "travel",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "audit prep",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "travel",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "career_goal_001",
+      "category": "identity_continuity",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What are my career goals?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "management"
+        ],
+        "must_not_claim": [
+          "mechanical engineer",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "management",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "mechanical engineer",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "career_goal_002",
+      "category": "identity_continuity",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What professional direction am I aiming for?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "team lead"
+        ],
+        "must_not_claim": [
+          "individual contributor",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "team lead",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "individual contributor",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "career_goal_003",
+      "category": "identity_continuity",
+      "passed": true,
+      "failure_type": "passed",
+      "verdict": "passed",
+      "probe": "What are my siblings' names?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "only child"
+        ],
+        "must_not_claim": [
+          "brother",
+          "sister",
+          "siblings' names are"
+        ]
+      },
+      "claims": [
+        "only child"
+      ],
+      "stored_episodes": [
+        {
+          "episode_id": "d6de96ca-ad4f-486b-aed5-e04305b0eadb",
+          "assertions": [
+            "identity:family_structure=only child"
+          ],
+          "contour": [
+            {
+              "name": "attention",
+              "value": 0.55636364,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "goal",
+              "value": 0.35,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_valence",
+              "value": 0.52000004,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_arousal",
+              "value": 0.38,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "identity",
+              "value": 0.8600001,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "trust",
+              "value": 0.44000003,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "social",
+              "value": 0.62,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "temporal",
+              "value": 1.0,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "candidates": [
+        {
+          "episode_id": "d6de96ca-ad4f-486b-aed5-e04305b0eadb",
+          "selected": true,
+          "expected_match": true,
+          "score": 0.6736186,
+          "breakdown": {
+            "semantic_similarity": 0.0,
+            "intent_similarity": 0.0,
+            "assertion_fit": 1.0,
+            "contradiction_gate": 1.0,
+            "forgotten_risk_gate": 1.0,
+            "pre_gate_score": 0.6736186,
+            "total": 0.6736186,
+            "contributions": [
+              {
+                "name": "assertion_fit",
+                "raw_similarity": 1.0,
+                "weight": 0.22,
+                "contribution": 0.22,
+                "enabled": true
+              },
+              {
+                "name": "attention",
+                "raw_similarity": 0.71838635,
+                "weight": 0.1,
+                "contribution": 0.07183864,
+                "enabled": true
+              },
+              {
+                "name": "coherence",
+                "raw_similarity": 0.53279996,
+                "weight": 0.1,
+                "contribution": 0.053279996,
+                "enabled": true
+              },
+              {
+                "name": "emotional_arousal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.05,
+                "contribution": 0.0365,
+                "enabled": true
+              },
+              {
+                "name": "goal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.12,
+                "contribution": 0.08759999,
+                "enabled": true
+              },
+              {
+                "name": "identity",
+                "raw_similarity": 0.72999996,
+                "weight": 0.14,
+                "contribution": 0.102199994,
+                "enabled": true
+              },
+              {
+                "name": "intent",
+                "raw_similarity": 0.0,
+                "weight": 0.13,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "semantic",
+                "raw_similarity": 0.0,
+                "weight": 0.1,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "social",
+                "raw_similarity": 0.72999996,
+                "weight": 0.06,
+                "contribution": 0.043799996,
+                "enabled": true
+              },
+              {
+                "name": "trust",
+                "raw_similarity": 0.72999996,
+                "weight": 0.08,
+                "contribution": 0.058399994,
+                "enabled": true
+              }
+            ]
+          }
+        }
+      ],
+      "top_candidate": "d6de96ca-ad4f-486b-aed5-e04305b0eadb",
+      "expected_episode": "d6de96ca-ad4f-486b-aed5-e04305b0eadb",
+      "must_recall_matches": [
+        {
+          "needle": "only child",
+          "matched": true,
+          "matched_claim": "only child"
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "brother",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "sister",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "siblings' names are",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "career_goal_004",
+      "category": "identity_continuity",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What kind of professional identity am I building?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "mentor"
+        ],
+        "must_not_claim": [
+          "manager",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "mentor",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "manager",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "career_goal_005",
+      "category": "identity_continuity",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "How is my work identity changing?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "strategy work"
+        ],
+        "must_not_claim": [
+          "staying hands-on only",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "strategy work",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "staying hands-on only",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "profession_paraphrase_001",
+      "category": "paraphrase_invariance",
+      "passed": true,
+      "failure_type": "passed",
+      "verdict": "passed",
+      "probe": "What do I do for a living?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "mechanical engineer"
+        ],
+        "must_not_claim": [
+          "software engineer",
+          "architect",
+          "unknown"
+        ]
+      },
+      "claims": [
+        "mechanical engineer"
+      ],
+      "stored_episodes": [
+        {
+          "episode_id": "a2961001-0d55-42dd-82fa-e95708dd1202",
+          "assertions": [
+            "identity:profession=mechanical engineer"
+          ],
+          "contour": [
+            {
+              "name": "attention",
+              "value": 0.61545455,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "goal",
+              "value": 0.35,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_valence",
+              "value": 0.52000004,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_arousal",
+              "value": 0.38,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "identity",
+              "value": 0.8600001,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "trust",
+              "value": 0.44000003,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "social",
+              "value": 0.62,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "temporal",
+              "value": 1.0,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "candidates": [
+        {
+          "episode_id": "a2961001-0d55-42dd-82fa-e95708dd1202",
+          "selected": true,
+          "expected_match": true,
+          "score": 0.63672704,
+          "breakdown": {
+            "semantic_similarity": 0.0,
+            "intent_similarity": 0.0,
+            "assertion_fit": 1.0,
+            "contradiction_gate": 1.0,
+            "forgotten_risk_gate": 1.0,
+            "pre_gate_score": 0.63672704,
+            "total": 0.63672704,
+            "contributions": [
+              {
+                "name": "assertion_fit",
+                "raw_similarity": 1.0,
+                "weight": 0.22,
+                "contribution": 0.22,
+                "enabled": true
+              },
+              {
+                "name": "attention",
+                "raw_similarity": 0.6735909,
+                "weight": 0.1,
+                "contribution": 0.06735909,
+                "enabled": true
+              },
+              {
+                "name": "coherence",
+                "raw_similarity": 0.53279996,
+                "weight": 0.1,
+                "contribution": 0.053279996,
+                "enabled": true
+              },
+              {
+                "name": "emotional_arousal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.05,
+                "contribution": 0.0365,
+                "enabled": true
+              },
+              {
+                "name": "goal",
+                "raw_similarity": 0.45989987,
+                "weight": 0.12,
+                "contribution": 0.055187985,
+                "enabled": true
+              },
+              {
+                "name": "identity",
+                "raw_similarity": 0.72999996,
+                "weight": 0.14,
+                "contribution": 0.102199994,
+                "enabled": true
+              },
+              {
+                "name": "intent",
+                "raw_similarity": 0.0,
+                "weight": 0.13,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "semantic",
+                "raw_similarity": 0.0,
+                "weight": 0.1,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "social",
+                "raw_similarity": 0.72999996,
+                "weight": 0.06,
+                "contribution": 0.043799996,
+                "enabled": true
+              },
+              {
+                "name": "trust",
+                "raw_similarity": 0.72999996,
+                "weight": 0.08,
+                "contribution": 0.058399994,
+                "enabled": true
+              }
+            ]
+          }
+        }
+      ],
+      "top_candidate": "a2961001-0d55-42dd-82fa-e95708dd1202",
+      "expected_episode": "a2961001-0d55-42dd-82fa-e95708dd1202",
+      "must_recall_matches": [
+        {
+          "needle": "mechanical engineer",
+          "matched": true,
+          "matched_claim": "mechanical engineer"
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "software engineer",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "architect",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "profession_paraphrase_002",
+      "category": "paraphrase_invariance",
+      "passed": false,
+      "failure_type": "no_candidate_selected",
+      "verdict": "expected episode exists, but recall selected no candidate",
+      "probe": "What field do I work in?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "mechanical engineer"
+        ],
+        "must_not_claim": [
+          "software engineer",
+          "civil engineer",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [
+        {
+          "episode_id": "55c58683-3373-4dad-b967-fe0cd923b89d",
+          "assertions": [
+            "identity:profession=mechanical engineer"
+          ],
+          "contour": [
+            {
+              "name": "attention",
+              "value": 0.6472727,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "goal",
+              "value": 0.35,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_valence",
+              "value": 0.52000004,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_arousal",
+              "value": 0.38,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "identity",
+              "value": 0.8600001,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "trust",
+              "value": 0.44000003,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "social",
+              "value": 0.62,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "temporal",
+              "value": 1.0,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "candidates": [
+        {
+          "episode_id": "55c58683-3373-4dad-b967-fe0cd923b89d",
+          "selected": false,
+          "expected_match": true,
+          "score": 0.3887017,
+          "breakdown": {
+            "semantic_similarity": 0.0,
+            "intent_similarity": 0.0,
+            "assertion_fit": 0.0,
+            "contradiction_gate": 1.0,
+            "forgotten_risk_gate": 1.0,
+            "pre_gate_score": 0.3887017,
+            "total": 0.3887017,
+            "contributions": [
+              {
+                "name": "assertion_fit",
+                "raw_similarity": 0.0,
+                "weight": 0.22,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "attention",
+                "raw_similarity": 0.66197723,
+                "weight": 0.1,
+                "contribution": 0.06619772,
+                "enabled": true
+              },
+              {
+                "name": "coherence",
+                "raw_similarity": 0.53279996,
+                "weight": 0.1,
+                "contribution": 0.053279996,
+                "enabled": true
+              },
+              {
+                "name": "emotional_arousal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.05,
+                "contribution": 0.0365,
+                "enabled": true
+              },
+              {
+                "name": "goal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.12,
+                "contribution": 0.08759999,
+                "enabled": true
+              },
+              {
+                "name": "identity",
+                "raw_similarity": 0.30659994,
+                "weight": 0.14,
+                "contribution": 0.04292399,
+                "enabled": true
+              },
+              {
+                "name": "intent",
+                "raw_similarity": 0.0,
+                "weight": 0.13,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "semantic",
+                "raw_similarity": 0.0,
+                "weight": 0.1,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "social",
+                "raw_similarity": 0.72999996,
+                "weight": 0.06,
+                "contribution": 0.043799996,
+                "enabled": true
+              },
+              {
+                "name": "trust",
+                "raw_similarity": 0.72999996,
+                "weight": 0.08,
+                "contribution": 0.058399994,
+                "enabled": true
+              }
+            ]
+          }
+        }
+      ],
+      "top_candidate": null,
+      "expected_episode": "55c58683-3373-4dad-b967-fe0cd923b89d",
+      "must_recall_matches": [
+        {
+          "needle": "mechanical engineer",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "software engineer",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "civil engineer",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "profession_paraphrase_003",
+      "category": "paraphrase_invariance",
+      "passed": false,
+      "failure_type": "no_probe_observed",
+      "verdict": "no user probe turn was observed",
+      "probe": null,
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "mechanical engineer"
+        ],
+        "must_not_claim": [
+          "architect",
+          "electrician",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "mechanical engineer",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "architect",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "electrician",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "profession_paraphrase_004",
+      "category": "paraphrase_invariance",
+      "passed": true,
+      "failure_type": "passed",
+      "verdict": "passed",
+      "probe": "What do I do professionally?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "mechanical engineer"
+        ],
+        "must_not_claim": [
+          "software engineer",
+          "consultant",
+          "unknown"
+        ]
+      },
+      "claims": [
+        "mechanical engineer"
+      ],
+      "stored_episodes": [
+        {
+          "episode_id": "770bee25-cd01-4372-a4fd-f29fd5fe4c3a",
+          "assertions": [
+            "identity:profession=mechanical engineer"
+          ],
+          "contour": [
+            {
+              "name": "attention",
+              "value": 0.6700001,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "goal",
+              "value": 0.35,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_valence",
+              "value": 0.52000004,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_arousal",
+              "value": 0.38,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "identity",
+              "value": 0.8600001,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "trust",
+              "value": 0.44000003,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "social",
+              "value": 0.62,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "temporal",
+              "value": 1.0,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "candidates": [
+        {
+          "episode_id": "770bee25-cd01-4372-a4fd-f29fd5fe4c3a",
+          "selected": true,
+          "expected_match": true,
+          "score": 0.63340884,
+          "breakdown": {
+            "semantic_similarity": 0.0,
+            "intent_similarity": 0.0,
+            "assertion_fit": 1.0,
+            "contradiction_gate": 1.0,
+            "forgotten_risk_gate": 1.0,
+            "pre_gate_score": 0.63340884,
+            "total": 0.63340884,
+            "contributions": [
+              {
+                "name": "assertion_fit",
+                "raw_similarity": 1.0,
+                "weight": 0.22,
+                "contribution": 0.22,
+                "enabled": true
+              },
+              {
+                "name": "attention",
+                "raw_similarity": 0.640409,
+                "weight": 0.1,
+                "contribution": 0.0640409,
+                "enabled": true
+              },
+              {
+                "name": "coherence",
+                "raw_similarity": 0.53279996,
+                "weight": 0.1,
+                "contribution": 0.053279996,
+                "enabled": true
+              },
+              {
+                "name": "emotional_arousal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.05,
+                "contribution": 0.0365,
+                "enabled": true
+              },
+              {
+                "name": "goal",
+                "raw_similarity": 0.45989987,
+                "weight": 0.12,
+                "contribution": 0.055187985,
+                "enabled": true
+              },
+              {
+                "name": "identity",
+                "raw_similarity": 0.72999996,
+                "weight": 0.14,
+                "contribution": 0.102199994,
+                "enabled": true
+              },
+              {
+                "name": "intent",
+                "raw_similarity": 0.0,
+                "weight": 0.13,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "semantic",
+                "raw_similarity": 0.0,
+                "weight": 0.1,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "social",
+                "raw_similarity": 0.72999996,
+                "weight": 0.06,
+                "contribution": 0.043799996,
+                "enabled": true
+              },
+              {
+                "name": "trust",
+                "raw_similarity": 0.72999996,
+                "weight": 0.08,
+                "contribution": 0.058399994,
+                "enabled": true
+              }
+            ]
+          }
+        }
+      ],
+      "top_candidate": "770bee25-cd01-4372-a4fd-f29fd5fe4c3a",
+      "expected_episode": "770bee25-cd01-4372-a4fd-f29fd5fe4c3a",
+      "must_recall_matches": [
+        {
+          "needle": "mechanical engineer",
+          "matched": true,
+          "matched_claim": "mechanical engineer"
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "software engineer",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "consultant",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "profession_paraphrase_005",
+      "category": "paraphrase_invariance",
+      "passed": false,
+      "failure_type": "no_candidate_selected",
+      "verdict": "expected episode exists, but recall selected no candidate",
+      "probe": "What's my line of work?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "mechanical engineer"
+        ],
+        "must_not_claim": [
+          "mechanic",
+          "architect",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [
+        {
+          "episode_id": "6cd47d98-3e76-481b-b5b1-8f3d47df433b",
+          "assertions": [
+            "identity:profession=mechanical engineer"
+          ],
+          "contour": [
+            {
+              "name": "attention",
+              "value": 0.775,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "goal",
+              "value": 0.35,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_valence",
+              "value": 0.52000004,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "emotional_arousal",
+              "value": 0.38,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "identity",
+              "value": 0.8600001,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "trust",
+              "value": 0.44000003,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "social",
+              "value": 0.62,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            },
+            {
+              "name": "temporal",
+              "value": 1.0,
+              "confidence": 0.72999996,
+              "reliability": "Statistical",
+              "sources": 2,
+              "enabled": true
+            }
+          ]
+        }
+      ],
+      "candidates": [
+        {
+          "episode_id": "6cd47d98-3e76-481b-b5b1-8f3d47df433b",
+          "selected": false,
+          "expected_match": true,
+          "score": 0.3808708,
+          "breakdown": {
+            "semantic_similarity": 0.0,
+            "intent_similarity": 0.0,
+            "assertion_fit": 0.0,
+            "contradiction_gate": 1.0,
+            "forgotten_risk_gate": 1.0,
+            "pre_gate_score": 0.3808708,
+            "total": 0.3808708,
+            "contributions": [
+              {
+                "name": "assertion_fit",
+                "raw_similarity": 0.0,
+                "weight": 0.22,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "attention",
+                "raw_similarity": 0.5836682,
+                "weight": 0.1,
+                "contribution": 0.058366816,
+                "enabled": true
+              },
+              {
+                "name": "coherence",
+                "raw_similarity": 0.53279996,
+                "weight": 0.1,
+                "contribution": 0.053279996,
+                "enabled": true
+              },
+              {
+                "name": "emotional_arousal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.05,
+                "contribution": 0.0365,
+                "enabled": true
+              },
+              {
+                "name": "goal",
+                "raw_similarity": 0.72999996,
+                "weight": 0.12,
+                "contribution": 0.08759999,
+                "enabled": true
+              },
+              {
+                "name": "identity",
+                "raw_similarity": 0.30659994,
+                "weight": 0.14,
+                "contribution": 0.04292399,
+                "enabled": true
+              },
+              {
+                "name": "intent",
+                "raw_similarity": 0.0,
+                "weight": 0.13,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "semantic",
+                "raw_similarity": 0.0,
+                "weight": 0.1,
+                "contribution": 0.0,
+                "enabled": false
+              },
+              {
+                "name": "social",
+                "raw_similarity": 0.72999996,
+                "weight": 0.06,
+                "contribution": 0.043799996,
+                "enabled": true
+              },
+              {
+                "name": "trust",
+                "raw_similarity": 0.72999996,
+                "weight": 0.08,
+                "contribution": 0.058399994,
+                "enabled": true
+              }
+            ]
+          }
+        }
+      ],
+      "top_candidate": null,
+      "expected_episode": "6cd47d98-3e76-481b-b5b1-8f3d47df433b",
+      "must_recall_matches": [
+        {
+          "needle": "mechanical engineer",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "mechanic",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "architect",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "recent_stress_001",
+      "category": "temporal_disambiguation",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "Recently, what was stressing me?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "job"
+        ],
+        "must_not_claim": [
+          "family",
+          "health",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "job",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "family",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "health",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "recent_stress_002",
+      "category": "temporal_disambiguation",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What was the recent pressure?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "client deadline"
+        ],
+        "must_not_claim": [
+          "moving apartments",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "client deadline",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "moving apartments",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "recent_stress_003",
+      "category": "temporal_disambiguation",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What bothered me lately?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "manager's feedback"
+        ],
+        "must_not_claim": [
+          "tuition",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "manager's feedback",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "tuition",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "recent_stress_004",
+      "category": "temporal_disambiguation",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What is wearing me down now?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "budget review"
+        ],
+        "must_not_claim": [
+          "commute",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "budget review",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "commute",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    },
+    {
+      "id": "recent_stress_005",
+      "category": "temporal_disambiguation",
+      "passed": false,
+      "failure_type": "no_expected_episode_stored",
+      "verdict": "expected content never became a stored episode; extractor/store layer failed before recall",
+      "probe": "What's the current stressful thing?",
+      "recall_mode": "factual",
+      "expected": {
+        "must_recall": [
+          "product launch"
+        ],
+        "must_not_claim": [
+          "travel",
+          "unknown"
+        ]
+      },
+      "claims": [],
+      "stored_episodes": [],
+      "candidates": [],
+      "top_candidate": null,
+      "expected_episode": null,
+      "must_recall_matches": [
+        {
+          "needle": "product launch",
+          "matched": false,
+          "matched_claim": null
+        }
+      ],
+      "must_not_claim_matches": [
+        {
+          "needle": "travel",
+          "matched": false,
+          "matched_claim": null
+        },
+        {
+          "needle": "unknown",
+          "matched": false,
+          "matched_claim": null
+        }
+      ]
+    }
+  ]
+}

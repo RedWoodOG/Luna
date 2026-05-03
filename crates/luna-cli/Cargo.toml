@@ -1,0 +1,17 @@
+[package]
+name = "luna-cli"
+version.workspace = true
+edition.workspace = true
+description = "Command-line interface for Luna."
+
+[[bin]]
+name = "luna"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+luna-bench = { path = "../luna-bench" }
+luna-core = { path = "../luna-core" }
+luna-metrics = { path = "../luna-metrics" }
+serde_json.workspace = true

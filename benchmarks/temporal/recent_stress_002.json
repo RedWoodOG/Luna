@@ -1,0 +1,15 @@
+{
+  "id": "recent_stress_002",
+  "category": "temporal_disambiguation",
+  "turns": [
+    { "role": "user", "content": "Months ago I was anxious about moving apartments." },
+    { "role": "assistant", "content": "Okay." },
+    { "role": "user", "content": "This morning the client deadline had me tense." },
+    { "role": "assistant", "content": "Noted." },
+    { "role": "user", "content": "What was the recent pressure?" }
+  ],
+  "expected": {
+    "must_recall": ["client deadline"],
+    "must_not_claim": ["moving apartments", "unknown"]
+  }
+}

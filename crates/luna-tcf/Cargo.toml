@@ -1,0 +1,12 @@
+[package]
+name = "luna-tcf"
+version.workspace = true
+edition.workspace = true
+description = "Temporal coherence field math for Luna."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+serde.workspace = true

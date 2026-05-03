@@ -1,0 +1,13 @@
+{
+  "id": "recent_stress_001",
+  "category": "temporal_disambiguation",
+  "turns": [
+    { "role": "user", "content": "Last week I was struggling with my job." },
+    { "role": "assistant", "content": "That sounds heavy." },
+    { "role": "user", "content": "Recently, what was stressing me?" }
+  ],
+  "expected": {
+    "must_recall": ["job"],
+    "must_not_claim": ["family", "health", "unknown"]
+  }
+}

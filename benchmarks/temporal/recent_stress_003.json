@@ -1,0 +1,15 @@
+{
+  "id": "recent_stress_003",
+  "category": "temporal_disambiguation",
+  "turns": [
+    { "role": "user", "content": "Earlier this year I worried about tuition." },
+    { "role": "assistant", "content": "I hear you." },
+    { "role": "user", "content": "Yesterday my manager's feedback was what bothered me." },
+    { "role": "assistant", "content": "That is more recent." },
+    { "role": "user", "content": "What bothered me lately?" }
+  ],
+  "expected": {
+    "must_recall": ["manager's feedback"],
+    "must_not_claim": ["tuition", "unknown"]
+  }
+}

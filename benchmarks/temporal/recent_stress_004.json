@@ -1,0 +1,15 @@
+{
+  "id": "recent_stress_004",
+  "category": "temporal_disambiguation",
+  "turns": [
+    { "role": "user", "content": "A while back the commute was draining." },
+    { "role": "assistant", "content": "Noted." },
+    { "role": "user", "content": "Today the budget review is what's wearing me down." },
+    { "role": "assistant", "content": "Got it." },
+    { "role": "user", "content": "What is wearing me down now?" }
+  ],
+  "expected": {
+    "must_recall": ["budget review"],
+    "must_not_claim": ["commute", "unknown"]
+  }
+}

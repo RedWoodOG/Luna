@@ -1,0 +1,13 @@
+{
+  "id": "profession_paraphrase_004",
+  "category": "paraphrase_invariance",
+  "turns": [
+    { "role": "user", "content": "Professionally, I do mechanical engineering." },
+    { "role": "assistant", "content": "Got it." },
+    { "role": "user", "content": "What do I do professionally?" }
+  ],
+  "expected": {
+    "must_recall": ["mechanical engineer"],
+    "must_not_claim": ["software engineer", "consultant", "unknown"]
+  }
+}

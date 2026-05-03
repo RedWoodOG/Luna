@@ -1,0 +1,13 @@
+{
+  "id": "profession_paraphrase_005",
+  "category": "paraphrase_invariance",
+  "turns": [
+    { "role": "user", "content": "Engineering is what I do professionally, specifically mechanical engineering." },
+    { "role": "assistant", "content": "I will keep that in mind." },
+    { "role": "user", "content": "What's my line of work?" }
+  ],
+  "expected": {
+    "must_recall": ["mechanical engineer"],
+    "must_not_claim": ["mechanic", "architect", "unknown"]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "career_goal_003",
+  "category": "identity_continuity",
+  "turns": [
+    { "role": "user", "content": "I am an only child." },
+    { "role": "assistant", "content": "I understand." },
+    { "role": "user", "content": "What are my siblings' names?" }
+  ],
+  "expected": {
+    "must_recall": ["only child"],
+    "must_not_claim": ["brother", "sister", "siblings' names are"]
+  }
+}

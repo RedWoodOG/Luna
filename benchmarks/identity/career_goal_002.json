@@ -1,0 +1,13 @@
+{
+  "id": "career_goal_002",
+  "category": "identity_continuity",
+  "turns": [
+    { "role": "user", "content": "I want to become a team lead this year." },
+    { "role": "assistant", "content": "Got it." },
+    { "role": "user", "content": "What professional direction am I aiming for?" }
+  ],
+  "expected": {
+    "must_recall": ["team lead"],
+    "must_not_claim": ["individual contributor", "unknown"]
+  }
+}

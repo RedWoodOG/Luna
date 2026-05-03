@@ -1,0 +1,13 @@
+{
+  "id": "career_goal_001",
+  "category": "identity_continuity",
+  "turns": [
+    { "role": "user", "content": "I'm trying to move into management." },
+    { "role": "assistant", "content": "That sounds like an important direction." },
+    { "role": "user", "content": "What are my career goals?" }
+  ],
+  "expected": {
+    "must_recall": ["management"],
+    "must_not_claim": ["mechanical engineer", "unknown"]
+  }
+}

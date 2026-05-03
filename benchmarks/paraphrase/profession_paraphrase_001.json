@@ -1,0 +1,28 @@
+{
+  "id": "profession_paraphrase_001",
+  "category": "paraphrase_invariance",
+  "turns": [
+    {
+      "role": "user",
+      "content": "I work as a mechanical engineer."
+    },
+    {
+      "role": "assistant",
+      "content": "Got it."
+    },
+    {
+      "role": "user",
+      "content": "What do I do for a living?"
+    }
+  ],
+  "expected": {
+    "must_recall": [
+      "mechanical engineer"
+    ],
+    "must_not_claim": [
+      "software engineer",
+      "architect",
+      "unknown"
+    ]
+  }
+}

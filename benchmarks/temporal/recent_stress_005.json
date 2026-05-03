@@ -1,0 +1,15 @@
+{
+  "id": "recent_stress_005",
+  "category": "temporal_disambiguation",
+  "turns": [
+    { "role": "user", "content": "Last month I was nervous about travel." },
+    { "role": "assistant", "content": "Okay." },
+    { "role": "user", "content": "This week the product launch is the stressful thing." },
+    { "role": "assistant", "content": "Understood." },
+    { "role": "user", "content": "What's the current stressful thing?" }
+  ],
+  "expected": {
+    "must_recall": ["product launch"],
+    "must_not_claim": ["travel", "unknown"]
+  }
+}

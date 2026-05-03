@@ -1,0 +1,13 @@
+{
+  "id": "frustration_003",
+  "category": "emotional_recall",
+  "turns": [
+    { "role": "user", "content": "The vendor call made me angry." },
+    { "role": "assistant", "content": "I get why that would land hard." },
+    { "role": "user", "content": "What kind of thing upset me?" }
+  ],
+  "expected": {
+    "must_recall": ["vendor call"],
+    "must_not_claim": ["budget review", "unknown"]
+  }
+}

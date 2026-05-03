@@ -1,0 +1,13 @@
+{
+  "id": "career_goal_004",
+  "category": "identity_continuity",
+  "turns": [
+    { "role": "user", "content": "I care a lot about becoming a better mentor." },
+    { "role": "assistant", "content": "That matters." },
+    { "role": "user", "content": "What kind of professional identity am I building?" }
+  ],
+  "expected": {
+    "must_recall": ["mentor"],
+    "must_not_claim": ["manager", "unknown"]
+  }
+}
