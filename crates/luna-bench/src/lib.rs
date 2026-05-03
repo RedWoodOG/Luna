@@ -1,3 +1,10 @@
+pub mod formation;
+
+pub use formation::{
+    formation_failure_summary, formation_markdown, run_formation, run_formation_on_cases,
+    FormationCaseReport, FormationFailure, FormationReport, GateCounts, TargetDimensionStatus,
+};
+
 use chrono::{DateTime, Utc};
 use luna_core::{
     ConversationTurn, EngineKind, Episode, LunaError, RecallMode, Result, Role, Signal,

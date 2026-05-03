@@ -118,6 +118,48 @@ impl LlmBackend for RecordingFakeBackend {
     }
 }
 
+/// Decorator that counts every `complete` call passing through. Used
+/// by formation runs (PR 0.5) to compute second-pass cache hit rate
+/// without modifying the underlying backend's interface. Wraps any
+/// `LlmBackend` impl.
+pub struct CountingBackend<B: LlmBackend> {
+    inner: B,
+    count: std::sync::atomic::AtomicUsize,
+}
+
+impl<B: LlmBackend> CountingBackend<B> {
+    pub fn new(inner: B) -> Self {
+        Self {
+            inner,
+            count: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    /// Number of completions that have flowed through this decorator
+    /// since construction. Cache hits at the [`crate::ExtractionCache`]
+    /// layer never reach the backend, so this counts only true LLM
+    /// invocations.
+    pub fn count(&self) -> usize {
+        self.count.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub fn inner(&self) -> &B {
+        &self.inner
+    }
+}
+
+impl<B: LlmBackend> LlmBackend for CountingBackend<B> {
+    fn model_id(&self) -> &str {
+        self.inner.model_id()
+    }
+
+    fn complete(&self, request: &LlmRequest) -> Result<String> {
+        self.count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.inner.complete(request)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +219,27 @@ mod tests {
     fn model_id_is_returned_verbatim() {
         let fake = RecordingFakeBackend::new("llama3-8b-q4@cpu-greedy-seed42-v1");
         assert_eq!(fake.model_id(), "llama3-8b-q4@cpu-greedy-seed42-v1");
+    }
+
+    #[test]
+    fn counting_backend_increments_on_each_complete() {
+        let fake = RecordingFakeBackend::new("test-model");
+        fake.expect("X", "ok");
+        let counted = CountingBackend::new(fake);
+        assert_eq!(counted.count(), 0);
+        let _ = counted.complete(&LlmRequest {
+            prompt: "X-1".to_string(),
+        });
+        assert_eq!(counted.count(), 1);
+        let _ = counted.complete(&LlmRequest {
+            prompt: "X-2".to_string(),
+        });
+        assert_eq!(counted.count(), 2);
+    }
+
+    #[test]
+    fn counting_backend_passes_through_model_id() {
+        let counted = CountingBackend::new(RecordingFakeBackend::new("inner-model"));
+        assert_eq!(counted.model_id(), "inner-model");
     }
 }
