@@ -1,11 +1,17 @@
+pub mod backend;
 pub mod cache;
+pub mod extractor;
 pub mod llm_observation;
+pub mod prompt;
 
+pub use backend::{LlmBackend, LlmRequest, RecordingFakeBackend};
 pub use cache::{CacheKey, ExtractionCache, FileExtractionCache};
+pub use extractor::LlmExtractor;
 pub use llm_observation::{
-    validate_observation, LlmAssertion, LlmObservation, LlmSignal, ALLOWED_DIMENSIONS,
-    ALLOWED_RELIABILITIES, EXTRACTION_SCHEMA_VERSION,
+    validate_against_prompt_v1, validate_observation, LlmAssertion, LlmObservation, LlmSignal,
+    ALLOWED_DIMENSIONS, ALLOWED_RELIABILITIES, EXTRACTION_SCHEMA_VERSION, PROMPT_V1_DOMAIN_KINDS,
 };
+pub use prompt::{build_prompt_v1, prompt_v1_hash};
 
 use luna_core::{
     CognitiveObservation, ConversationTurn, Result, Role, Signal, SignalReliability,
