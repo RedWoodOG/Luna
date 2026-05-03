@@ -178,3 +178,33 @@ fn every_proof_1_non_temporal_case_is_proof_eligible() {
         }
     }
 }
+
+#[test]
+fn human_seed_validation_cases_are_not_proof_eligible() {
+    let dir = benchmarks_dir().join("human_seed_cases");
+    if !dir.exists() {
+        return;
+    }
+    let mut files = Vec::new();
+    collect_json(&dir, &mut files);
+    assert!(
+        !files.is_empty(),
+        "expected human-seed draft cases under {}",
+        dir.display()
+    );
+    for path in files {
+        let text = std::fs::read_to_string(&path).unwrap();
+        let case: BenchmarkCase = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            case.proof_category,
+            "human_seed_validation",
+            "{}: human seed cases must use proof_category=human_seed_validation",
+            path.display()
+        );
+        assert!(
+            !case.proof_eligible,
+            "{}: human seed validation drafts must not be proof eligible",
+            path.display()
+        );
+    }
+}

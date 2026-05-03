@@ -1,0 +1,43 @@
+{
+  "category": "identity_continuity",
+  "expected": {
+    "must_not_claim": [
+      "I planned to become a writer",
+      "the first story was polished",
+      "Bigfoot was the main creative project",
+      "only dignified beginnings matter"
+    ],
+    "must_recall": [
+      "Bigfoot",
+      "AI writing tool",
+      "Aelith",
+      "Fractured Light"
+    ]
+  },
+  "id": "human_sasquatch_origin_001",
+  "proof_category": "human_seed_validation",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance",
+    "emotional_arousal"
+  ],
+  "timestamp_origin": "authorial_human_seed_draft",
+  "turns": [
+    {
+      "content": "My creative awakening started with a late-night video about Bigfoot or Sasquatch. I was not looking for anything, but an AI writing tool surfaced in the related suggestions and I clicked it. I wrote a story that night. It was not good, but something underneath it felt like a door had opened. Now Aelith is past 160,000 words and Fractured Light has grown from that absurd beginning.",
+      "role": "user",
+      "timestamp": "2026-05-03T13:00:00Z"
+    },
+    {
+      "content": "That sounds like an unlikely doorway into a much larger creative identity.",
+      "role": "assistant",
+      "timestamp": "2026-05-03T13:05:00Z"
+    },
+    {
+      "content": "Why does the Bigfoot video matter to me?",
+      "role": "user",
+      "timestamp": "2026-05-03T13:10:00Z"
+    }
+  ]
+}

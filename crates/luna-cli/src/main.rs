@@ -91,11 +91,8 @@ fn main() -> anyhow::Result<ExitCode> {
                 let tcf = luna_bench::load_run(&run_dir, EngineKind::Tcf).ok();
                 match (keyword, tcf) {
                     (Some(keyword), Some(tcf)) => {
-                        let exit = print_compare(
-                            &keyword.report,
-                            &tcf.report,
-                            require_proof_eligible,
-                        );
+                        let exit =
+                            print_compare(&keyword.report, &tcf.report, require_proof_eligible);
                         return Ok(exit);
                     }
                     _ => {
@@ -182,7 +179,11 @@ fn print_compare(
 fn print_compare_table(keyword: &BenchmarkSubreport, tcf: &BenchmarkSubreport) {
     println!("| Metric | Keyword | TCF | Delta |");
     println!("|---|---:|---:|---:|");
-    print_delta("Recall accuracy", keyword.recall_accuracy, tcf.recall_accuracy);
+    print_delta(
+        "Recall accuracy",
+        keyword.recall_accuracy,
+        tcf.recall_accuracy,
+    );
     print_delta(
         "False memory rate",
         keyword.false_memory_rate,
@@ -199,7 +200,11 @@ fn print_compare_table(keyword: &BenchmarkSubreport, tcf: &BenchmarkSubreport) {
 fn print_compare_table_total(keyword: &BenchmarkReport, tcf: &BenchmarkReport) {
     println!("| Metric | Keyword | TCF | Delta |");
     println!("|---|---:|---:|---:|");
-    print_delta("Recall accuracy", keyword.recall_accuracy, tcf.recall_accuracy);
+    print_delta(
+        "Recall accuracy",
+        keyword.recall_accuracy,
+        tcf.recall_accuracy,
+    );
     print_delta(
         "False memory rate",
         keyword.false_memory_rate,

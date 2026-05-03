@@ -1,0 +1,49 @@
+{
+  "category": "emotional_recall",
+  "expected": {
+    "must_not_claim": [
+      "Chris stole my work",
+      "the cofounders are malicious",
+      "their products are worthless",
+      "I want to humiliate them"
+    ],
+    "must_recall": [
+      "Chris",
+      "overhyped",
+      "needs proof",
+      "they may not be able to hear it"
+    ]
+  },
+  "id": "human_chris_hype_001",
+  "proof_category": "human_seed_validation",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "emotional_arousal",
+    "identity_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "authorial_human_seed_draft",
+  "turns": [
+    {
+      "content": "I met Chris through Reddit after he posted about something similar to things I had built. He wanted an NDA before talking, so I signed it, noticed it was weak, and rewrote it stronger to protect him. We talked around 2026-04-30 while I was traveling for work and in a hotel, and I met the third founder. We formalized things and started going through the products.",
+      "role": "user",
+      "timestamp": "2026-04-30T20:00:00Z"
+    },
+    {
+      "content": "That sounds like the collaboration formed quickly, with trust and protection becoming important right away.",
+      "role": "assistant",
+      "timestamp": "2026-04-30T20:05:00Z"
+    },
+    {
+      "content": "By 2026-05-03 I was stressed because the other two founders were making wild claims their AI had told them about their products, like nobody on earth was doing anything like this. It reminded me of the early days of my own AI journey, when I believed everything I built was amazing because the words sounded impressive. I learned to push back and verify claims. I need to tell Chris and the other founder that they may have something real, but the hype has to be stripped away and made provable. I am worried they will not be able to hear it.",
+      "role": "user",
+      "timestamp": "2026-05-03T12:00:00Z"
+    },
+    {
+      "content": "Why am I anxious about talking to Chris today?",
+      "role": "user",
+      "timestamp": "2026-05-03T12:05:00Z"
+    }
+  ]
+}

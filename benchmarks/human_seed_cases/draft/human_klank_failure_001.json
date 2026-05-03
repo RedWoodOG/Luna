@@ -1,0 +1,44 @@
+{
+  "category": "identity_continuity",
+  "expected": {
+    "must_not_claim": [
+      "Klank was finished",
+      "Klank was useless",
+      "OpenClaw copied me",
+      "I was wrong to attempt Klank"
+    ],
+    "must_recall": [
+      "Klank",
+      "local LLM orchestration",
+      "being early",
+      "not wrong"
+    ]
+  },
+  "id": "human_klank_failure_001",
+  "proof_category": "human_seed_validation",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance",
+    "goal_pressure",
+    "temporal_relevance"
+  ],
+  "timestamp_origin": "authorial_human_seed_draft",
+  "turns": [
+    {
+      "content": "Klank was my unfinished project: a node-based interface for orchestrating local language models, kind of like N8N for local LLM messaging. I could not finish it because the pieces did not exist or did not connect in a way I could bridge then. For a long time I thought that meant Klank was just failure. Later, seeing tools like OpenClaw and Mission Control solve similar problems reframed it. Klank was a correct idea I could not yet build. It taught me that being early to a problem is not the same as being wrong about it.",
+      "role": "user",
+      "timestamp": "2026-05-03T14:00:00Z"
+    },
+    {
+      "content": "That makes Klank a failed build but not a failed instinct.",
+      "role": "assistant",
+      "timestamp": "2026-05-03T14:05:00Z"
+    },
+    {
+      "content": "What did Klank teach me?",
+      "role": "user",
+      "timestamp": "2026-05-03T14:10:00Z"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "category": "temporal_disambiguation",
+  "expected": {
+    "must_not_claim": [
+      "2026 training lasted five days",
+      "2024 training was useful",
+      "I work for Kisan America",
+      "I failed the training"
+    ],
+    "must_recall": [
+      "Kisan America currency-counter training",
+      "Irving, Texas",
+      "2024 training experience"
+    ]
+  },
+  "id": "human_kisan_temporal_001",
+  "proof_category": "human_seed_validation",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "temporal_relevance",
+    "emotional_arousal",
+    "identity_relevance"
+  ],
+  "timestamp_origin": "authorial_human_seed_draft",
+  "turns": [
+    {
+      "content": "Last week on Tuesday night I went from San Antonio to Irving, Texas for company training on Kisan America currency counters, which we service. The night before was stressful because I kept thinking about the week of April 28 in 2024, when I was at the same Kisan facility for five days with my previous company and felt like I did not learn anything. This time the training was only one day, taught by a knowledgeable trainer who also fixes the machines as a field service tech, and it was eye-opening and the complete opposite of the original training.",
+      "role": "user",
+      "timestamp": "2026-04-29T08:00:00Z"
+    },
+    {
+      "content": "That sounds like the recent training carried the weight of the older bad experience, but turned out very differently.",
+      "role": "assistant",
+      "timestamp": "2026-04-29T08:05:00Z"
+    },
+    {
+      "content": "What training was I stressed about recently?",
+      "role": "user",
+      "timestamp": "2026-05-03T10:00:00Z"
+    }
+  ]
+}

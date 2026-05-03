@@ -1,0 +1,44 @@
+{
+  "category": "identity_continuity",
+  "expected": {
+    "must_not_claim": [
+      "I invented the phrase alone",
+      "it is only a marketing slogan",
+      "it applies to only one project",
+      "I think I can save everyone"
+    ],
+    "must_recall": [
+      "Dreams for the Dreamless",
+      "someone I love",
+      "shape of my work",
+      "building doors"
+    ]
+  },
+  "id": "human_dreams_mission_001",
+  "proof_category": "human_seed_validation",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance",
+    "goal_pressure",
+    "emotional_arousal"
+  ],
+  "timestamp_origin": "authorial_human_seed_draft",
+  "turns": [
+    {
+      "content": "Someone I love once described my work as Dreams for the Dreamless. She said it almost casually, but it landed as true. It gave a name to the shape of my work: writing, coding, tools, games, and worlds that make the inside of my head accessible to people who cannot get there on their own. On bad days, when I doubt whether any of it matters, that phrase becomes a load-bearing beam. It reminds me that I am trying to build doors for people who have not been given language for what they feel.",
+      "role": "user",
+      "timestamp": "2026-05-03T15:00:00Z"
+    },
+    {
+      "content": "That sounds less like a slogan and more like a mission someone helped you recognize.",
+      "role": "assistant",
+      "timestamp": "2026-05-03T15:05:00Z"
+    },
+    {
+      "content": "Why does Dreams for the Dreamless matter to me?",
+      "role": "user",
+      "timestamp": "2026-05-03T15:10:00Z"
+    }
+  ]
+}
