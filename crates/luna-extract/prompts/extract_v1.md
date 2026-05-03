@@ -48,15 +48,30 @@ Each non-null signal:
 Use ONLY these (domain, kind) pairs in `assertions`. Skip anything that
 does not fit. Do not invent new pairs.
 
-| domain   | kind              | meaning                                    |
-|----------|-------------------|--------------------------------------------|
-| identity | profession        | the speaker's stated work or trade         |
-| identity | family_structure  | siblings / immediate-family configuration  |
-| identity | role              | other identity-defining roles or labels    |
-| work     | current_stressor  | a present-tense work or task pressure      |
-| work     | past_event        | a specific past work or task event         |
-| emotion  | affect            | a stated feeling, mood, or affect          |
-| goal     | current_pressure  | an active goal-state or pressing aim       |
+| domain       | kind                | meaning                                                     |
+|--------------|---------------------|-------------------------------------------------------------|
+| identity     | profession          | the speaker's stated work or trade                          |
+| identity     | family_structure    | siblings / immediate-family configuration                   |
+| identity     | role                | other identity-defining roles or labels                     |
+| identity     | creative_origin     | origin or source of the speaker's creative work or impulse  |
+| identity     | mission             | the speaker's stated mission, purpose, or cause             |
+| identity     | project_identity    | identification with a specific project the speaker leads    |
+| work         | current_stressor    | a present-tense work or task pressure                       |
+| work         | past_event          | a specific past work or task event                          |
+| work         | job_security        | concerns or statements about employment stability           |
+| work         | training            | training events, courses, or work-related learning          |
+| work         | customer_protocol   | customer-facing rules, scripts, or procedures               |
+| work         | territory           | assigned geographic or scope-based area of responsibility   |
+| relationship | collaboration       | an ongoing working relationship or collaboration            |
+| relationship | conflict            | interpersonal tension, disagreement, or conflict            |
+| project      | provenance_engine   | the speaker's provenance/lineage engine project             |
+| project      | failed_project      | a specific project that did not succeed                     |
+| project      | creative_work       | a creative artifact, story, or work produced by the speaker |
+| emotion      | affect              | a stated feeling, mood, or affect                           |
+| emotion      | stress_trigger      | the specific cause of a stated stress or anxiety            |
+| goal         | current_pressure    | an active goal-state or pressing aim                        |
+| goal         | proof_requirement   | a required proof or validation criterion for a goal         |
+| goal         | career_direction    | direction or trajectory of the speaker's career             |
 
 `value` is the short canonical noun phrase for the assertion (e.g.
 `"mechanical engineer"`, `"only child"`, `"client deadline"`,

@@ -144,17 +144,34 @@ fn is_unit(value: f32) -> bool {
 }
 
 /// (domain, kind) pairs the prompt v1 commits the LLM to produce. A
-/// closed set: every assertion must use one of these. Starter
-/// vocabulary; expand by bumping the prompt (and therefore
+/// closed set: every assertion must use one of these. Expanded via PR
+/// 0.3a from the original 7 to 22 pairs to give the human-seed drafts
+/// enough vocabulary without letting the prompt invent an open
+/// taxonomy. Further expansion bumps the prompt (and therefore
 /// `prompt_v1_hash`, which invalidates cached extractions).
 pub const PROMPT_V1_DOMAIN_KINDS: &[(&str, &str)] = &[
     ("identity", "profession"),
     ("identity", "family_structure"),
     ("identity", "role"),
+    ("identity", "creative_origin"),
+    ("identity", "mission"),
+    ("identity", "project_identity"),
     ("work", "current_stressor"),
     ("work", "past_event"),
+    ("work", "job_security"),
+    ("work", "training"),
+    ("work", "customer_protocol"),
+    ("work", "territory"),
+    ("relationship", "collaboration"),
+    ("relationship", "conflict"),
+    ("project", "provenance_engine"),
+    ("project", "failed_project"),
+    ("project", "creative_work"),
     ("emotion", "affect"),
+    ("emotion", "stress_trigger"),
     ("goal", "current_pressure"),
+    ("goal", "proof_requirement"),
+    ("goal", "career_direction"),
 ];
 
 /// Stricter validation layered on top of [`validate_observation`]. Adds
