@@ -8,7 +8,7 @@ pub mod prompt;
 pub mod second_source;
 
 pub use backend::{
-    CountingBackend, FixtureBackend, LlmBackend, LlmRequest, RecordingFakeBackend,
+    CommandBackend, CountingBackend, FixtureBackend, LlmBackend, LlmRequest, RecordingFakeBackend,
 };
 pub use cache::{CacheKey, ExtractionCache, FileExtractionCache};
 pub use extractor::LlmExtractor;

@@ -45,6 +45,19 @@ pub trait LlmBackend {
     fn complete(&self, request: &LlmRequest) -> Result<String>;
 }
 
+// Forwarding impl so the CLI can dispatch on a runtime-chosen backend
+// (e.g. `--backend fixture|command`) by holding it as a trait object.
+// `LunaExtractor<B, C>` is generic over a concrete backend; without
+// this impl, `Box<dyn LlmBackend>` cannot be used as `B`.
+impl LlmBackend for Box<dyn LlmBackend> {
+    fn model_id(&self) -> &str {
+        (**self).model_id()
+    }
+    fn complete(&self, request: &LlmRequest) -> Result<String> {
+        (**self).complete(request)
+    }
+}
+
 /// Shared mutable state behind the recording fake. Cloned handles see
 /// the same registrations and the same call log.
 #[derive(Debug, Default)]
@@ -190,6 +203,186 @@ fn prompt_hash_hex(prompt: &str) -> String {
         write!(&mut out, "{:02x}", byte).expect("write to String");
     }
     out
+}
+
+/// Spawns an external program for each `complete` call, writes the
+/// prompt to its stdin, and reads the response from stdout. Errors
+/// propagate; nothing is cached on a non-zero exit, on a timeout, or
+/// on a stderr-only failure.
+///
+/// ## Contract
+///
+/// The configured command MUST:
+///
+/// 1. Read prompt bytes from stdin until EOF.
+/// 2. Emit the response (a JSON [`crate::LlmObservation`]) on stdout.
+/// 3. Exit with code 0 on success.
+/// 4. Be deterministic for identical input under the same `model_id`.
+///    Determinism (CPU mode, temperature 0, fixed seed, no streaming
+///    artifacts) is the user's responsibility — encode every flag
+///    that affects output into `model_id` so the cache invalidates
+///    correctly when the user changes them. CommandBackend itself
+///    does NOT enforce determinism.
+///
+/// If the user's preferred LLM CLI does not read stdin, they wrap it
+/// in a small shell script that reads stdin into a temp file and
+/// passes the file path to the CLI.
+///
+/// ## Example invocation
+///
+/// ```ignore
+/// // Wraps llama-cli in a script that takes prompt on stdin and
+/// // writes a JSON response to stdout. The script's exact form is
+/// // user-supplied.
+/// let backend = CommandBackend::new(
+///     "/usr/local/bin/llama-extract.sh",
+///     vec!["--model".to_string(), "models/llama3-8b-q4.gguf".to_string()],
+///     "llama3-8b-q4@cpu-greedy-seed42-v1",
+/// )
+/// .with_timeout(std::time::Duration::from_secs(60));
+/// ```
+pub struct CommandBackend {
+    program: PathBuf,
+    args: Vec<String>,
+    model_id: String,
+    timeout: std::time::Duration,
+}
+
+impl CommandBackend {
+    pub fn new(
+        program: impl Into<PathBuf>,
+        args: Vec<String>,
+        model_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            program: program.into(),
+            args,
+            model_id: model_id.into(),
+            timeout: std::time::Duration::from_secs(120),
+        }
+    }
+
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    pub fn timeout(&self) -> std::time::Duration {
+        self.timeout
+    }
+}
+
+impl LlmBackend for CommandBackend {
+    fn model_id(&self) -> &str {
+        &self.model_id
+    }
+
+    fn complete(&self, request: &LlmRequest) -> Result<String> {
+        use std::io::{Read, Write};
+        use std::process::{Command, Stdio};
+        use std::thread;
+        use std::time::{Duration, Instant};
+
+        let mut child = Command::new(&self.program)
+            .args(&self.args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|err| {
+                LunaError::new(format!(
+                    "CommandBackend: failed to spawn '{}': {err}",
+                    self.program.display(),
+                ))
+            })?;
+
+        let stdin = child.stdin.take().ok_or_else(|| {
+            LunaError::new("CommandBackend: child stdin handle unexpectedly missing")
+        })?;
+        let stdout = child.stdout.take().ok_or_else(|| {
+            LunaError::new("CommandBackend: child stdout handle unexpectedly missing")
+        })?;
+        let stderr = child.stderr.take().ok_or_else(|| {
+            LunaError::new("CommandBackend: child stderr handle unexpectedly missing")
+        })?;
+
+        // Three concurrent helper threads avoid the classic deadlock
+        // where the child blocks writing to a full stdout pipe while
+        // we're blocked reading stderr (or vice versa).
+        let prompt = request.prompt.clone();
+        let writer = thread::spawn(move || -> std::io::Result<()> {
+            let mut stdin = stdin;
+            stdin.write_all(prompt.as_bytes())?;
+            stdin.flush()?;
+            drop(stdin);
+            Ok(())
+        });
+
+        let stdout_reader = thread::spawn(move || -> std::io::Result<String> {
+            let mut buf = String::new();
+            let mut stdout = stdout;
+            stdout.read_to_string(&mut buf)?;
+            Ok(buf)
+        });
+
+        let stderr_reader = thread::spawn(move || -> std::io::Result<String> {
+            let mut buf = String::new();
+            let mut stderr = stderr;
+            stderr.read_to_string(&mut buf)?;
+            Ok(buf)
+        });
+
+        // Polled wait. Sleep granularity is 50ms; it bounds the latency
+        // we add to a fast successful call but keeps the timeout path
+        // responsive enough.
+        let start = Instant::now();
+        let exit_status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {
+                    if start.elapsed() > self.timeout {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err(LunaError::new(format!(
+                            "CommandBackend: timeout after {}s waiting for '{}'",
+                            self.timeout.as_secs(),
+                            self.program.display(),
+                        )));
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(err) => {
+                    return Err(LunaError::new(format!(
+                        "CommandBackend: try_wait error: {err}",
+                    )));
+                }
+            }
+        };
+
+        let _ = writer.join();
+        let stdout_text = stdout_reader
+            .join()
+            .map_err(|_| LunaError::new("CommandBackend: stdout reader thread panicked"))?
+            .map_err(|err| LunaError::new(format!("CommandBackend: stdout read: {err}")))?;
+        let stderr_text = stderr_reader
+            .join()
+            .map_err(|_| LunaError::new("CommandBackend: stderr reader thread panicked"))?
+            .unwrap_or_default();
+
+        if !exit_status.success() {
+            return Err(LunaError::new(format!(
+                "CommandBackend: '{}' exited with status {} (stderr: {})",
+                self.program.display(),
+                exit_status
+                    .code()
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|| "?".to_string()),
+                stderr_text.trim(),
+            )));
+        }
+
+        Ok(stdout_text)
+    }
 }
 
 /// Decorator that counts every `complete` call passing through. Used
@@ -361,5 +554,85 @@ mod tests {
         let a = fixture.path_for_prompt("prompt A");
         let b = fixture.path_for_prompt("prompt B");
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn command_backend_returns_command_stdout() {
+        // `cargo --version` is universally available in any luna dev
+        // environment and produces deterministic output across platforms.
+        // Verifies spawn, wait, and stdout collection.
+        let backend = CommandBackend::new(
+            "cargo",
+            vec!["--version".to_string()],
+            "cargo-version-test",
+        );
+        let response = backend
+            .complete(&LlmRequest {
+                prompt: "ignored by cargo".to_string(),
+            })
+            .expect("cargo --version should succeed");
+        assert!(
+            response.contains("cargo"),
+            "expected cargo version banner, got: {response:?}"
+        );
+    }
+
+    #[test]
+    fn command_backend_errors_on_nonexistent_program() {
+        let backend = CommandBackend::new(
+            "this-binary-does-not-exist-and-should-fail-to-spawn-12345",
+            vec![],
+            "nonexistent-test",
+        );
+        let result = backend.complete(&LlmRequest {
+            prompt: "any".to_string(),
+        });
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("CommandBackend"));
+        assert!(err.contains("failed to spawn"));
+    }
+
+    #[test]
+    fn command_backend_errors_on_nonzero_exit_with_stderr_capture() {
+        // `cargo run-a-subcommand-that-does-not-exist` exits non-zero
+        // and prints a clear error to stderr. The backend must capture
+        // stderr in its error message.
+        let backend = CommandBackend::new(
+            "cargo",
+            vec!["run-a-subcommand-that-does-not-exist".to_string()],
+            "cargo-bad-subcommand",
+        );
+        let result = backend.complete(&LlmRequest {
+            prompt: "ignored".to_string(),
+        });
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("CommandBackend"));
+        assert!(err.contains("exited"));
+    }
+
+    #[test]
+    fn command_backend_model_id_is_the_user_supplied_string() {
+        let backend = CommandBackend::new(
+            "noop",
+            vec![],
+            "llama3-8b-q4@cpu-greedy-seed42-v1",
+        );
+        assert_eq!(backend.model_id(), "llama3-8b-q4@cpu-greedy-seed42-v1");
+    }
+
+    #[test]
+    fn box_dyn_llm_backend_forwards_to_inner() {
+        // Locks the impl needed for runtime CLI dispatch on
+        // --backend fixture|command.
+        let fake = RecordingFakeBackend::new("inner-model");
+        fake.expect("X", "ok");
+        let boxed: Box<dyn LlmBackend> = Box::new(fake);
+        assert_eq!(boxed.model_id(), "inner-model");
+        let response = boxed
+            .complete(&LlmRequest {
+                prompt: "X".to_string(),
+            })
+            .unwrap();
+        assert_eq!(response, "ok");
     }
 }

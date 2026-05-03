@@ -1,10 +1,11 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use luna_core::EngineKind;
 use luna_extract::{
-    CountingBackend, FileExtractionCache, FixtureBackend, LlmExtractor, LunaExtractor,
+    CommandBackend, CountingBackend, FileExtractionCache, FixtureBackend, LlmBackend,
+    LlmExtractor, LunaExtractor,
 };
 use luna_metrics::{BenchmarkReport, BenchmarkSubreport};
-use std::{path::PathBuf, process::ExitCode, str::FromStr};
+use std::{path::PathBuf, process::ExitCode, str::FromStr, time::Duration};
 
 #[derive(Debug, Parser)]
 #[command(name = "luna")]
@@ -57,11 +58,35 @@ enum BenchCommand {
     /// any case fails formation.
     Formation {
         benchmarks: PathBuf,
+        /// Backend that produces LlmObservations. `fixture` reads
+        /// pre-authored JSON files from `--fixtures`; `command`
+        /// invokes an external process supplied by `--command`.
+        #[arg(long, default_value = "fixture")]
+        backend: String,
         /// Directory of pre-authored fixture extraction JSONs. Each
         /// fixture file is keyed by SHA-256 of the rendered prompt.
-        /// Required until a real LLM backend is wired (PR 0.6 / 0.3b).
+        /// Required when `--backend fixture`.
         #[arg(long)]
-        fixtures: PathBuf,
+        fixtures: Option<PathBuf>,
+        /// Path to the external program when `--backend command`. The
+        /// program receives the prompt on stdin and must emit a JSON
+        /// LlmObservation on stdout.
+        #[arg(long)]
+        command: Option<PathBuf>,
+        /// Opaque determinism key for the command backend. Encode
+        /// every flag that affects output into this string so the
+        /// extraction cache invalidates when those flags change.
+        /// Required when `--backend command`.
+        #[arg(long = "model-id")]
+        model_id: Option<String>,
+        /// Arguments passed verbatim to `--command`. Repeat the flag
+        /// for each argument. Example:
+        /// `--command-arg --temp --command-arg 0`.
+        #[arg(long = "command-arg")]
+        command_args: Vec<String>,
+        /// Per-call timeout in seconds for the command backend.
+        #[arg(long = "timeout-secs", default_value = "120")]
+        timeout_secs: u64,
         /// Cache root for the formation run. The second pass reads
         /// from here and a 100% hit rate is the formation gate.
         #[arg(long, default_value = ".luna/formation_cache")]
@@ -107,11 +132,26 @@ fn main() -> anyhow::Result<ExitCode> {
             }
             BenchCommand::Formation {
                 benchmarks,
+                backend,
                 fixtures,
+                command,
+                model_id,
+                command_args,
+                timeout_secs,
                 cache,
                 out,
             } => {
-                let exit = run_formation_command(&benchmarks, &fixtures, &cache, &out)?;
+                let exit = run_formation_command(
+                    &benchmarks,
+                    &backend,
+                    fixtures.as_deref(),
+                    command.as_deref(),
+                    model_id.as_deref(),
+                    &command_args,
+                    timeout_secs,
+                    &cache,
+                    &out,
+                )?;
                 return Ok(exit);
             }
             BenchCommand::Compare {
@@ -258,29 +298,66 @@ fn ineligible_count(report: &BenchmarkReport) -> usize {
     report.total_cases.saturating_sub(eligible)
 }
 
-/// Wires the FixtureBackend + cache + LunaExtractor and runs the
-/// formation engine end-to-end. Returns the exit code the CLI hands
-/// back to the shell: 0 on green, 3 on any case failing formation.
+/// Build the chosen backend (fixture or command), wrap it in
+/// CountingBackend + cache + LunaExtractor, and run the formation
+/// engine end-to-end. Returns 0 on green, 3 on any case failing
+/// formation.
+#[allow(clippy::too_many_arguments)]
 fn run_formation_command(
     benchmarks: &std::path::Path,
-    fixtures: &std::path::Path,
+    backend_choice: &str,
+    fixtures: Option<&std::path::Path>,
+    command: Option<&std::path::Path>,
+    model_id: Option<&str>,
+    command_args: &[String],
+    timeout_secs: u64,
     cache: &std::path::Path,
     out: &std::path::Path,
 ) -> anyhow::Result<ExitCode> {
-    if !fixtures.exists() {
-        anyhow::bail!(
-            "fixture directory does not exist: {}\n\
-             Authoring fixtures: each fixture is one JSON file at\n\
-             <fixtures>/<sha256_of_rendered_prompt>.json containing the\n\
-             would-be LLM response (an LlmObservation) for that turn.",
-            fixtures.display()
-        );
-    }
+    let backend: Box<dyn LlmBackend> = match backend_choice {
+        "fixture" => {
+            let fixtures = fixtures.ok_or_else(|| {
+                anyhow::anyhow!("--backend fixture requires --fixtures <dir>")
+            })?;
+            if !fixtures.exists() {
+                anyhow::bail!(
+                    "fixture directory does not exist: {}\n\
+                     Authoring fixtures: each fixture is one JSON file at\n\
+                     <fixtures>/<sha256_of_rendered_prompt>.json containing the\n\
+                     would-be LLM response (an LlmObservation) for that turn.",
+                    fixtures.display()
+                );
+            }
+            Box::new(FixtureBackend::new(fixtures))
+        }
+        "command" => {
+            let command = command.ok_or_else(|| {
+                anyhow::anyhow!("--backend command requires --command <path>")
+            })?;
+            let model_id = model_id.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "--backend command requires --model-id <id>; encode every\n\
+                     flag that affects determinism (sampling, seed, CPU vs GPU,\n\
+                     quantization) into this string so the cache invalidates\n\
+                     correctly when those change."
+                )
+            })?;
+            let command_backend = CommandBackend::new(command, command_args.to_vec(), model_id)
+                .with_timeout(Duration::from_secs(timeout_secs));
+            Box::new(command_backend)
+        }
+        other => {
+            anyhow::bail!(
+                "unknown --backend '{other}' (expected 'fixture' or 'command')"
+            );
+        }
+    };
+
     std::fs::create_dir_all(cache)?;
     std::fs::create_dir_all(out)?;
 
-    let backend = CountingBackend::new(FixtureBackend::new(fixtures));
-    let llm = LlmExtractor::new(backend, FileExtractionCache::new(cache));
+    let counted = CountingBackend::new(backend);
+    let llm = LlmExtractor::new(counted, FileExtractionCache::new(cache));
     let extractor = LunaExtractor::with_default_v1_sources(llm);
 
     let report = luna_bench::run_formation(benchmarks, &extractor)?;
