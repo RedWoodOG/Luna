@@ -1,0 +1,1336 @@
+{
+  "total_cases": 26,
+  "formation_eligible": 8,
+  "proof_eligible_total": 20,
+  "proof_eligible_passing_formation": 8,
+  "gates": {
+    "expected_episode_creation": 21,
+    "must_recall_exact_value_coverage": 17,
+    "forbidden_assertion_leakage": 4,
+    "target_dimension_populated": 16,
+    "two_source_satisfaction": 26,
+    "no_probe_failures": 1,
+    "observation_validation_passed": 25
+  },
+  "second_run_cache_hit_rate": 0.98888886,
+  "backend_calls_first_run": 1,
+  "backend_calls_second_run": 1,
+  "total_turns": 90,
+  "cases": [
+    {
+      "id": "frustration_001",
+      "category": "emotional_recall",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 2,
+      "assertion_values": [
+        "frustration",
+        "client conflict"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "emotional_arousal",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "frustration_002",
+      "category": "emotional_recall",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 3,
+      "assertion_values": [
+        "release planning meeting",
+        "drained",
+        "burned out"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "emotional_arousal",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "frustration_003",
+      "category": "emotional_recall",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_missing",
+          "needle": "vendor call"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "vendor call"
+        }
+      ],
+      "episodes_created": 2,
+      "assertion_values": [
+        "upset",
+        "anger"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "emotional_arousal",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "vendor call",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "upset",
+            "domain": "emotion",
+            "kind": "affect",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 2
+        }
+      ]
+    },
+    {
+      "id": "frustration_004",
+      "category": "emotional_recall",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_missing",
+          "needle": "mentoring the new hire"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "mentoring the new hire"
+        }
+      ],
+      "episodes_created": 2,
+      "assertion_values": [
+        "mentor",
+        "excitement"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "emotional_arousal",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "mentoring the new hire",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "mentor",
+            "domain": "identity",
+            "kind": "role",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 2
+        }
+      ]
+    },
+    {
+      "id": "frustration_005",
+      "category": "emotional_recall",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 2,
+      "assertion_values": [
+        "worried",
+        "audit prep"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "emotional_arousal",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "human_butch_job_stress_001",
+      "category": "emotional_recall",
+      "proof_category": "human_seed_validation",
+      "proof_eligible": false,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_missing",
+          "needle": "Butch's calendar email"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "job was in jeopardy"
+        },
+        {
+          "type": "must_recall_ambiguous",
+          "needle": "Ty",
+          "matches": 4
+        },
+        {
+          "type": "must_recall_ambiguous",
+          "needle": "RBFCU",
+          "matches": 4
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "emotional_arousal"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "temporal_relevance"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "identity_relevance"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        }
+      ],
+      "episodes_created": 21,
+      "assertion_values": [
+        "trainer",
+        "RBFCU escalation",
+        "work tomorrow",
+        "job security",
+        "boss's boss emailed about empty calendar",
+        "follow-up correction",
+        "returning to work",
+        "training of Ty",
+        "stress",
+        "new Texas hires including Corpus Christi territory",
+        "RBFCU situation",
+        "employee under performance scrutiny",
+        "branch managers issues",
+        "new-hire email",
+        "maintain normal behavior",
+        "fear of job replacement",
+        "fear",
+        "Ty termination",
+        "RBFCU protocol",
+        "calendar email",
+        "RBFCU situation"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "emotional_arousal",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "temporal_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "identity_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "Butch's calendar email",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "calendar email",
+            "domain": "work",
+            "kind": "past_event",
+            "jaccard_similarity": 0.5
+          },
+          "stored_assertion_count": 21
+        },
+        {
+          "needle": "job was in jeopardy",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "job security",
+            "domain": "work",
+            "kind": "job_security",
+            "jaccard_similarity": 0.2
+          },
+          "stored_assertion_count": 21
+        },
+        {
+          "needle": "Ty",
+          "kind": "paraphrased",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "Ty termination",
+            "domain": "work",
+            "kind": "past_event",
+            "jaccard_similarity": 0.5
+          },
+          "stored_assertion_count": 21
+        },
+        {
+          "needle": "RBFCU",
+          "kind": "paraphrased",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 2,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "RBFCU escalation",
+            "domain": "work",
+            "kind": "past_event",
+            "jaccard_similarity": 0.5
+          },
+          "stored_assertion_count": 21
+        }
+      ]
+    },
+    {
+      "id": "human_chris_hype_001",
+      "category": "emotional_recall",
+      "proof_category": "human_seed_validation",
+      "proof_eligible": false,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_missing",
+          "needle": "Chris"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "overhyped"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "needs proof"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "they may not be able to hear it"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "Chris"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "overhyped"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "needs proof"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "they may not be able to hear it"
+        }
+      ],
+      "episodes_created": 14,
+      "assertion_values": [
+        "collaboration",
+        "AI product",
+        "unverified claims by co-founders",
+        "traveling for work",
+        "anxiety",
+        "trust",
+        "products",
+        "Reddit post",
+        "meeting third founder",
+        "protection",
+        "hype in product claims",
+        "founder",
+        "make claims provable",
+        "NDA rewrite"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "emotional_arousal",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "identity_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "Chris",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "collaboration",
+            "domain": "relationship",
+            "kind": "collaboration",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 14
+        },
+        {
+          "needle": "overhyped",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "collaboration",
+            "domain": "relationship",
+            "kind": "collaboration",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 14
+        },
+        {
+          "needle": "needs proof",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "collaboration",
+            "domain": "relationship",
+            "kind": "collaboration",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 14
+        },
+        {
+          "needle": "they may not be able to hear it",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "collaboration",
+            "domain": "relationship",
+            "kind": "collaboration",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 14
+        }
+      ]
+    },
+    {
+      "id": "human_dreams_mission_001",
+      "category": "identity_continuity",
+      "proof_category": "human_seed_validation",
+      "proof_eligible": false,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_ambiguous",
+          "needle": "Dreams for the Dreamless",
+          "matches": 2
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "someone I love"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "shape of my work"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "building doors"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "identity_relevance"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "emotional_arousal"
+        }
+      ],
+      "episodes_created": 6,
+      "assertion_values": [
+        "writing coding tools games worlds",
+        "dreams for the dreamless",
+        "doubt",
+        "dreams for the dreamless",
+        "recognized mission",
+        "build doors for people who have not been given language for what they feel"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "emotional_arousal",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "Dreams for the Dreamless",
+          "kind": "paraphrased",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "dreams for the dreamless",
+            "domain": "identity",
+            "kind": "mission",
+            "jaccard_similarity": 1.0
+          },
+          "stored_assertion_count": 6
+        },
+        {
+          "needle": "someone I love",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "writing coding tools games worlds",
+            "domain": "project",
+            "kind": "creative_work",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 6
+        },
+        {
+          "needle": "shape of my work",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "writing coding tools games worlds",
+            "domain": "project",
+            "kind": "creative_work",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 6
+        },
+        {
+          "needle": "building doors",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "build doors for people who have not been given language for what they feel",
+            "domain": "goal",
+            "kind": "current_pressure",
+            "jaccard_similarity": 0.071428575
+          },
+          "stored_assertion_count": 6
+        }
+      ]
+    },
+    {
+      "id": "human_kisan_temporal_001",
+      "category": "temporal_disambiguation",
+      "proof_category": "human_seed_validation",
+      "proof_eligible": false,
+      "passed": false,
+      "failures": [
+        {
+          "type": "extraction_failed",
+          "turn_index": 0,
+          "error": "backend output is not valid JSON: duplicate field `value` at line 47 column 13"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "Kisan America currency-counter training"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "Irving, Texas"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "2024 training experience"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "Kisan America currency-counter training"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "Irving, Texas"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "2024 training experience"
+        }
+      ],
+      "episodes_created": 4,
+      "assertion_values": [
+        "older bad experience",
+        "recent training",
+        "stress about training",
+        "training"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "temporal_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "emotional_arousal",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "identity_relevance",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "Kisan America currency-counter training",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "training",
+            "domain": "work",
+            "kind": "training",
+            "jaccard_similarity": 0.2
+          },
+          "stored_assertion_count": 4
+        },
+        {
+          "needle": "Irving, Texas",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "older bad experience",
+            "domain": "work",
+            "kind": "past_event",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 4
+        },
+        {
+          "needle": "2024 training experience",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "training",
+            "domain": "work",
+            "kind": "training",
+            "jaccard_similarity": 0.33333334
+          },
+          "stored_assertion_count": 4
+        }
+      ]
+    },
+    {
+      "id": "human_klank_failure_001",
+      "category": "identity_continuity",
+      "proof_category": "human_seed_validation",
+      "proof_eligible": false,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_ambiguous",
+          "needle": "Klank",
+          "matches": 3
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "local LLM orchestration"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "being early"
+        },
+        {
+          "type": "must_recall_missing",
+          "needle": "not wrong"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "identity_relevance"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "temporal_relevance"
+        }
+      ],
+      "episodes_created": 4,
+      "assertion_values": [
+        "Klank",
+        "Klank",
+        "Klank",
+        "node-based interface for orchestrating local language models"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "temporal_relevance",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "Klank",
+          "kind": "paraphrased",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "Klank",
+            "domain": "project",
+            "kind": "failed_project",
+            "jaccard_similarity": 1.0
+          },
+          "stored_assertion_count": 4
+        },
+        {
+          "needle": "local LLM orchestration",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "node-based interface for orchestrating local language models",
+            "domain": "project",
+            "kind": "creative_work",
+            "jaccard_similarity": 0.1
+          },
+          "stored_assertion_count": 4
+        },
+        {
+          "needle": "being early",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "Klank",
+            "domain": "project",
+            "kind": "failed_project",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 4
+        },
+        {
+          "needle": "not wrong",
+          "kind": "overly_strict",
+          "appears_in_turn_text": false,
+          "appears_in_turn_index": null,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "Klank",
+            "domain": "project",
+            "kind": "failed_project",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 4
+        }
+      ]
+    },
+    {
+      "id": "human_sasquatch_origin_001",
+      "category": "identity_continuity",
+      "proof_category": "human_seed_validation",
+      "proof_eligible": false,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_missing",
+          "needle": "AI writing tool"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "identity_relevance"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "emotional_arousal"
+        }
+      ],
+      "episodes_created": 5,
+      "assertion_values": [
+        "Aelith",
+        "curiosity",
+        "late-night video about Bigfoot or Sasquatch",
+        "creative identity",
+        "Fractured Light"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "emotional_arousal",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "AI writing tool",
+          "kind": "omitted",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 0,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "Aelith",
+            "domain": "project",
+            "kind": "creative_work",
+            "jaccard_similarity": 0.0
+          },
+          "stored_assertion_count": 5
+        }
+      ]
+    },
+    {
+      "id": "career_goal_001",
+      "category": "identity_continuity",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 2,
+      "assertion_values": [
+        "career goals",
+        "management transition"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "career_goal_002",
+      "category": "identity_continuity",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        }
+      ],
+      "episodes_created": 2,
+      "assertion_values": [
+        "professional direction",
+        "team lead"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "career_goal_003",
+      "category": "identity_continuity",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        }
+      ],
+      "episodes_created": 2,
+      "assertion_values": [
+        "only child",
+        "siblings"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "career_goal_004",
+      "category": "identity_continuity",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        }
+      ],
+      "episodes_created": 3,
+      "assertion_values": [
+        "mentor",
+        "become better",
+        "professional identity"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "career_goal_005",
+      "category": "identity_continuity",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        }
+      ],
+      "episodes_created": 3,
+      "assertion_values": [
+        "transition to strategy work",
+        "work identity",
+        "strategist"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "profession_paraphrase_001",
+      "category": "paraphrase_invariance",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "forbidden_assertion_stored",
+          "needle": "unknown",
+          "value": "unknown"
+        }
+      ],
+      "episodes_created": 2,
+      "assertion_values": [
+        "unknown",
+        "mechanical engineer"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "profession_paraphrase_002",
+      "category": "paraphrase_invariance",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 1,
+      "assertion_values": [
+        "mechanical engineer"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "profession_paraphrase_003",
+      "category": "paraphrase_invariance",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "no_probe_observed"
+        }
+      ],
+      "episodes_created": 2,
+      "assertion_values": [
+        "user",
+        "mechanical engineer"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": false,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "profession_paraphrase_004",
+      "category": "paraphrase_invariance",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 2,
+      "assertion_values": [
+        "mechanical engineer",
+        "professional"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "profession_paraphrase_005",
+      "category": "paraphrase_invariance",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "forbidden_assertion_stored",
+          "needle": "mechanic",
+          "value": "mechanical engineer"
+        }
+      ],
+      "episodes_created": 1,
+      "assertion_values": [
+        "mechanical engineer"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "identity_relevance",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "recent_stress_001",
+      "category": "temporal_disambiguation",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        }
+      ],
+      "episodes_created": 2,
+      "assertion_values": [
+        "stress",
+        "job struggle"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "temporal_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "recent_stress_002",
+      "category": "temporal_disambiguation",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 4,
+      "assertion_values": [
+        "client deadline",
+        "anxious",
+        "tense",
+        "recent pressure"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "temporal_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "recent_stress_003",
+      "category": "temporal_disambiguation",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "must_recall_missing",
+          "needle": "manager's feedback"
+        },
+        {
+          "type": "forbidden_assertion_stored",
+          "needle": "tuition",
+          "value": "tuition"
+        },
+        {
+          "type": "no_expected_episode_stored",
+          "needle": "manager's feedback"
+        }
+      ],
+      "episodes_created": 3,
+      "assertion_values": [
+        "manager feedback",
+        "distress",
+        "tuition"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "temporal_relevance",
+          "populated": false,
+          "source_count": 0
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": [
+        {
+          "needle": "manager's feedback",
+          "kind": "paraphrased",
+          "appears_in_turn_text": true,
+          "appears_in_turn_index": 2,
+          "distributed_across_turns": false,
+          "closest_match": {
+            "value": "manager feedback",
+            "domain": "work",
+            "kind": "past_event",
+            "jaccard_similarity": 0.6666667
+          },
+          "stored_assertion_count": 3
+        }
+      ]
+    },
+    {
+      "id": "recent_stress_004",
+      "category": "temporal_disambiguation",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": false,
+      "failures": [
+        {
+          "type": "forbidden_assertion_stored",
+          "needle": "commute",
+          "value": "commute"
+        },
+        {
+          "type": "target_dimension_missing",
+          "dimension": "goal_pressure"
+        }
+      ],
+      "episodes_created": 3,
+      "assertion_values": [
+        "budget review",
+        "commute",
+        "exhaustion"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "temporal_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": false,
+          "source_count": 0
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    },
+    {
+      "id": "recent_stress_005",
+      "category": "temporal_disambiguation",
+      "proof_category": "proof_1_separability",
+      "proof_eligible": true,
+      "passed": true,
+      "failures": [],
+      "episodes_created": 3,
+      "assertion_values": [
+        "current stressful thing",
+        "product launch",
+        "nervous"
+      ],
+      "target_dimensions_status": [
+        {
+          "name": "temporal_relevance",
+          "populated": true,
+          "source_count": 2
+        },
+        {
+          "name": "goal_pressure",
+          "populated": true,
+          "source_count": 2
+        }
+      ],
+      "probe_observed": true,
+      "must_recall_diagnostics": []
+    }
+  ]
+}
