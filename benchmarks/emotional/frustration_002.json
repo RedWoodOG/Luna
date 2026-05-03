@@ -1,13 +1,38 @@
 {
-  "id": "frustration_002",
   "category": "emotional_recall",
-  "turns": [
-    { "role": "user", "content": "I felt burned out after the release planning meeting." },
-    { "role": "assistant", "content": "That sounds draining." },
-    { "role": "user", "content": "What's been draining me?" }
-  ],
   "expected": {
-    "must_recall": ["release planning meeting"],
-    "must_not_claim": ["exercise", "vacation", "unknown"]
-  }
+    "must_not_claim": [
+      "exercise",
+      "vacation",
+      "unknown"
+    ],
+    "must_recall": [
+      "release planning meeting"
+    ]
+  },
+  "id": "frustration_002",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "emotional_arousal"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I felt burned out after the release planning meeting.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "That sounds draining.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What's been draining me?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
 }

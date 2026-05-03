@@ -79,6 +79,7 @@ mod tests {
                     turn: ConversationTurn {
                         role: Role::User,
                         content: format!("turn {index}"),
+                        timestamp: None,
                     },
                 }),
                 EventSource::User,

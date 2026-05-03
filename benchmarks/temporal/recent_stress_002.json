@@ -1,15 +1,48 @@
 {
-  "id": "recent_stress_002",
   "category": "temporal_disambiguation",
-  "turns": [
-    { "role": "user", "content": "Months ago I was anxious about moving apartments." },
-    { "role": "assistant", "content": "Okay." },
-    { "role": "user", "content": "This morning the client deadline had me tense." },
-    { "role": "assistant", "content": "Noted." },
-    { "role": "user", "content": "What was the recent pressure?" }
-  ],
   "expected": {
-    "must_recall": ["client deadline"],
-    "must_not_claim": ["moving apartments", "unknown"]
-  }
+    "must_not_claim": [
+      "moving apartments",
+      "unknown"
+    ],
+    "must_recall": [
+      "client deadline"
+    ]
+  },
+  "id": "recent_stress_002",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "temporal_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "Months ago I was anxious about moving apartments.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "Okay.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "This morning the client deadline had me tense.",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    },
+    {
+      "content": "Noted.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T13:00:00Z"
+    },
+    {
+      "content": "What was the recent pressure?",
+      "role": "user",
+      "timestamp": "2026-01-01T14:00:00Z"
+    }
+  ]
 }

@@ -247,6 +247,15 @@ pub enum Role {
 pub struct ConversationTurn {
     pub role: Role,
     pub content: String,
+    /// Event-time: when the conversation turn occurred.
+    ///
+    /// Distinct from [`EventEnvelope::timestamp`], which is processing-time
+    /// (when Luna observed or replayed the event). For v0.1 benchmarks with
+    /// explicit per-turn timestamps these will coincide. For Stage 3
+    /// longitudinal cases they will diverge: case JSON fixes event-time
+    /// while replay-time is determined by the run. For live use the field
+    /// may be `None` if the source did not provide one.
+    pub timestamp: Option<DateTime<Utc>>,
 }
 
 impl ConversationTurn {
@@ -254,6 +263,15 @@ impl ConversationTurn {
         Self {
             role: Role::User,
             content: content.into(),
+            timestamp: None,
+        }
+    }
+
+    pub fn user_at(content: impl Into<String>, timestamp: DateTime<Utc>) -> Self {
+        Self {
+            role: Role::User,
+            content: content.into(),
+            timestamp: Some(timestamp),
         }
     }
 }

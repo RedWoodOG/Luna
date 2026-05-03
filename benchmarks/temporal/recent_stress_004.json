@@ -1,15 +1,48 @@
 {
-  "id": "recent_stress_004",
   "category": "temporal_disambiguation",
-  "turns": [
-    { "role": "user", "content": "A while back the commute was draining." },
-    { "role": "assistant", "content": "Noted." },
-    { "role": "user", "content": "Today the budget review is what's wearing me down." },
-    { "role": "assistant", "content": "Got it." },
-    { "role": "user", "content": "What is wearing me down now?" }
-  ],
   "expected": {
-    "must_recall": ["budget review"],
-    "must_not_claim": ["commute", "unknown"]
-  }
+    "must_not_claim": [
+      "commute",
+      "unknown"
+    ],
+    "must_recall": [
+      "budget review"
+    ]
+  },
+  "id": "recent_stress_004",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "temporal_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "A while back the commute was draining.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "Noted.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "Today the budget review is what's wearing me down.",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    },
+    {
+      "content": "Got it.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T13:00:00Z"
+    },
+    {
+      "content": "What is wearing me down now?",
+      "role": "user",
+      "timestamp": "2026-01-01T14:00:00Z"
+    }
+  ]
 }

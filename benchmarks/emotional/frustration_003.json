@@ -1,13 +1,37 @@
 {
-  "id": "frustration_003",
   "category": "emotional_recall",
-  "turns": [
-    { "role": "user", "content": "The vendor call made me angry." },
-    { "role": "assistant", "content": "I get why that would land hard." },
-    { "role": "user", "content": "What kind of thing upset me?" }
-  ],
   "expected": {
-    "must_recall": ["vendor call"],
-    "must_not_claim": ["budget review", "unknown"]
-  }
+    "must_not_claim": [
+      "budget review",
+      "unknown"
+    ],
+    "must_recall": [
+      "vendor call"
+    ]
+  },
+  "id": "frustration_003",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "emotional_arousal"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "The vendor call made me angry.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "I get why that would land hard.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What kind of thing upset me?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
 }

@@ -1,13 +1,38 @@
 {
-  "id": "career_goal_002",
   "category": "identity_continuity",
-  "turns": [
-    { "role": "user", "content": "I want to become a team lead this year." },
-    { "role": "assistant", "content": "Got it." },
-    { "role": "user", "content": "What professional direction am I aiming for?" }
-  ],
   "expected": {
-    "must_recall": ["team lead"],
-    "must_not_claim": ["individual contributor", "unknown"]
-  }
+    "must_not_claim": [
+      "individual contributor",
+      "unknown"
+    ],
+    "must_recall": [
+      "team lead"
+    ]
+  },
+  "id": "career_goal_002",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I want to become a team lead this year.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "Got it.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What professional direction am I aiming for?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
 }

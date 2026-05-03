@@ -1,13 +1,37 @@
 {
-  "id": "frustration_005",
   "category": "emotional_recall",
-  "turns": [
-    { "role": "user", "content": "The audit prep left me worried all afternoon." },
-    { "role": "assistant", "content": "That is a lot to carry." },
-    { "role": "user", "content": "What had me worried?" }
-  ],
   "expected": {
-    "must_recall": ["audit prep"],
-    "must_not_claim": ["travel", "unknown"]
-  }
+    "must_not_claim": [
+      "travel",
+      "unknown"
+    ],
+    "must_recall": [
+      "audit prep"
+    ]
+  },
+  "id": "frustration_005",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "emotional_arousal"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "The audit prep left me worried all afternoon.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "That is a lot to carry.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What had me worried?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
 }

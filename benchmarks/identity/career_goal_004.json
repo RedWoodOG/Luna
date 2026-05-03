@@ -1,13 +1,38 @@
 {
-  "id": "career_goal_004",
   "category": "identity_continuity",
-  "turns": [
-    { "role": "user", "content": "I care a lot about becoming a better mentor." },
-    { "role": "assistant", "content": "That matters." },
-    { "role": "user", "content": "What kind of professional identity am I building?" }
-  ],
   "expected": {
-    "must_recall": ["mentor"],
-    "must_not_claim": ["manager", "unknown"]
-  }
+    "must_not_claim": [
+      "manager",
+      "unknown"
+    ],
+    "must_recall": [
+      "mentor"
+    ]
+  },
+  "id": "career_goal_004",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I care a lot about becoming a better mentor.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "That matters.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What kind of professional identity am I building?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
 }

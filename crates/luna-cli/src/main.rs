@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use luna_core::EngineKind;
-use std::{path::PathBuf, str::FromStr};
+use luna_metrics::{BenchmarkReport, BenchmarkSubreport};
+use std::{path::PathBuf, process::ExitCode, str::FromStr};
 
 #[derive(Debug, Parser)]
 #[command(name = "luna")]
@@ -38,6 +39,14 @@ enum BenchCommand {
     },
     Compare {
         run_dir: PathBuf,
+        /// Strict mode. Compare on the proof-eligible subreport only and
+        /// exit with code 2 if any case in either engine's run is not
+        /// proof-eligible. Auto-enables in a future PR when a non-draft
+        /// `benchmarks/manifest.json` is present; for PR 0.1 only the
+        /// explicit flag activates strict mode (no non-draft manifest
+        /// exists yet).
+        #[arg(long)]
+        require_proof_eligible: bool,
     },
 }
 
@@ -47,7 +56,7 @@ enum ReportFormat {
     Json,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<ExitCode> {
     let cli = Cli::parse();
     match cli.command {
         Command::Bench { command } => match command {
@@ -74,34 +83,20 @@ fn main() -> anyhow::Result<()> {
                     print_explanations(&run.explanations);
                 }
             }
-            BenchCommand::Compare { run_dir } => {
+            BenchCommand::Compare {
+                run_dir,
+                require_proof_eligible,
+            } => {
                 let keyword = luna_bench::load_run(&run_dir, EngineKind::Keyword).ok();
                 let tcf = luna_bench::load_run(&run_dir, EngineKind::Tcf).ok();
                 match (keyword, tcf) {
                     (Some(keyword), Some(tcf)) => {
-                        println!("# Luna Engine Compare\n");
-                        println!("| Metric | Keyword | TCF | Delta |");
-                        println!("|---|---:|---:|---:|");
-                        print_delta(
-                            "Recall accuracy",
-                            keyword.report.recall_accuracy,
-                            tcf.report.recall_accuracy,
+                        let exit = print_compare(
+                            &keyword.report,
+                            &tcf.report,
+                            require_proof_eligible,
                         );
-                        print_delta(
-                            "False memory rate",
-                            keyword.report.false_memory_rate,
-                            tcf.report.false_memory_rate,
-                        );
-                        print_delta(
-                            "Overclaim rate",
-                            keyword.report.overclaim_rate,
-                            tcf.report.overclaim_rate,
-                        );
-                        print_delta(
-                            "Mean latency ms",
-                            keyword.report.mean_latency_ms,
-                            tcf.report.mean_latency_ms,
-                        );
+                        return Ok(exit);
                     }
                     _ => {
                         println!("Run both engines first:");
@@ -124,7 +119,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
 
 fn print_delta(label: &str, keyword: f32, tcf: f32) {
@@ -134,6 +129,97 @@ fn print_delta(label: &str, keyword: f32, tcf: f32) {
         tcf,
         tcf - keyword
     );
+}
+
+/// Renders the compare table in either strict (proof-eligible only) or
+/// lenient (all-cases totals) mode. Returns the exit code the CLI should
+/// hand back to the shell: success in lenient mode, code 2 in strict mode
+/// when either run contains ineligible cases or has no eligible subset.
+fn print_compare(
+    keyword: &BenchmarkReport,
+    tcf: &BenchmarkReport,
+    require_proof_eligible: bool,
+) -> ExitCode {
+    let keyword_ineligible = ineligible_count(keyword);
+    let tcf_ineligible = ineligible_count(tcf);
+    let any_ineligible = keyword_ineligible > 0 || tcf_ineligible > 0;
+
+    if require_proof_eligible {
+        let (k, t) = match (&keyword.eligible, &tcf.eligible) {
+            (Some(k), Some(t)) => (k, t),
+            _ => {
+                eprintln!(
+                    "--require-proof-eligible: at least one engine has no proof-eligible cases in this run."
+                );
+                return ExitCode::from(2);
+            }
+        };
+        if any_ineligible {
+            eprintln!(
+                "--require-proof-eligible: {} keyword case(s) and {} TCF case(s) are not proof-eligible. Run aborted; results are non-publishable until all cases are eligible.",
+                keyword_ineligible, tcf_ineligible
+            );
+            return ExitCode::from(2);
+        }
+        println!("# Luna Engine Compare (proof-eligible only)\n");
+        print_compare_table(k, t);
+        ExitCode::SUCCESS
+    } else {
+        if any_ineligible {
+            eprintln!(
+                "warning: {} keyword case(s) and {} TCF case(s) are not proof-eligible. \
+                 Use --require-proof-eligible for strict comparison; numbers below \
+                 are TOTALS over all cases and are NOT proof-counted.",
+                keyword_ineligible, tcf_ineligible
+            );
+        }
+        println!("# Luna Engine Compare\n");
+        print_compare_table_total(keyword, tcf);
+        ExitCode::SUCCESS
+    }
+}
+
+fn print_compare_table(keyword: &BenchmarkSubreport, tcf: &BenchmarkSubreport) {
+    println!("| Metric | Keyword | TCF | Delta |");
+    println!("|---|---:|---:|---:|");
+    print_delta("Recall accuracy", keyword.recall_accuracy, tcf.recall_accuracy);
+    print_delta(
+        "False memory rate",
+        keyword.false_memory_rate,
+        tcf.false_memory_rate,
+    );
+    print_delta("Overclaim rate", keyword.overclaim_rate, tcf.overclaim_rate);
+    print_delta(
+        "Mean latency ms",
+        keyword.mean_latency_ms,
+        tcf.mean_latency_ms,
+    );
+}
+
+fn print_compare_table_total(keyword: &BenchmarkReport, tcf: &BenchmarkReport) {
+    println!("| Metric | Keyword | TCF | Delta |");
+    println!("|---|---:|---:|---:|");
+    print_delta("Recall accuracy", keyword.recall_accuracy, tcf.recall_accuracy);
+    print_delta(
+        "False memory rate",
+        keyword.false_memory_rate,
+        tcf.false_memory_rate,
+    );
+    print_delta("Overclaim rate", keyword.overclaim_rate, tcf.overclaim_rate);
+    print_delta(
+        "Mean latency ms",
+        keyword.mean_latency_ms,
+        tcf.mean_latency_ms,
+    );
+}
+
+fn ineligible_count(report: &BenchmarkReport) -> usize {
+    let eligible = report
+        .eligible
+        .as_ref()
+        .map(|sub| sub.total_cases)
+        .unwrap_or(0);
+    report.total_cases.saturating_sub(eligible)
 }
 
 fn print_explanations(explanations: &[luna_bench::CaseExplanation]) {

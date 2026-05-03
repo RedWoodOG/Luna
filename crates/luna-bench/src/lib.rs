@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use luna_core::{
     ConversationTurn, EngineKind, Episode, LunaError, RecallMode, Result, Role, Signal,
 };
@@ -18,10 +18,39 @@ use std::{
 };
 use uuid::Uuid;
 
+/// Schema version expected on every benchmark case file. Hard-break: a
+/// case with any other value is rejected by [`validate_case`]. Bump this
+/// (and the v0.1 manifest) only when adding a new case-file shape that
+/// older loaders cannot understand.
+pub const BENCHMARK_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkCase {
+    pub schema_version: u32,
     pub id: String,
+    /// Which proof program this case feeds (e.g. `proof_1_separability`).
+    /// Cases for different proofs live in the same workspace but never
+    /// share a manifest; this field is the routing key.
+    pub proof_category: String,
+    /// `true` when the case is eligible to count toward proof metrics in a
+    /// frozen manifest. PR 0.1 sets this to `false` for the temporal
+    /// disambiguation cases pending the PR 0.1b authorial timestamp pass.
+    pub proof_eligible: bool,
     pub category: String,
+    /// Contour dimensions the case is *designed* to exercise. Recorded
+    /// per-case so that the formation-stage gates (PR 0.4) can verify each
+    /// stored episode carries non-empty signal in at least one of these
+    /// dimensions. Not consulted by the recall path in PR 0.1; the
+    /// hardcoded `expected_dimensions(category)` mapping continues to
+    /// drive the existing diagnostic classification until PR 0.4.
+    pub target_dimensions: Vec<String>,
+    /// Provenance marker for the per-turn timestamps. PR 0.1 stamps every
+    /// case with `"mechanical_pr_0_1"`. PR 0.1b will replace this with
+    /// `"authorial"` on temporal cases as authorial gap values are
+    /// committed alongside `benchmarks/temporal/RATIONALE.md`. Lets later
+    /// stages programmatically audit which cases still ship with the
+    /// PR-0.1 placeholder schedule.
+    pub timestamp_origin: Option<String>,
     pub turns: Vec<ConversationTurn>,
     pub expected: ExpectedOutcome,
 }
@@ -61,6 +90,8 @@ pub struct CaseExplanation {
     pub id: String,
     pub category: String,
     pub passed: bool,
+    #[serde(default)]
+    pub proof_eligible: bool,
     pub failure_type: FailureType,
     pub verdict: String,
     pub probe: Option<String>,
@@ -349,6 +380,7 @@ fn run_case(
         uncertainty_correct,
         latency_ms,
         claims: final_claims,
+        proof_eligible: case.proof_eligible,
     };
 
     let explanation = if explain {
@@ -378,15 +410,97 @@ fn load_benchmark_cases(input_dir: &Path) -> Result<Vec<BenchmarkCase>> {
     let mut files = Vec::new();
     collect_json_files(input_dir, &mut files)?;
     files.sort();
+
     let mut cases = Vec::new();
+    let mut violations: Vec<String> = Vec::new();
+
     for file in files {
-        let text = fs::read_to_string(&file).map_err(|err| LunaError::new(err.to_string()))?;
-        cases.push(
-            serde_json::from_str(&text)
-                .map_err(|err| LunaError::new(format!("{}: {err}", file.display())))?,
-        );
+        let text = match fs::read_to_string(&file) {
+            Ok(text) => text,
+            Err(err) => {
+                violations.push(format!("{}: read failed: {err}", file.display()));
+                continue;
+            }
+        };
+        let case: BenchmarkCase = match serde_json::from_str(&text) {
+            Ok(case) => case,
+            Err(err) => {
+                violations.push(format!("{}: parse failed: {err}", file.display()));
+                continue;
+            }
+        };
+        let case_violations = validate_case(&case, &file);
+        if !case_violations.is_empty() {
+            violations.extend(case_violations);
+            continue;
+        }
+        cases.push(case);
     }
+
+    if !violations.is_empty() {
+        let msg = format!(
+            "{} benchmark validation issue(s):\n  {}",
+            violations.len(),
+            violations.join("\n  ")
+        );
+        return Err(LunaError::new(msg));
+    }
+
     Ok(cases)
+}
+
+/// Returns a list of human-readable schema/integrity violations for a
+/// single benchmark case. An empty vec means the case is structurally
+/// valid; presence of any entries means the loader rejects this file.
+///
+/// Validation runs after serde deserialization, so type-level failures
+/// (missing fields, wrong types) are surfaced as parse errors and never
+/// reach this function.
+pub fn validate_case(case: &BenchmarkCase, file: &Path) -> Vec<String> {
+    let mut violations = Vec::new();
+    let prefix = file.display();
+
+    if case.schema_version != BENCHMARK_SCHEMA_VERSION {
+        violations.push(format!(
+            "{prefix}: unsupported schema_version {} (only {} is accepted)",
+            case.schema_version, BENCHMARK_SCHEMA_VERSION
+        ));
+    }
+    if case.id.is_empty() {
+        violations.push(format!("{prefix}: id must not be empty"));
+    }
+    if case.proof_category.is_empty() {
+        violations.push(format!("{prefix}: proof_category must not be empty"));
+    }
+    if case.target_dimensions.is_empty() {
+        violations.push(format!("{prefix}: target_dimensions must not be empty"));
+    }
+    if case.turns.is_empty() {
+        violations.push(format!("{prefix}: turns must not be empty"));
+    }
+
+    let mut last: Option<DateTime<Utc>> = None;
+    for (index, turn) in case.turns.iter().enumerate() {
+        match turn.timestamp {
+            None => violations.push(format!(
+                "{prefix}: turn {index} ({:?}) is missing a timestamp",
+                turn.role
+            )),
+            Some(ts) => {
+                if let Some(prev) = last {
+                    if ts < prev {
+                        violations.push(format!(
+                            "{prefix}: turn {index} timestamp {} precedes previous turn ({})",
+                            ts, prev
+                        ));
+                    }
+                }
+                last = Some(ts);
+            }
+        }
+    }
+
+    violations
 }
 
 fn collect_json_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
@@ -467,6 +581,7 @@ fn build_explanation(
         id: case.id.clone(),
         category: case.category.clone(),
         passed: score.passed,
+        proof_eligible: case.proof_eligible,
         failure_type,
         verdict,
         probe,

@@ -1,13 +1,38 @@
 {
-  "id": "frustration_001",
   "category": "emotional_recall",
-  "turns": [
-    { "role": "user", "content": "I hated working with that client." },
-    { "role": "assistant", "content": "That sounded frustrating." },
-    { "role": "user", "content": "What situations frustrate me?" }
-  ],
   "expected": {
-    "must_recall": ["client"],
-    "must_not_claim": ["commute", "family", "unknown"]
-  }
+    "must_not_claim": [
+      "commute",
+      "family",
+      "unknown"
+    ],
+    "must_recall": [
+      "client"
+    ]
+  },
+  "id": "frustration_001",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "emotional_arousal"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I hated working with that client.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "That sounded frustrating.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What situations frustrate me?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
 }

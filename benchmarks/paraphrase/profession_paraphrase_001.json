@@ -1,28 +1,38 @@
 {
-  "id": "profession_paraphrase_001",
   "category": "paraphrase_invariance",
-  "turns": [
-    {
-      "role": "user",
-      "content": "I work as a mechanical engineer."
-    },
-    {
-      "role": "assistant",
-      "content": "Got it."
-    },
-    {
-      "role": "user",
-      "content": "What do I do for a living?"
-    }
-  ],
   "expected": {
-    "must_recall": [
-      "mechanical engineer"
-    ],
     "must_not_claim": [
       "software engineer",
       "architect",
       "unknown"
+    ],
+    "must_recall": [
+      "mechanical engineer"
     ]
-  }
+  },
+  "id": "profession_paraphrase_001",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I work as a mechanical engineer.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "Got it.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What do I do for a living?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
 }
