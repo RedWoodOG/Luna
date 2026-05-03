@@ -29,7 +29,7 @@
 //! ```
 //!
 //! Schema-violating LLM output is caught upstream by
-//! [`luna_extract::validate_against_prompt_v2`] inside
+//! [`luna_extract::validate_against_prompt_v3`] inside
 //! [`luna_extract::LlmExtractor::extract`]; those cases surface here
 //! as `ExtractionFailed`, which is why a separate
 //! `ObservationInvalid` variant would be redundant.

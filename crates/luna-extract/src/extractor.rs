@@ -16,7 +16,7 @@
 //!      |
 //!      | parse JSON
 //!      v
-//!   validate_against_prompt_v2
+//!   validate_against_prompt_v3
 //!      |
 //!      | aggregate violations -> error if any
 //!      v
@@ -33,8 +33,8 @@
 use crate::{
     backend::{LlmBackend, LlmRequest},
     cache::{CacheKey, ExtractionCache},
-    llm_observation::{validate_against_prompt_v2, LlmObservation, EXTRACTION_SCHEMA_VERSION},
-    prompt::{build_prompt_v2, prompt_v2_hash},
+    llm_observation::{validate_against_prompt_v3, LlmObservation, EXTRACTION_SCHEMA_VERSION},
+    prompt::{build_prompt_v3, prompt_v3_hash},
 };
 use luna_core::{ConversationTurn, LunaError, Result};
 
@@ -61,7 +61,7 @@ impl<B: LlmBackend, C: ExtractionCache> LlmExtractor<B, C> {
         let key = CacheKey::compute(
             EXTRACTION_SCHEMA_VERSION,
             self.backend.model_id(),
-            prompt_v2_hash(),
+            prompt_v3_hash(),
             &turn.content,
             turn.timestamp,
         );
@@ -71,14 +71,14 @@ impl<B: LlmBackend, C: ExtractionCache> LlmExtractor<B, C> {
         }
 
         let request = LlmRequest {
-            prompt: build_prompt_v2(turn),
+            prompt: build_prompt_v3(turn),
         };
         let raw = self.backend.complete(&request)?;
         let observation: LlmObservation = serde_json::from_str(&raw).map_err(|err| {
             LunaError::new(format!("backend output is not valid JSON: {err}"))
         })?;
 
-        let violations = validate_against_prompt_v2(&observation);
+        let violations = validate_against_prompt_v3(&observation);
         if !violations.is_empty() {
             return Err(LunaError::new(format!(
                 "extraction validation failed ({}): {}",
@@ -108,7 +108,7 @@ mod tests {
     }
 
     fn well_formed_response() -> String {
-        // Hand-crafted to satisfy validate_against_prompt_v2: valid
+        // Hand-crafted to satisfy validate_against_prompt_v3: valid
         // domain/kind, all confidences in [0,1], reliability "learned".
         let observation = LlmObservation {
             assertions: vec![LlmAssertion {
@@ -138,7 +138,7 @@ mod tests {
 
     fn invalid_domain_response() -> String {
         // domain "vibe" is not in the prompt-v1 allowlist; passes
-        // serde parsing, fails validate_against_prompt_v2.
+        // serde parsing, fails validate_against_prompt_v3.
         let observation = LlmObservation {
             assertions: vec![LlmAssertion {
                 domain: "vibe".to_string(),
@@ -172,7 +172,7 @@ mod tests {
         let key = CacheKey::compute(
             EXTRACTION_SCHEMA_VERSION,
             "test-model@v1",
-            prompt_v2_hash(),
+            prompt_v3_hash(),
             &turn.content,
             turn.timestamp,
         );
@@ -234,7 +234,7 @@ mod tests {
         let key = CacheKey::compute(
             EXTRACTION_SCHEMA_VERSION,
             "test-model@v1",
-            prompt_v2_hash(),
+            prompt_v3_hash(),
             &turn.content,
             turn.timestamp,
         );
@@ -264,7 +264,7 @@ mod tests {
         let key = CacheKey::compute(
             EXTRACTION_SCHEMA_VERSION,
             "test-model@v1",
-            prompt_v2_hash(),
+            prompt_v3_hash(),
             &turn.content,
             turn.timestamp,
         );
