@@ -1,1 +1,8 @@
 target/
+
+# Scratch evaluation output. Each `bench run` rewrites it; never committed
+# to avoid accidental "results drift" commits that would muddy pre-
+# registered publication runs. Named publication runs go to dedicated
+# directories instead, e.g. runs/proof-1/, runs/adversarial-proof-1/,
+# runs/stage-0-formation/, and are committed deliberately at tag time.
+runs/latest/
