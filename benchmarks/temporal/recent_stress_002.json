@@ -11,38 +11,38 @@
   },
   "id": "recent_stress_002",
   "proof_category": "proof_1_separability",
-  "proof_eligible": false,
+  "proof_eligible": true,
   "schema_version": 1,
   "target_dimensions": [
     "temporal_relevance",
     "goal_pressure"
   ],
-  "timestamp_origin": "mechanical_pr_0_1",
+  "timestamp_origin": "authorial",
   "turns": [
     {
       "content": "Months ago I was anxious about moving apartments.",
       "role": "user",
-      "timestamp": "2026-01-01T10:00:00Z"
+      "timestamp": "2026-02-03T09:00:00Z"
     },
     {
       "content": "Okay.",
       "role": "assistant",
-      "timestamp": "2026-01-01T11:00:00Z"
+      "timestamp": "2026-02-03T09:01:00Z"
     },
     {
       "content": "This morning the client deadline had me tense.",
       "role": "user",
-      "timestamp": "2026-01-01T12:00:00Z"
+      "timestamp": "2026-05-03T08:00:00Z"
     },
     {
       "content": "Noted.",
       "role": "assistant",
-      "timestamp": "2026-01-01T13:00:00Z"
+      "timestamp": "2026-05-03T08:01:00Z"
     },
     {
       "content": "What was the recent pressure?",
       "role": "user",
-      "timestamp": "2026-01-01T14:00:00Z"
+      "timestamp": "2026-05-03T14:00:00Z"
     }
   ]
 }

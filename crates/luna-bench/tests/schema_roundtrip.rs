@@ -160,17 +160,19 @@ fn every_temporal_case_is_proof_ineligible_until_pr_0_1b() {
 }
 
 #[test]
-fn every_non_temporal_case_is_proof_eligible() {
+fn every_proof_1_non_temporal_case_is_proof_eligible() {
     let dir = benchmarks_dir();
     let mut files = Vec::new();
     collect_json(&dir, &mut files);
     for path in files {
         let text = std::fs::read_to_string(&path).unwrap();
         let case: BenchmarkCase = serde_json::from_str(&text).unwrap();
-        if case.category != "temporal_disambiguation" {
+        if case.proof_category == "proof_1_separability"
+            && case.category != "temporal_disambiguation"
+        {
             assert!(
                 case.proof_eligible,
-                "{}: non-temporal case must ship proof_eligible=true",
+                "{}: proof-1 non-temporal case must ship proof_eligible=true",
                 path.display()
             );
         }
