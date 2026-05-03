@@ -35,13 +35,14 @@
 //! `ObservationInvalid` variant would be redundant.
 
 use crate::{load_benchmark_cases, BenchmarkCase};
-use luna_core::{Episode, LunaError, Result, Role, Signal};
+use luna_core::{ConversationTurn, Episode, LunaError, Result, Role, Signal, StructuredAssertion};
 use luna_events::{
     AssertionExtracted, EpisodeCreated, EpisodeReinforced, EventEnvelope, EventSource, LunaEvent,
     StoredEvent, TurnObserved,
 };
 use luna_extract::{CountingBackend, ExtractionCache, LlmBackend, LunaExtractor};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::Path;
 use uuid::Uuid;
 
@@ -96,6 +97,84 @@ pub struct FormationCaseReport {
     pub assertion_values: Vec<String>,
     pub target_dimensions_status: Vec<TargetDimensionStatus>,
     pub probe_observed: bool,
+    /// Per-needle diagnostics for any must_recall needle that did not
+    /// match exactly one stored assertion value. Surfaces *why* the
+    /// gate failed: did the LLM omit the content, paraphrase it,
+    /// produce a broader category, or is the needle distributed
+    /// across turns in a way the case wording doesn't allow a single
+    /// assertion to capture? PR 0.8 introduces this; old run JSONs
+    /// deserialize with the field absent.
+    #[serde(default)]
+    pub must_recall_diagnostics: Vec<MustRecallDiagnostic>,
+}
+
+/// One diagnostic record per must_recall needle that didn't match
+/// exactly once. Pairs with a `MustRecallMissing` or
+/// `MustRecallAmbiguous` entry in `failures` to classify the failure.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MustRecallDiagnostic {
+    pub needle: String,
+    /// Classification picked by the lexical heuristic. Each variant
+    /// suggests a different remediation lever (extractor prompt,
+    /// case wording, formation-gate granularity); see
+    /// [`MustRecallFailureKind`].
+    pub kind: MustRecallFailureKind,
+    /// True iff the needle (case-insensitive) appears as a substring
+    /// in any user-role turn's content. False means the case wording
+    /// itself doesn't include the canonical phrase the must_recall
+    /// expects.
+    pub appears_in_turn_text: bool,
+    /// Index of the first user-role turn whose content contains the
+    /// needle as a substring. `None` when `appears_in_turn_text` is
+    /// false.
+    pub appears_in_turn_index: Option<usize>,
+    /// All needle words present somewhere across the user-role turns
+    /// but no single turn contains all of them. Catches the
+    /// cross-turn-distributed case (type E).
+    pub distributed_across_turns: bool,
+    /// Closest stored assertion value by Jaccard token overlap, if
+    /// any assertion was stored at all. Lets a reviewer compare
+    /// "what the case wanted" with "what the LLM produced".
+    pub closest_match: Option<ClosestAssertion>,
+    /// Number of stored assertion values across all rebuilt episodes
+    /// for this case, for context when reading the diagnostic.
+    pub stored_assertion_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClosestAssertion {
+    pub value: String,
+    pub domain: String,
+    pub kind: String,
+    pub jaccard_similarity: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MustRecallFailureKind {
+    /// Type A. The needle appears in the case's user turns but no
+    /// stored assertion value comes close (no related assertion at
+    /// all, or only assertions with very low token overlap).
+    /// Suggests the LLM did not extract the relevant content.
+    Omitted,
+    /// Types B and C combined. The needle appears in the case's user
+    /// turns and a stored assertion has meaningful token overlap with
+    /// the needle but is not an exact match. Either the LLM
+    /// paraphrased the canonical noun phrase or extracted a broader
+    /// category. Lexical similarity alone can't distinguish B from C
+    /// reliably; both are "near miss" — inspect manually.
+    Paraphrased,
+    /// Type D. The needle does not appear as a substring in any
+    /// user-role turn, and its tokens are not distributed across
+    /// turns. Suggests the case's expected value is too strict or
+    /// disconnected from the case wording.
+    OverlyStrict,
+    /// Type E. The needle does not appear in any single user-role
+    /// turn but all of its tokens are present somewhere across the
+    /// user turns. Suggests the formation gate's
+    /// "value contained in single assertion" check is too rigid for
+    /// content that's distributed across the conversation.
+    CrossTurn,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -354,6 +433,14 @@ where
 
     let passed = failures.is_empty();
 
+    let must_recall_diagnostics = build_must_recall_diagnostics(
+        &case.expected.must_recall,
+        &assertion_values,
+        &collect_assertions(&episodes),
+        &case.turns,
+        &failures,
+    );
+
     FormationCaseReport {
         id: case.id.clone(),
         category: case.category.clone(),
@@ -365,6 +452,188 @@ where
         assertion_values,
         target_dimensions_status,
         probe_observed,
+        must_recall_diagnostics,
+    }
+}
+
+/// Flattens the rebuilt episodes' assertions into one list, preserving
+/// each assertion's domain/kind alongside its value. The diagnostic
+/// pass uses this to surface the closest stored value's context.
+fn collect_assertions(episodes: &[Episode]) -> Vec<StructuredAssertion> {
+    episodes
+        .iter()
+        .flat_map(|episode| episode.assertions.iter().cloned())
+        .collect()
+}
+
+/// Builds one [`MustRecallDiagnostic`] per needle that surfaced as
+/// `MustRecallMissing` or `MustRecallAmbiguous` in `failures`. No
+/// behavior change — purely additive context for the human reviewer.
+fn build_must_recall_diagnostics(
+    must_recall: &[String],
+    assertion_values: &[String],
+    structured_assertions: &[StructuredAssertion],
+    turns: &[ConversationTurn],
+    failures: &[FormationFailure],
+) -> Vec<MustRecallDiagnostic> {
+    let needs_diagnostic: HashSet<&str> = failures
+        .iter()
+        .filter_map(|failure| match failure {
+            FormationFailure::MustRecallMissing { needle }
+            | FormationFailure::MustRecallAmbiguous { needle, .. } => Some(needle.as_str()),
+            _ => None,
+        })
+        .collect();
+
+    must_recall
+        .iter()
+        .filter(|needle| needs_diagnostic.contains(needle.as_str()))
+        .map(|needle| diagnose_needle(needle, assertion_values, structured_assertions, turns))
+        .collect()
+}
+
+fn diagnose_needle(
+    needle: &str,
+    assertion_values: &[String],
+    structured_assertions: &[StructuredAssertion],
+    turns: &[ConversationTurn],
+) -> MustRecallDiagnostic {
+    let needle_lower = needle.to_ascii_lowercase();
+
+    let appears_in_turn_index = turns
+        .iter()
+        .enumerate()
+        .find(|(_, turn)| {
+            turn.role == Role::User
+                && turn.content.to_ascii_lowercase().contains(&needle_lower)
+        })
+        .map(|(index, _)| index);
+    let appears_in_turn_text = appears_in_turn_index.is_some();
+
+    let distributed_across_turns =
+        !appears_in_turn_text && needle_words_distributed_across_turns(&needle_lower, turns);
+
+    let closest_match =
+        closest_assertion(&needle_lower, assertion_values, structured_assertions);
+
+    let kind = classify(
+        appears_in_turn_text,
+        distributed_across_turns,
+        closest_match.as_ref(),
+    );
+
+    MustRecallDiagnostic {
+        needle: needle.to_string(),
+        kind,
+        appears_in_turn_text,
+        appears_in_turn_index,
+        distributed_across_turns,
+        closest_match,
+        stored_assertion_count: assertion_values.len(),
+    }
+}
+
+fn classify(
+    appears_in_turn_text: bool,
+    distributed_across_turns: bool,
+    closest: Option<&ClosestAssertion>,
+) -> MustRecallFailureKind {
+    // Threshold for "the LLM said something near this" vs "the LLM
+    // missed it entirely". Picked at 0.34 — a near-miss assertion
+    // sharing one of two or three tokens crosses it; sharing zero
+    // tokens does not. Adjust when accumulated diagnostics suggest a
+    // sharper line.
+    const NEAR_MISS_JACCARD: f32 = 0.34;
+
+    if !appears_in_turn_text {
+        return if distributed_across_turns {
+            MustRecallFailureKind::CrossTurn
+        } else {
+            MustRecallFailureKind::OverlyStrict
+        };
+    }
+    match closest {
+        Some(match_) if match_.jaccard_similarity >= NEAR_MISS_JACCARD => {
+            MustRecallFailureKind::Paraphrased
+        }
+        _ => MustRecallFailureKind::Omitted,
+    }
+}
+
+fn closest_assertion(
+    needle_lower: &str,
+    assertion_values: &[String],
+    structured_assertions: &[StructuredAssertion],
+) -> Option<ClosestAssertion> {
+    if assertion_values.is_empty() {
+        return None;
+    }
+    let needle_tokens = tokenize(needle_lower);
+    let mut best: Option<(usize, f32)> = None;
+    for (index, value) in assertion_values.iter().enumerate() {
+        let value_tokens = tokenize(&value.to_ascii_lowercase());
+        let similarity = jaccard(&needle_tokens, &value_tokens);
+        if best.map(|(_, score)| similarity > score).unwrap_or(true) {
+            best = Some((index, similarity));
+        }
+    }
+    let (index, similarity) = best?;
+    // structured_assertions and assertion_values are constructed in
+    // the same order, so index aligns. Defensive fallback to the
+    // first assertion if alignment ever drifts.
+    let domain_kind = structured_assertions
+        .get(index)
+        .or_else(|| structured_assertions.first());
+    Some(ClosestAssertion {
+        value: assertion_values[index].clone(),
+        domain: domain_kind
+            .map(|a| a.domain.clone())
+            .unwrap_or_default(),
+        kind: domain_kind.map(|a| a.kind.clone()).unwrap_or_default(),
+        jaccard_similarity: similarity,
+    })
+}
+
+fn needle_words_distributed_across_turns(needle_lower: &str, turns: &[ConversationTurn]) -> bool {
+    let needle_tokens: HashSet<String> = tokenize(needle_lower).into_iter().collect();
+    if needle_tokens.is_empty() {
+        return false;
+    }
+    let user_turn_token_sets: Vec<HashSet<String>> = turns
+        .iter()
+        .filter(|t| t.role == Role::User)
+        .map(|t| tokenize(&t.content.to_ascii_lowercase()).into_iter().collect())
+        .collect();
+    let union: HashSet<&String> = user_turn_token_sets.iter().flatten().collect();
+    let all_present = needle_tokens.iter().all(|word| union.contains(word));
+    if !all_present {
+        return false;
+    }
+    let any_single_has_all = user_turn_token_sets
+        .iter()
+        .any(|turn_words| needle_tokens.iter().all(|w| turn_words.contains(w)));
+    !any_single_has_all
+}
+
+fn tokenize(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(|word| word.to_ascii_lowercase())
+        .collect()
+}
+
+fn jaccard(left: &[String], right: &[String]) -> f32 {
+    if left.is_empty() && right.is_empty() {
+        return 0.0;
+    }
+    let left_set: HashSet<&String> = left.iter().collect();
+    let right_set: HashSet<&String> = right.iter().collect();
+    let intersection = left_set.intersection(&right_set).count();
+    let union = left_set.union(&right_set).count();
+    if union == 0 {
+        0.0
+    } else {
+        intersection as f32 / union as f32
     }
 }
 
@@ -469,6 +738,36 @@ fn dimension_signal(episode: &Episode, name: &str) -> Option<Signal> {
     }
 }
 
+/// Tally of [`MustRecallFailureKind`] classifications across all
+/// per-needle diagnostics in a report. Surfaces in the markdown
+/// summary so reviewers can see the dominant failure mode at a
+/// glance — different modes call for different fixes (prompt,
+/// case wording, gate granularity).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MustRecallDiagnosticCounts {
+    pub omitted: usize,
+    pub paraphrased: usize,
+    pub overly_strict: usize,
+    pub cross_turn: usize,
+    pub total: usize,
+}
+
+pub fn diagnostic_counts(report: &FormationReport) -> MustRecallDiagnosticCounts {
+    let mut counts = MustRecallDiagnosticCounts::default();
+    for case in &report.cases {
+        for diagnostic in &case.must_recall_diagnostics {
+            counts.total += 1;
+            match diagnostic.kind {
+                MustRecallFailureKind::Omitted => counts.omitted += 1,
+                MustRecallFailureKind::Paraphrased => counts.paraphrased += 1,
+                MustRecallFailureKind::OverlyStrict => counts.overly_strict += 1,
+                MustRecallFailureKind::CrossTurn => counts.cross_turn += 1,
+            }
+        }
+    }
+    counts
+}
+
 /// Render a [`FormationReport`] as the human-readable summary the user
 /// committed to before implementation: total counts on top, gate-by-
 /// gate counts, second-run cache hit rate, then the proof-eligible
@@ -486,6 +785,27 @@ pub fn formation_markdown(report: &FormationReport) -> String {
                 100.0 * numerator as f32 / denominator as f32
             )
         }
+    };
+
+    let counts = diagnostic_counts(report);
+    let diagnostics_block = if counts.total == 0 {
+        String::new()
+    } else {
+        format!(
+            "\n## Must-recall diagnostics (PR 0.8)\n\n\
+             {} per-needle diagnostic record(s) across all failing cases:\n\n\
+             | Classification | Count | Suggested lever |\n\
+             |---|---:|---|\n\
+             | Omitted (A) | {} | LLM extraction prompt — content not extracted |\n\
+             | Paraphrased (B/C) | {} | Prompt instruction to preserve canonical noun phrases |\n\
+             | Overly strict (D) | {} | Case wording — needle not in turn text |\n\
+             | Cross-turn (E) | {} | Formation gate granularity — needle distributed across turns |\n",
+            counts.total,
+            counts.omitted,
+            counts.paraphrased,
+            counts.overly_strict,
+            counts.cross_turn,
+        )
     };
 
     format!(
@@ -506,7 +826,7 @@ pub fn formation_markdown(report: &FormationReport) -> String {
          | Cache hit rate, second run | {:.0}% |\n\
          | Backend calls (first run) | {} |\n\
          | Backend calls (second run) | {} |\n\
-         | Total turns | {} |\n\n\
+         | Total turns | {} |\n{}\n\
          _Formation does not call any recall engine. Formation green is\n\
          a precondition for proof runs; formation red means fix\n\
          extraction or case wording, never TCF scoring._\n",
@@ -528,11 +848,12 @@ pub fn formation_markdown(report: &FormationReport) -> String {
         report.backend_calls_first_run,
         report.backend_calls_second_run,
         report.total_turns,
+        diagnostics_block,
     )
 }
 
-/// Returns a [`LunaError`] holding the markdown summary plus any failed
-/// case ids and their failure types — useful when a CLI wants to fail
+/// Returns a textual summary of failed cases with their failure types
+/// and PR-0.8 must_recall diagnostics. Useful when a CLI wants to fail
 /// loudly with formation-quality context.
 pub fn formation_failure_summary(report: &FormationReport) -> String {
     let failed: Vec<_> = report.cases.iter().filter(|c| !c.passed).collect();
@@ -548,6 +869,25 @@ pub fn formation_failure_summary(report: &FormationReport) -> String {
         out.push_str(&format!("  {} ({}):\n", case.id, case.category));
         for failure in &case.failures {
             out.push_str(&format!("    - {failure:?}\n"));
+        }
+        for diagnostic in &case.must_recall_diagnostics {
+            out.push_str(&format!(
+                "    [diag {:?}] needle={:?} in_turn={} closest={}\n",
+                diagnostic.kind,
+                diagnostic.needle,
+                diagnostic
+                    .appears_in_turn_index
+                    .map(|i| i.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+                diagnostic
+                    .closest_match
+                    .as_ref()
+                    .map(|m| format!(
+                        "{:?} (jaccard={:.2}, {}:{})",
+                        m.value, m.jaccard_similarity, m.domain, m.kind
+                    ))
+                    .unwrap_or_else(|| "none".to_string()),
+            ));
         }
     }
     out
@@ -1011,5 +1351,170 @@ mod tests {
         };
         let md = formation_markdown(&report);
         assert!(md.contains("Formation Report"));
+    }
+
+    // PR 0.8 must_recall diagnostic classification tests. Each test
+    // sets up a controlled situation where exactly one classification
+    // should fire, then asserts on the kind.
+
+    fn user(content: &str) -> ConversationTurn {
+        ConversationTurn::user(content)
+    }
+
+    fn structured(domain: &str, kind: &str, value: &str) -> StructuredAssertion {
+        StructuredAssertion {
+            domain: domain.to_string(),
+            kind: kind.to_string(),
+            value: value.to_string(),
+        }
+    }
+
+    #[test]
+    fn diagnostic_classifies_omitted_when_needle_in_turn_but_no_related_assertion() {
+        let needle = "client deadline";
+        let assertion_values = vec!["mechanical engineer".to_string()];
+        let structured_assertions = vec![structured("identity", "profession", "mechanical engineer")];
+        let turns = vec![user("This morning the client deadline had me tense.")];
+        let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
+        assert_eq!(diag.kind, MustRecallFailureKind::Omitted);
+        assert!(diag.appears_in_turn_text);
+        assert_eq!(diag.appears_in_turn_index, Some(0));
+        // Closest is recorded for diagnostic context but its similarity is below the
+        // near-miss threshold, which is what flips the classification to Omitted.
+        let closest = diag.closest_match.expect("a closest match should be recorded");
+        assert!(
+            closest.jaccard_similarity < 0.34,
+            "expected jaccard below threshold for Omitted classification, got {}",
+            closest.jaccard_similarity
+        );
+    }
+
+    #[test]
+    fn diagnostic_classifies_paraphrased_when_similar_assertion_exists() {
+        let needle = "client deadline";
+        let assertion_values = vec!["client deadline pressure".to_string()];
+        let structured_assertions = vec![structured("work", "current_stressor", "client deadline pressure")];
+        let turns = vec![user("This morning the client deadline had me tense.")];
+        let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
+        assert_eq!(diag.kind, MustRecallFailureKind::Paraphrased);
+        let closest = diag.closest_match.unwrap();
+        assert!(closest.jaccard_similarity >= 0.34);
+        assert_eq!(closest.domain, "work");
+        assert_eq!(closest.kind, "current_stressor");
+    }
+
+    #[test]
+    fn diagnostic_classifies_overly_strict_when_needle_absent_from_turns() {
+        let needle = "phantom phrase";
+        let assertion_values = vec!["mechanical engineer".to_string()];
+        let structured_assertions = vec![structured("identity", "profession", "mechanical engineer")];
+        let turns = vec![user("I work as a mechanical engineer.")];
+        let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
+        assert_eq!(diag.kind, MustRecallFailureKind::OverlyStrict);
+        assert!(!diag.appears_in_turn_text);
+        assert!(!diag.distributed_across_turns);
+    }
+
+    #[test]
+    fn diagnostic_classifies_cross_turn_when_needle_words_split_across_turns() {
+        let needle = "client deadline";
+        let assertion_values = vec!["work pressure".to_string()];
+        let structured_assertions = vec![structured("work", "current_stressor", "work pressure")];
+        let turns = vec![
+            user("The client meeting is tomorrow."),
+            user("That deadline is going to wreck me."),
+        ];
+        let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
+        assert_eq!(diag.kind, MustRecallFailureKind::CrossTurn);
+        assert!(!diag.appears_in_turn_text);
+        assert!(diag.distributed_across_turns);
+    }
+
+    #[test]
+    fn diagnostic_records_no_closest_match_when_no_assertions_stored() {
+        let needle = "anything";
+        let assertion_values: Vec<String> = vec![];
+        let structured_assertions: Vec<StructuredAssertion> = vec![];
+        let turns = vec![user("I had a strange day with anything happening.")];
+        let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
+        assert!(diag.closest_match.is_none());
+        // Needle in turn text + no closest match -> classified Omitted.
+        assert_eq!(diag.kind, MustRecallFailureKind::Omitted);
+    }
+
+    #[test]
+    fn diagnostic_counts_aggregate_across_cases() {
+        let report = FormationReport {
+            total_cases: 2,
+            formation_eligible: 0,
+            proof_eligible_total: 0,
+            proof_eligible_passing_formation: 0,
+            gates: GateCounts::default(),
+            second_run_cache_hit_rate: 0.0,
+            backend_calls_first_run: 0,
+            backend_calls_second_run: 0,
+            total_turns: 0,
+            cases: vec![
+                FormationCaseReport {
+                    id: "a".to_string(),
+                    category: "x".to_string(),
+                    proof_category: "p".to_string(),
+                    proof_eligible: true,
+                    passed: false,
+                    failures: vec![],
+                    episodes_created: 0,
+                    assertion_values: vec![],
+                    target_dimensions_status: vec![],
+                    probe_observed: false,
+                    must_recall_diagnostics: vec![
+                        MustRecallDiagnostic {
+                            needle: "x".to_string(),
+                            kind: MustRecallFailureKind::Omitted,
+                            appears_in_turn_text: true,
+                            appears_in_turn_index: Some(0),
+                            distributed_across_turns: false,
+                            closest_match: None,
+                            stored_assertion_count: 0,
+                        },
+                        MustRecallDiagnostic {
+                            needle: "y".to_string(),
+                            kind: MustRecallFailureKind::Paraphrased,
+                            appears_in_turn_text: true,
+                            appears_in_turn_index: Some(0),
+                            distributed_across_turns: false,
+                            closest_match: None,
+                            stored_assertion_count: 0,
+                        },
+                    ],
+                },
+                FormationCaseReport {
+                    id: "b".to_string(),
+                    category: "x".to_string(),
+                    proof_category: "p".to_string(),
+                    proof_eligible: true,
+                    passed: false,
+                    failures: vec![],
+                    episodes_created: 0,
+                    assertion_values: vec![],
+                    target_dimensions_status: vec![],
+                    probe_observed: false,
+                    must_recall_diagnostics: vec![MustRecallDiagnostic {
+                        needle: "z".to_string(),
+                        kind: MustRecallFailureKind::CrossTurn,
+                        appears_in_turn_text: false,
+                        appears_in_turn_index: None,
+                        distributed_across_turns: true,
+                        closest_match: None,
+                        stored_assertion_count: 0,
+                    }],
+                },
+            ],
+        };
+        let counts = diagnostic_counts(&report);
+        assert_eq!(counts.total, 3);
+        assert_eq!(counts.omitted, 1);
+        assert_eq!(counts.paraphrased, 1);
+        assert_eq!(counts.cross_turn, 1);
+        assert_eq!(counts.overly_strict, 0);
     }
 }

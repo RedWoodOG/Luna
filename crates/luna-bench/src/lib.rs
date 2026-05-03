@@ -1,8 +1,10 @@
 pub mod formation;
 
 pub use formation::{
-    formation_failure_summary, formation_markdown, run_formation, run_formation_on_cases,
-    FormationCaseReport, FormationFailure, FormationReport, GateCounts, TargetDimensionStatus,
+    diagnostic_counts, formation_failure_summary, formation_markdown, run_formation,
+    run_formation_on_cases, ClosestAssertion, FormationCaseReport, FormationFailure,
+    FormationReport, GateCounts, MustRecallDiagnostic, MustRecallDiagnosticCounts,
+    MustRecallFailureKind, TargetDimensionStatus,
 };
 
 use chrono::{DateTime, Utc};
