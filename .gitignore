@@ -6,3 +6,9 @@ target/
 # directories instead, e.g. runs/proof-1/, runs/adversarial-proof-1/,
 # runs/stage-0-formation/, and are committed deliberately at tag time.
 runs/latest/
+
+# Project-local persistent caches: extraction outputs keyed by
+# (schema_version, model_id, prompt_hash, turn_content, turn_timestamp).
+# Survives `cargo clean` and isn't shared via git; cache hits are a
+# determinism aid, not a publishable artifact.
+.luna/

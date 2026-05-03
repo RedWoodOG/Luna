@@ -1,3 +1,12 @@
+pub mod cache;
+pub mod llm_observation;
+
+pub use cache::{CacheKey, ExtractionCache, FileExtractionCache};
+pub use llm_observation::{
+    validate_observation, LlmAssertion, LlmObservation, LlmSignal, ALLOWED_DIMENSIONS,
+    ALLOWED_RELIABILITIES, EXTRACTION_SCHEMA_VERSION,
+};
+
 use luna_core::{
     CognitiveObservation, ConversationTurn, Result, Role, Signal, SignalReliability,
     StructuredAssertion,
