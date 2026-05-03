@@ -14,11 +14,11 @@ pub use cache::{CacheKey, ExtractionCache, FileExtractionCache};
 pub use extractor::LlmExtractor;
 pub use fusion::fuse_observation;
 pub use llm_observation::{
-    validate_against_prompt_v1, validate_observation, LlmAssertion, LlmObservation, LlmSignal,
-    ALLOWED_DIMENSIONS, ALLOWED_RELIABILITIES, EXTRACTION_SCHEMA_VERSION, PROMPT_V1_DOMAIN_KINDS,
+    validate_against_prompt_v2, validate_observation, LlmAssertion, LlmObservation, LlmSignal,
+    ALLOWED_DIMENSIONS, ALLOWED_RELIABILITIES, EXTRACTION_SCHEMA_VERSION, PROMPT_V2_DOMAIN_KINDS,
 };
 pub use luna_extractor::LunaExtractor;
-pub use prompt::{build_prompt_v1, prompt_v1_hash};
+pub use prompt::{build_prompt_v2, prompt_v2_hash};
 pub use second_source::{
     default_v1_sources, AffectLexicon, FirstPersonIdentityDetector, GoalPhraseLexicon,
     SecondSource, TemporalDetector,

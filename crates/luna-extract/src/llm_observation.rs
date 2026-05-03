@@ -143,13 +143,15 @@ fn is_unit(value: f32) -> bool {
     value.is_finite() && (0.0..=1.0).contains(&value)
 }
 
-/// (domain, kind) pairs the prompt v1 commits the LLM to produce. A
+/// (domain, kind) pairs the prompt v2 commits the LLM to produce. A
 /// closed set: every assertion must use one of these. Expanded via PR
 /// 0.3a from the original 7 to 22 pairs to give the human-seed drafts
 /// enough vocabulary without letting the prompt invent an open
-/// taxonomy. Further expansion bumps the prompt (and therefore
-/// `prompt_v1_hash`, which invalidates cached extractions).
-pub const PROMPT_V1_DOMAIN_KINDS: &[(&str, &str)] = &[
+/// taxonomy. Promoted to v2 alongside the prompt's assertion-value
+/// rule (PR 0.9); the allowlist content is unchanged from v1.
+/// Further expansion bumps the prompt (and therefore
+/// `prompt_v2_hash`, which invalidates cached extractions).
+pub const PROMPT_V2_DOMAIN_KINDS: &[(&str, &str)] = &[
     ("identity", "profession"),
     ("identity", "family_structure"),
     ("identity", "role"),
@@ -175,20 +177,20 @@ pub const PROMPT_V1_DOMAIN_KINDS: &[(&str, &str)] = &[
 ];
 
 /// Stricter validation layered on top of [`validate_observation`]. Adds
-/// the prompt-v1 domain/kind allowlist: any assertion whose
-/// `(domain, kind)` pair is not in [`PROMPT_V1_DOMAIN_KINDS`] is a
+/// the prompt-v2 domain/kind allowlist: any assertion whose
+/// `(domain, kind)` pair is not in [`PROMPT_V2_DOMAIN_KINDS`] is a
 /// violation.
 ///
 /// Layered (rather than parameterized) because the allowlist is
 /// inseparable from the prompt it accompanies — a prompt vN edit ships
 /// its own validate_against_prompt_vN.
-pub fn validate_against_prompt_v1(observation: &LlmObservation) -> Vec<String> {
+pub fn validate_against_prompt_v2(observation: &LlmObservation) -> Vec<String> {
     let mut violations = validate_observation(observation);
     for (index, assertion) in observation.assertions.iter().enumerate() {
         let pair = (assertion.domain.as_str(), assertion.kind.as_str());
-        if !PROMPT_V1_DOMAIN_KINDS.contains(&pair) {
+        if !PROMPT_V2_DOMAIN_KINDS.contains(&pair) {
             violations.push(format!(
-                "assertion[{index}]: ({}, {}) not in prompt_v1 domain/kind allowlist",
+                "assertion[{index}]: ({}, {}) not in prompt_v2 domain/kind allowlist",
                 assertion.domain, assertion.kind
             ));
         }
@@ -303,28 +305,28 @@ mod tests {
     }
 
     #[test]
-    fn validate_against_prompt_v1_accepts_well_formed_allowlisted_assertion() {
+    fn validate_against_prompt_v2_accepts_well_formed_allowlisted_assertion() {
         let obs = ok_observation();
         // ok_assertion's (domain, kind) is ("work", "current_stressor"),
-        // which is in the prompt-v1 allowlist.
-        assert!(validate_against_prompt_v1(&obs).is_empty());
+        // which is in the prompt-v2 allowlist (unchanged from v1).
+        assert!(validate_against_prompt_v2(&obs).is_empty());
     }
 
     #[test]
-    fn validate_against_prompt_v1_rejects_unlisted_domain_kind_pair() {
+    fn validate_against_prompt_v2_rejects_unlisted_domain_kind_pair() {
         let mut obs = ok_observation();
         obs.assertions[0].domain = "vibe".to_string();
-        let violations = validate_against_prompt_v1(&obs);
+        let violations = validate_against_prompt_v2(&obs);
         assert!(violations
             .iter()
             .any(|v| v.contains("vibe") && v.contains("allowlist")));
     }
 
     #[test]
-    fn validate_against_prompt_v1_includes_base_schema_violations() {
+    fn validate_against_prompt_v2_includes_base_schema_violations() {
         let mut obs = ok_observation();
         obs.assertions[0].confidence = 9.0; // out-of-range
-        let violations = validate_against_prompt_v1(&obs);
+        let violations = validate_against_prompt_v2(&obs);
         assert!(violations.iter().any(|v| v.contains("confidence")));
     }
 

@@ -1,4 +1,4 @@
-# Luna Extraction Prompt v1
+# Luna Extraction Prompt v2
 
 You read a single conversation turn and produce a JSON observation
 proposing what episodic memory should record about it.
@@ -18,7 +18,7 @@ no preamble, no markdown fences):
     {
       "domain": "<allowed domain>",
       "kind": "<allowed kind>",
-      "value": "<short canonical value>",
+      "value": "<canonical phrase preserved from the turn>",
       "confidence": <float in [0, 1]>,
       "evidence_span": "<verbatim substring of the turn or null>"
     }
@@ -73,9 +73,47 @@ does not fit. Do not invent new pairs.
 | goal         | proof_requirement   | a required proof or validation criterion for a goal         |
 | goal         | career_direction    | direction or trajectory of the speaker's career             |
 
-`value` is the short canonical noun phrase for the assertion (e.g.
-`"mechanical engineer"`, `"only child"`, `"client deadline"`,
-`"product launch"`). Strip articles, possessives, and tense markers.
+## Assertion value rule (NEW in v2)
+
+When the turn contains a concrete noun phrase that answers what should
+be remembered, **preserve that phrase as `value` verbatim or near-
+verbatim**. The (domain, kind) pair is the *category*; `value` is the
+*content*.
+
+Do NOT replace a specific phrase with:
+
+- a category label ("collaboration", "job security", "training")
+- a broad summary ("work stuff", "a problem")
+- only a named entity ("Aelith", "Klank", "Chris")
+- an emotional state ("upset", "frustrated", "stressed")
+
+When the turn carries both a named entity and a descriptive phrase,
+prefer the descriptive phrase. The named entity may help select the
+(domain, kind), but `value` should record what the named entity *is*
+or *did*.
+
+| Good `value`                                  | Bad `value`        |
+|-----------------------------------------------|--------------------|
+| `"vendor call"`                               | `"upset"`          |
+| `"manager's feedback"`                        | `"frustrated"`     |
+| `"AI writing tool"`                           | `"Aelith"`         |
+| `"job was in jeopardy"`                       | `"job security"`   |
+| `"Kisan America currency-counter training"`   | `"training"`       |
+| `"overhyped claims"`                          | `"collaboration"`  |
+| `"being early to a problem"`                  | `"Klank"`          |
+| `"client deadline"`                           | `"deadline"`       |
+
+`value` should be the shortest noun phrase that preserves the memory's
+meaning. Articles ("the", "a") may be stripped. **Possessives MUST be
+preserved** when they carry meaning ("manager's feedback" not "manager
+feedback"). Verb tense should match the turn's framing.
+
+When a turn is primarily about an event, do not skip the event in
+favor of an emotional reaction to the event. Emotional reactions
+belong in `signals.emotional_arousal`, not in `assertions`. An
+`emotion:affect` assertion records a stated feeling that is itself the
+memory ("I felt overwhelmed all week"), not the feeling someone had
+about another remembered event.
 
 ## Dimensions
 
