@@ -23,6 +23,9 @@
 //! ```
 
 use luna_core::{LunaError, Result};
+use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// One LLM call's inputs. Carries the fully-rendered prompt the
@@ -116,6 +119,77 @@ impl LlmBackend for RecordingFakeBackend {
             inner.prescriptions.len()
         )))
     }
+}
+
+/// Production-style fake: reads the LLM response from a directory of
+/// pre-authored JSON files, keyed by SHA-256 of the rendered prompt.
+///
+/// Used by `luna bench formation` (PR 0.5b) when no real LLM is wired
+/// (PR 0.6 / 0.3b). A fixture covers exactly one (prompt template,
+/// turn content, turn timestamp, role) tuple — change any of those
+/// and the fixture file is stale, by design. The
+/// [`crate::ExtractionCache`] still sits above this backend, so a
+/// second formation pass returns from cache without re-reading the
+/// fixture file.
+///
+/// Layout: `<root>/<sha256_of_rendered_prompt_hex>.json`. File
+/// content is the LLM's would-be response (a JSON
+/// [`crate::LlmObservation`]), exactly as if a real backend had
+/// produced it.
+///
+/// `model_id` is `"fixture@v1"`. Bump if the fixture format ever
+/// changes.
+#[derive(Debug, Clone)]
+pub struct FixtureBackend {
+    root: PathBuf,
+}
+
+impl FixtureBackend {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Path the fixture for a given prompt hash should live at.
+    /// Helpful for fixture-authoring tools (and tests).
+    pub fn path_for_prompt(&self, prompt: &str) -> PathBuf {
+        self.root.join(format!("{}.json", prompt_hash_hex(prompt)))
+    }
+}
+
+impl LlmBackend for FixtureBackend {
+    fn model_id(&self) -> &str {
+        "fixture@v1"
+    }
+
+    fn complete(&self, request: &LlmRequest) -> Result<String> {
+        let path = self.path_for_prompt(&request.prompt);
+        if !path.exists() {
+            return Err(LunaError::new(format!(
+                "FixtureBackend: missing fixture {} (rendered-prompt hash {}, prompt starts: '{}...')",
+                path.display(),
+                prompt_hash_hex(&request.prompt),
+                request.prompt.chars().take(60).collect::<String>(),
+            )));
+        }
+        std::fs::read_to_string(&path).map_err(|err| {
+            LunaError::new(format!("FixtureBackend: read {}: {err}", path.display()))
+        })
+    }
+}
+
+fn prompt_hash_hex(prompt: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(prompt.as_bytes());
+    let bytes = hasher.finalize();
+    let mut out = String::with_capacity(64);
+    for byte in bytes {
+        write!(&mut out, "{:02x}", byte).expect("write to String");
+    }
+    out
 }
 
 /// Decorator that counts every `complete` call passing through. Used
@@ -241,5 +315,51 @@ mod tests {
     fn counting_backend_passes_through_model_id() {
         let counted = CountingBackend::new(RecordingFakeBackend::new("inner-model"));
         assert_eq!(counted.model_id(), "inner-model");
+    }
+
+    #[test]
+    fn fixture_backend_returns_file_contents_for_matching_prompt() {
+        let dir = std::env::temp_dir().join(format!("luna_fixture_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fixture = FixtureBackend::new(&dir);
+        let prompt = "rendered prompt with content X";
+        let response = r#"{"hello": "world"}"#;
+        let path = fixture.path_for_prompt(prompt);
+        std::fs::write(&path, response).unwrap();
+
+        let got = fixture
+            .complete(&LlmRequest {
+                prompt: prompt.to_string(),
+            })
+            .unwrap();
+        assert_eq!(got, response);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fixture_backend_errors_on_missing_fixture_with_helpful_path() {
+        let dir = std::env::temp_dir().join(format!("luna_fixture_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fixture = FixtureBackend::new(&dir);
+        let result = fixture.complete(&LlmRequest {
+            prompt: "no fixture for this".to_string(),
+        });
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("FixtureBackend"));
+        assert!(err.contains("missing"));
+        // The error should include the expected on-disk path so the
+        // user knows where to write the fixture.
+        assert!(err.contains(".json"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fixture_backend_path_changes_with_prompt() {
+        let fixture = FixtureBackend::new("/tmp/luna_fixtures");
+        let a = fixture.path_for_prompt("prompt A");
+        let b = fixture.path_for_prompt("prompt B");
+        assert_ne!(a, b);
     }
 }

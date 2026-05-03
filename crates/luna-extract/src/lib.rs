@@ -7,7 +7,9 @@ pub mod luna_extractor;
 pub mod prompt;
 pub mod second_source;
 
-pub use backend::{CountingBackend, LlmBackend, LlmRequest, RecordingFakeBackend};
+pub use backend::{
+    CountingBackend, FixtureBackend, LlmBackend, LlmRequest, RecordingFakeBackend,
+};
 pub use cache::{CacheKey, ExtractionCache, FileExtractionCache};
 pub use extractor::LlmExtractor;
 pub use fusion::fuse_observation;

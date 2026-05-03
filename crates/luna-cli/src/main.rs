@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use luna_core::EngineKind;
+use luna_extract::{
+    CountingBackend, FileExtractionCache, FixtureBackend, LlmExtractor, LunaExtractor,
+};
 use luna_metrics::{BenchmarkReport, BenchmarkSubreport};
 use std::{path::PathBuf, process::ExitCode, str::FromStr};
 
@@ -48,6 +51,25 @@ enum BenchCommand {
         #[arg(long)]
         require_proof_eligible: bool,
     },
+    /// Run the Stage 0 formation report. Proves benchmark cases can
+    /// enter the recall path with valid, provenance-backed episodes
+    /// without invoking any recall engine. Exits non-zero (code 3) if
+    /// any case fails formation.
+    Formation {
+        benchmarks: PathBuf,
+        /// Directory of pre-authored fixture extraction JSONs. Each
+        /// fixture file is keyed by SHA-256 of the rendered prompt.
+        /// Required until a real LLM backend is wired (PR 0.6 / 0.3b).
+        #[arg(long)]
+        fixtures: PathBuf,
+        /// Cache root for the formation run. The second pass reads
+        /// from here and a 100% hit rate is the formation gate.
+        #[arg(long, default_value = ".luna/formation_cache")]
+        cache: PathBuf,
+        /// Output directory for the formation report JSON.
+        #[arg(long, default_value = "runs/latest")]
+        out: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -82,6 +104,15 @@ fn main() -> anyhow::Result<ExitCode> {
                     );
                     print_explanations(&run.explanations);
                 }
+            }
+            BenchCommand::Formation {
+                benchmarks,
+                fixtures,
+                cache,
+                out,
+            } => {
+                let exit = run_formation_command(&benchmarks, &fixtures, &cache, &out)?;
+                return Ok(exit);
             }
             BenchCommand::Compare {
                 run_dir,
@@ -225,6 +256,47 @@ fn ineligible_count(report: &BenchmarkReport) -> usize {
         .map(|sub| sub.total_cases)
         .unwrap_or(0);
     report.total_cases.saturating_sub(eligible)
+}
+
+/// Wires the FixtureBackend + cache + LunaExtractor and runs the
+/// formation engine end-to-end. Returns the exit code the CLI hands
+/// back to the shell: 0 on green, 3 on any case failing formation.
+fn run_formation_command(
+    benchmarks: &std::path::Path,
+    fixtures: &std::path::Path,
+    cache: &std::path::Path,
+    out: &std::path::Path,
+) -> anyhow::Result<ExitCode> {
+    if !fixtures.exists() {
+        anyhow::bail!(
+            "fixture directory does not exist: {}\n\
+             Authoring fixtures: each fixture is one JSON file at\n\
+             <fixtures>/<sha256_of_rendered_prompt>.json containing the\n\
+             would-be LLM response (an LlmObservation) for that turn.",
+            fixtures.display()
+        );
+    }
+    std::fs::create_dir_all(cache)?;
+    std::fs::create_dir_all(out)?;
+
+    let backend = CountingBackend::new(FixtureBackend::new(fixtures));
+    let llm = LlmExtractor::new(backend, FileExtractionCache::new(cache));
+    let extractor = LunaExtractor::with_default_v1_sources(llm);
+
+    let report = luna_bench::run_formation(benchmarks, &extractor)?;
+
+    println!("{}", luna_bench::formation_markdown(&report));
+
+    let report_path = out.join("formation.json");
+    std::fs::write(&report_path, serde_json::to_string_pretty(&report)?)?;
+    println!("Wrote {}", report_path.display());
+
+    if report.formation_eligible < report.total_cases {
+        eprintln!();
+        eprintln!("{}", luna_bench::formation_failure_summary(&report));
+        return Ok(ExitCode::from(3));
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn print_explanations(explanations: &[luna_bench::CaseExplanation]) {
