@@ -89,7 +89,7 @@ Every PR must answer:
 |-------|----------|--------------------------------------------------------------------------|
 | 1     | LANDED   | CI + `doctrine_check.sh` + PR template extensions.                       |
 | 2     | LANDED   | `RecallReason` enforced on `RecallHit.reason` and `EpisodeRecalled.reason`. |
-| 3a    | PLANNED  | `QuestionCandidate.reason` → `RecallReason`.                             |
+| 3a    | LANDED   | `QuestionCandidate.reason` → `RecallReason`.                             |
 | 3b    | PLANNED  | `WorkingMemory.activation_reason` migration — needs `Default` design call. |
 | 3c    | PLANNED  | `MemoryProvenance` constructor requires ≥1 source field set (forbid all-None). |
 | 3d    | PLANNED  | `MemoryNode.provenance` and `MemoryEdge.provenance` non-empty Vec.       |

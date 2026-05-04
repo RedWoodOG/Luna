@@ -3,8 +3,8 @@ use luna_core::{
     AssertionConfidenceTier, AssertionExtracted, CognitiveObservation, ConversationTurn, Episode,
     EpisodeCreated, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource, LunaEvent,
     MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance, MemoryRelationKind,
-    RecallMode, RecallSet, Result, Role, RootOrb, StructuredAssertion, TurnObserved, WorkingMemory,
-    WorkingMemoryBudget,
+    RecallMode, RecallReason, RecallSet, Result, Role, RootOrb, StructuredAssertion, TurnObserved,
+    WorkingMemory, WorkingMemoryBudget,
 };
 use luna_events::JsonlEventLog;
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
@@ -1314,7 +1314,7 @@ fn normalize_for_match(value: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuestionCandidate {
     pub question: String,
-    pub reason: String,
+    pub reason: RecallReason,
     pub priority: u8,
 }
 
@@ -1634,7 +1634,8 @@ fn propose_questions(
             10,
             QuestionCandidate {
                 question: "What do you do for work?".to_string(),
-                reason: "work context is active, but Luna does not know your role yet".to_string(),
+                reason: RecallReason::new("work context is active, but Luna does not know your role yet")
+                    .expect("static recall reason is non-empty"),
                 priority: 10,
             },
         );
@@ -1646,7 +1647,10 @@ fn propose_questions(
             QuestionCandidate {
                 question: "Who is \"they\" here, and what situation are you talking about?"
                     .to_string(),
-                reason: "the statement depends on an unresolved group or authority".to_string(),
+                reason: RecallReason::new(
+                    "the statement depends on an unresolved group or authority",
+                )
+                .expect("static recall reason is non-empty"),
                 priority: 20,
             },
         );
@@ -1657,8 +1661,10 @@ fn propose_questions(
             15,
             QuestionCandidate {
                 question: "Who is she to you?".to_string(),
-                reason: "a person is emotionally important, but the relationship is unknown"
-                    .to_string(),
+                reason: RecallReason::new(
+                    "a person is emotionally important, but the relationship is unknown",
+                )
+                .expect("static recall reason is non-empty"),
                 priority: 15,
             },
         );
@@ -1669,8 +1675,10 @@ fn propose_questions(
             12,
             QuestionCandidate {
                 question: "What is her name, and have you already proposed?".to_string(),
-                reason: "romantic-partner language needs a person anchor and status confirmation"
-                    .to_string(),
+                reason: RecallReason::new(
+                    "romantic-partner language needs a person anchor and status confirmation",
+                )
+                .expect("static recall reason is non-empty"),
                 priority: 12,
             },
         );
@@ -1684,8 +1692,10 @@ fn propose_questions(
             30,
             QuestionCandidate {
                 question: "What happened?".to_string(),
-                reason: "the turn carries emotional pressure but no concrete memory anchor"
-                    .to_string(),
+                reason: RecallReason::new(
+                    "the turn carries emotional pressure but no concrete memory anchor",
+                )
+                .expect("static recall reason is non-empty"),
                 priority: 30,
             },
         );
