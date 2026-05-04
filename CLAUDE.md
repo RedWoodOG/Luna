@@ -92,7 +92,7 @@ Every PR must answer:
 | 3a    | LANDED   | `QuestionCandidate.reason` → `RecallReason`.                             |
 | 3b    | LANDED   | `WorkingMemory.activation_reason` → `RecallReason`; `Default` derive dropped (was unused). |
 | 3c    | LANDED   | `MemoryProvenance` fields `pub(crate)`; named constructors (`from_assertion`, `system_rooted`) each set ≥1 source field. |
-| 3d    | PLANNED  | `MemoryNode.provenance` and `MemoryEdge.provenance` non-empty Vec.       |
+| 3d    | LANDED   | `MemoryNode` / `MemoryEdge` `provenance` field is `pub(crate)`; `::new` requires initial `MemoryProvenance`; `extend_provenance` accumulates additional sources. |
 | 4+    | PLANNED  | Phrase→answer map detection lint; per-crate test-presence check.         |
 
 Pick from PLANNED in order of leverage and isolation. Don't open a slice that

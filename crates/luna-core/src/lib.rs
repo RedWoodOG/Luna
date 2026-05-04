@@ -484,6 +484,14 @@ pub struct Episode {
     pub forgotten_risk: f32,
 }
 
+/// A node in the memory map.
+///
+/// **Invariant:** `provenance` is non-empty. The doctrine rule "every node
+/// traces back to at least one source" is enforced structurally: the field
+/// is `pub(crate)` and the only public construction path is `MemoryNode::new`,
+/// which requires an initial `MemoryProvenance`. Additional sources accumulate
+/// via `extend_provenance` (e.g. when the same node is observed from
+/// multiple claims).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryNode {
     pub id: String,
@@ -492,7 +500,36 @@ pub struct MemoryNode {
     pub confidence_tier: AssertionConfidenceTier,
     pub density: f32,
     pub activation: f32,
-    pub provenance: Vec<MemoryProvenance>,
+    pub(crate) provenance: Vec<MemoryProvenance>,
+}
+
+impl MemoryNode {
+    pub fn new(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        kind: MemoryNodeKind,
+        confidence_tier: AssertionConfidenceTier,
+        density: f32,
+        first_provenance: MemoryProvenance,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            kind,
+            confidence_tier,
+            density,
+            activation: 0.0,
+            provenance: vec![first_provenance],
+        }
+    }
+
+    pub fn provenance(&self) -> &[MemoryProvenance] {
+        &self.provenance
+    }
+
+    pub fn extend_provenance(&mut self, more: impl IntoIterator<Item = MemoryProvenance>) {
+        self.provenance.extend(more);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -511,6 +548,11 @@ pub enum MemoryNodeKind {
     Episode,
 }
 
+/// An edge in the memory map.
+///
+/// **Invariant:** `provenance` is non-empty. Same enforcement pattern as
+/// `MemoryNode`: `pub(crate)` field, `MemoryEdge::new` requires an initial
+/// `MemoryProvenance`, additional sources via `extend_provenance`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryEdge {
     pub source: String,
@@ -519,7 +561,36 @@ pub struct MemoryEdge {
     pub confidence_tier: AssertionConfidenceTier,
     pub strength: f32,
     pub activation: f32,
-    pub provenance: Vec<MemoryProvenance>,
+    pub(crate) provenance: Vec<MemoryProvenance>,
+}
+
+impl MemoryEdge {
+    pub fn new(
+        source: impl Into<String>,
+        target: impl Into<String>,
+        relation: MemoryRelationKind,
+        confidence_tier: AssertionConfidenceTier,
+        strength: f32,
+        first_provenance: MemoryProvenance,
+    ) -> Self {
+        Self {
+            source: source.into(),
+            target: target.into(),
+            relation,
+            confidence_tier,
+            strength,
+            activation: 0.0,
+            provenance: vec![first_provenance],
+        }
+    }
+
+    pub fn provenance(&self) -> &[MemoryProvenance] {
+        &self.provenance
+    }
+
+    pub fn extend_provenance(&mut self, more: impl IntoIterator<Item = MemoryProvenance>) {
+        self.provenance.extend(more);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -872,5 +943,53 @@ mod tests {
 
         assert_eq!(prov.system_root.as_deref(), Some("root-orb-v1"));
         assert!(prov.has_source());
+    }
+
+    #[test]
+    fn memory_node_new_seeds_non_empty_provenance() {
+        let node = MemoryNode::new(
+            "user:self",
+            "self",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Confirmed,
+            1.0,
+            MemoryProvenance::system_rooted("user:self"),
+        );
+
+        assert_eq!(node.provenance().len(), 1);
+        assert_eq!(node.activation, 0.0);
+    }
+
+    #[test]
+    fn memory_node_extend_provenance_accumulates() {
+        let mut node = MemoryNode::new(
+            "person:Chris",
+            "Chris",
+            MemoryNodeKind::Person,
+            AssertionConfidenceTier::Confirmed,
+            1.0,
+            MemoryProvenance::from_assertion(Uuid::new_v4(), "person:name=Chris"),
+        );
+        node.extend_provenance([MemoryProvenance::from_assertion(
+            Uuid::new_v4(),
+            "person:location=Iowa",
+        )]);
+
+        assert_eq!(node.provenance().len(), 2);
+    }
+
+    #[test]
+    fn memory_edge_new_seeds_non_empty_provenance() {
+        let edge = MemoryEdge::new(
+            "user:self",
+            "person:Chris",
+            MemoryRelationKind::RelatedTo,
+            AssertionConfidenceTier::Confirmed,
+            1.0,
+            MemoryProvenance::from_assertion(Uuid::new_v4(), "person:name=Chris"),
+        );
+
+        assert_eq!(edge.provenance().len(), 1);
+        assert_eq!(edge.activation, 0.0);
     }
 }

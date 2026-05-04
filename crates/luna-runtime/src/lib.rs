@@ -452,27 +452,23 @@ fn memory_map_from_claims(
 
     insert_node(
         &mut nodes,
-        MemoryNode {
-            id: "user:self".to_string(),
-            label: "self".to_string(),
-            kind: MemoryNodeKind::User,
-            confidence_tier: AssertionConfidenceTier::Confirmed,
-            density: 1.0,
-            activation: 0.0,
-            provenance: Vec::new(),
-        },
+        MemoryNode::new(
+            "user:self",
+            "self",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Confirmed,
+            1.0,
+            MemoryProvenance::system_rooted("user:self"),
+        ),
     );
     seed_root_orb(&mut nodes, &mut edges);
 
     let mut seen_edges = BTreeSet::new();
     for claim in claims {
-        let provenance = assertion_index
+        let (episode_id, assertion) = assertion_index
             .get(&claim.key)
-            .map(|(episode_id, assertion)| {
-                MemoryProvenance::from_assertion(*episode_id, assertion.key())
-            })
-            .into_iter()
-            .collect::<Vec<_>>();
+            .expect("every claim is paired with its assertion in assertion_index");
+        let provenance = MemoryProvenance::from_assertion(*episode_id, assertion.key());
         let target_id = format!(
             "{}:{}:{}",
             claim.domain,
@@ -481,30 +477,28 @@ fn memory_map_from_claims(
         );
         insert_node(
             &mut nodes,
-            MemoryNode {
-                id: target_id.clone(),
-                label: claim.value.clone(),
-                kind: node_kind_for_claim(claim),
-                confidence_tier: claim.status,
-                density: density_for_tier(claim.status),
-                activation: 0.0,
-                provenance: provenance.clone(),
-            },
+            MemoryNode::new(
+                target_id.clone(),
+                claim.value.clone(),
+                node_kind_for_claim(claim),
+                claim.status,
+                density_for_tier(claim.status),
+                provenance.clone(),
+            ),
         );
         let entity_keys = entity_keys_for_claim(claim);
         if entity_keys.is_empty() {
             push_edge_once(
                 &mut edges,
                 &mut seen_edges,
-                MemoryEdge {
-                    source: "user:self".to_string(),
-                    target: target_id,
-                    relation: relation_for_claim(claim),
-                    confidence_tier: claim.status,
-                    strength: density_for_tier(claim.status),
-                    activation: 0.0,
+                MemoryEdge::new(
+                    "user:self",
+                    target_id,
+                    relation_for_claim(claim),
+                    claim.status,
+                    density_for_tier(claim.status),
                     provenance,
-                },
+                ),
             );
             continue;
         }
@@ -513,28 +507,26 @@ fn memory_map_from_claims(
             if entity_id != "self" {
                 insert_node(
                     &mut nodes,
-                    MemoryNode {
-                        id: entity_id.clone(),
-                        label: entity_label,
-                        kind: node_kind_for_entity(&entity_kind),
-                        confidence_tier: claim.status,
-                        density: density_for_tier(claim.status),
-                        activation: 0.0,
-                        provenance: provenance.clone(),
-                    },
+                    MemoryNode::new(
+                        entity_id.clone(),
+                        entity_label,
+                        node_kind_for_entity(&entity_kind),
+                        claim.status,
+                        density_for_tier(claim.status),
+                        provenance.clone(),
+                    ),
                 );
                 push_edge_once(
                     &mut edges,
                     &mut seen_edges,
-                    MemoryEdge {
-                        source: "user:self".to_string(),
-                        target: entity_id.clone(),
-                        relation: MemoryRelationKind::RelatedTo,
-                        confidence_tier: claim.status,
-                        strength: density_for_tier(claim.status),
-                        activation: 0.0,
-                        provenance: provenance.clone(),
-                    },
+                    MemoryEdge::new(
+                        "user:self",
+                        entity_id.clone(),
+                        MemoryRelationKind::RelatedTo,
+                        claim.status,
+                        density_for_tier(claim.status),
+                        provenance.clone(),
+                    ),
                 );
             }
 
@@ -546,15 +538,14 @@ fn memory_map_from_claims(
             push_edge_once(
                 &mut edges,
                 &mut seen_edges,
-                MemoryEdge {
+                MemoryEdge::new(
                     source,
-                    target: target_id.clone(),
-                    relation: relation_for_claim(claim),
-                    confidence_tier: claim.status,
-                    strength: density_for_tier(claim.status),
-                    activation: 0.0,
-                    provenance: provenance.clone(),
-                },
+                    target_id.clone(),
+                    relation_for_claim(claim),
+                    claim.status,
+                    density_for_tier(claim.status),
+                    provenance.clone(),
+                ),
             );
         }
     }
@@ -571,7 +562,7 @@ fn insert_node(nodes: &mut BTreeMap<String, MemoryNode>, node: MemoryNode) {
         .and_modify(|existing| {
             existing.confidence_tier = existing.confidence_tier.max(node.confidence_tier);
             existing.density = existing.density.max(node.density);
-            existing.provenance.extend(node.provenance.clone());
+            existing.extend_provenance(node.provenance().iter().cloned());
         })
         .or_insert(node);
 }
@@ -589,43 +580,39 @@ fn push_edge_once(
 
 fn seed_root_orb(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<MemoryEdge>) {
     let root = RootOrb::default();
-    let root_provenance = vec![MemoryProvenance::system_rooted(root.id.clone())];
     insert_node(
         nodes,
-        MemoryNode {
-            id: root.id.clone(),
-            label: root.label.clone(),
-            kind: MemoryNodeKind::RootOrb,
-            confidence_tier: AssertionConfidenceTier::Confirmed,
-            density: 1.0,
-            activation: 0.0,
-            provenance: root_provenance.clone(),
-        },
+        MemoryNode::new(
+            root.id.clone(),
+            root.label.clone(),
+            MemoryNodeKind::RootOrb,
+            AssertionConfidenceTier::Confirmed,
+            1.0,
+            MemoryProvenance::system_rooted(root.id.clone()),
+        ),
     );
 
     for principle in root.principles {
-        let provenance = vec![MemoryProvenance::system_rooted(principle.id.clone())];
+        let provenance = MemoryProvenance::system_rooted(principle.id.clone());
         insert_node(
             nodes,
-            MemoryNode {
-                id: principle.id.clone(),
-                label: principle.label,
-                kind: MemoryNodeKind::Attribute,
-                confidence_tier: AssertionConfidenceTier::Confirmed,
-                density: 1.0,
-                activation: 0.0,
-                provenance: provenance.clone(),
-            },
+            MemoryNode::new(
+                principle.id.clone(),
+                principle.label,
+                MemoryNodeKind::Attribute,
+                AssertionConfidenceTier::Confirmed,
+                1.0,
+                provenance.clone(),
+            ),
         );
-        edges.push(MemoryEdge {
-            source: root.id.clone(),
-            target: principle.id,
-            relation: MemoryRelationKind::DefinesRule,
-            confidence_tier: AssertionConfidenceTier::Confirmed,
-            strength: 1.0,
-            activation: 0.0,
+        edges.push(MemoryEdge::new(
+            root.id.clone(),
+            principle.id,
+            MemoryRelationKind::DefinesRule,
+            AssertionConfidenceTier::Confirmed,
+            1.0,
             provenance,
-        });
+        ));
     }
 }
 
