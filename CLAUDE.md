@@ -91,7 +91,7 @@ Every PR must answer:
 | 2     | LANDED   | `RecallReason` enforced on `RecallHit.reason` and `EpisodeRecalled.reason`. |
 | 3a    | LANDED   | `QuestionCandidate.reason` → `RecallReason`.                             |
 | 3b    | LANDED   | `WorkingMemory.activation_reason` → `RecallReason`; `Default` derive dropped (was unused). |
-| 3c    | PLANNED  | `MemoryProvenance` constructor requires ≥1 source field set (forbid all-None). |
+| 3c    | LANDED   | `MemoryProvenance` fields `pub(crate)`; named constructors (`from_assertion`, `system_rooted`) each set ≥1 source field. |
 | 3d    | PLANNED  | `MemoryNode.provenance` and `MemoryEdge.provenance` non-empty Vec.       |
 | 4+    | PLANNED  | Phrase→answer map detection lint; per-crate test-presence check.         |
 
@@ -108,8 +108,10 @@ overlaps an in-flight one without coordinating.
   sites or new types since last seen.
 - **Check the slice table before opening new work.** If your idea is already
   on the PLANNED list, align with its scope rather than redoing it.
-- **`MemoryProvenance` currently allows all-`None`.** Don't construct one until
-  slice 3c lands (a constructor will appear that requires ≥1 source field).
+- **`MemoryProvenance` is constructor-only.** Fields are `pub(crate)`. Use
+  `MemoryProvenance::from_assertion(episode_id, assertion_key)` for
+  assertion-derived memory or `MemoryProvenance::system_rooted(id)` for RootOrb
+  / principle-derived memory. Both guarantee ≥1 source field by construction.
 - **Static strings** going through `RecallReason::new` use `.expect("...")`.
   **Dynamic strings** propagate the `Result` — do not unwrap user-derived input.
 - **The acceptance test is the gate.** Defer work that does not directly move

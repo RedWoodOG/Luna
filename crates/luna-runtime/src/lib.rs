@@ -468,11 +468,8 @@ fn memory_map_from_claims(
     for claim in claims {
         let provenance = assertion_index
             .get(&claim.key)
-            .map(|(episode_id, assertion)| MemoryProvenance {
-                episode_id: Some(*episode_id),
-                turn_id: None,
-                assertion_key: Some(assertion.key()),
-                system_root: None,
+            .map(|(episode_id, assertion)| {
+                MemoryProvenance::from_assertion(*episode_id, assertion.key())
             })
             .into_iter()
             .collect::<Vec<_>>();
@@ -592,12 +589,7 @@ fn push_edge_once(
 
 fn seed_root_orb(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<MemoryEdge>) {
     let root = RootOrb::default();
-    let root_provenance = vec![MemoryProvenance {
-        episode_id: None,
-        turn_id: None,
-        assertion_key: None,
-        system_root: Some(root.id.clone()),
-    }];
+    let root_provenance = vec![MemoryProvenance::system_rooted(root.id.clone())];
     insert_node(
         nodes,
         MemoryNode {
@@ -612,12 +604,7 @@ fn seed_root_orb(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<Memor
     );
 
     for principle in root.principles {
-        let provenance = vec![MemoryProvenance {
-            episode_id: None,
-            turn_id: None,
-            assertion_key: None,
-            system_root: Some(principle.id.clone()),
-        }];
+        let provenance = vec![MemoryProvenance::system_rooted(principle.id.clone())];
         insert_node(
             nodes,
             MemoryNode {

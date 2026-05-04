@@ -538,13 +538,52 @@ pub enum MemoryRelationKind {
     Supersedes,
 }
 
+/// Where a piece of memory came from.
+///
+/// **Invariant:** at least one source field is set. The doctrine rule
+/// "memory must trace back to its source" is enforced structurally:
+/// fields are `pub(crate)` and the only construction paths are named
+/// constructors that each populate ≥1 source field. Outside `luna-core`,
+/// struct-literal construction is impossible, so all-None is unreachable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryProvenance {
-    pub episode_id: Option<Uuid>,
-    pub turn_id: Option<Uuid>,
-    pub assertion_key: Option<String>,
+    pub(crate) episode_id: Option<Uuid>,
+    pub(crate) turn_id: Option<Uuid>,
+    pub(crate) assertion_key: Option<String>,
     #[serde(default)]
-    pub system_root: Option<String>,
+    pub(crate) system_root: Option<String>,
+}
+
+impl MemoryProvenance {
+    /// Provenance for memory derived from an extracted assertion.
+    pub fn from_assertion(episode_id: Uuid, assertion_key: impl Into<String>) -> Self {
+        Self {
+            episode_id: Some(episode_id),
+            turn_id: None,
+            assertion_key: Some(assertion_key.into()),
+            system_root: None,
+        }
+    }
+
+    /// Provenance for memory rooted in the RootOrb (system identity / principles).
+    pub fn system_rooted(id: impl Into<String>) -> Self {
+        Self {
+            episode_id: None,
+            turn_id: None,
+            assertion_key: None,
+            system_root: Some(id.into()),
+        }
+    }
+
+    /// True when at least one source field is set. Always true for values
+    /// constructed via the named constructors; useful for asserting the
+    /// invariant holds after deserialization.
+    pub fn has_source(&self) -> bool {
+        self.episode_id.is_some()
+            || self.turn_id.is_some()
+            || self.assertion_key.is_some()
+            || self.system_root.is_some()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -815,5 +854,23 @@ mod tests {
         let r = RecallReason::new("state contour activation").unwrap();
         let json = serde_json::to_string(&r).unwrap();
         assert_eq!(json, "\"state contour activation\"");
+    }
+
+    #[test]
+    fn memory_provenance_from_assertion_sets_two_source_fields() {
+        let episode = Uuid::new_v4();
+        let prov = MemoryProvenance::from_assertion(episode, "identity:name=Joe");
+
+        assert_eq!(prov.episode_id, Some(episode));
+        assert_eq!(prov.assertion_key.as_deref(), Some("identity:name=Joe"));
+        assert!(prov.has_source());
+    }
+
+    #[test]
+    fn memory_provenance_system_rooted_sets_system_root() {
+        let prov = MemoryProvenance::system_rooted("root-orb-v1");
+
+        assert_eq!(prov.system_root.as_deref(), Some("root-orb-v1"));
+        assert!(prov.has_source());
     }
 }
