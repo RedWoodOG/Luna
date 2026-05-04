@@ -12,7 +12,7 @@ def main() -> int:
         "temperature": 0,
         "top_p": 1,
         "seed": 42,
-        "max_tokens": 768,
+        "max_tokens": int(os.environ.get("LUNA_LLM_MAX_TOKENS", "2048")),
         "stream": False,
     }
     data = json.dumps(payload).encode("utf-8")

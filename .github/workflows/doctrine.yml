@@ -1,0 +1,54 @@
+name: doctrine
+
+# Doctrine-as-build, slice 1: the floor.
+# This workflow turns LUNA_BUILD_DOCTRINE.md from a document into an enforcement.
+# Every push and PR runs three gates. Red build = no merge.
+#
+# Slice 1 gates:
+#   1. cargo test --workspace must pass
+#   2. scripts/doctrine_check.sh must pass (forbidden-pattern lint)
+#   3. Every scenarios/runtime/*.json must pass under `luna-cli runtime scenario`
+#
+# Scenarios in CI use the deterministic (heuristic) extractor by default.
+# LLM-backed scenarios require localhost infrastructure and are not run here.
+# If/when LLM-required scenarios land, gate them behind a separate workflow.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo test --workspace
+        run: cargo test --workspace --all-features
+
+      - name: Doctrine check (forbidden patterns, scenario presence)
+        run: bash scripts/doctrine_check.sh
+
+      - name: Build luna-cli
+        run: cargo build -p luna-cli --release
+
+      - name: Runtime scenarios
+        # If `runtime scenario` CLI shape changes, this is the line to update.
+        run: |
+          set -e
+          shopt -s nullglob
+          scenarios=(scenarios/runtime/*.json)
+          if [ ${#scenarios[@]} -eq 0 ]; then
+            echo "ERROR: no runtime scenarios found. Doctrine requires at least one." >&2
+            exit 1
+          fi
+          for f in "${scenarios[@]}"; do
+            echo "=== scenario: $f ==="
+            ./target/release/luna runtime scenario "$f"
+          done

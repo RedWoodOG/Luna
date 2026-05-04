@@ -47,7 +47,10 @@ pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
                         episode.confidence,
                         episode.forgotten_risk,
                     );
-                    merge_assertion(&mut episode.assertions, payload.assertion.clone());
+                    merge_assertion(
+                        &mut episode.assertions,
+                        payload.assertion.clone().reinforced(),
+                    );
                 }
             }
             LunaEvent::EpisodeRecalled(payload) => {
@@ -144,10 +147,16 @@ pub fn episode_id_for_assertion(
 }
 
 fn merge_assertion(assertions: &mut Vec<StructuredAssertion>, assertion: StructuredAssertion) {
-    if !assertions
-        .iter()
-        .any(|existing| existing.key() == assertion.key())
+    if let Some(existing) = assertions
+        .iter_mut()
+        .find(|existing| existing.key() == assertion.key())
     {
+        existing.source_count = existing.source_count.max(assertion.source_count);
+        existing.reinforcement_count = existing
+            .reinforcement_count
+            .max(assertion.reinforcement_count);
+        existing.confidence_tier = existing.confidence_tier.max(assertion.confidence_tier);
+    } else {
         assertions.push(assertion);
     }
 }

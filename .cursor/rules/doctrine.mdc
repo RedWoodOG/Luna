@@ -1,0 +1,108 @@
+---
+description: Luna build doctrine and mechanically-enforced gates. Always apply.
+alwaysApply: true
+---
+
+# Luna Doctrine — Cursor Always-On
+
+You are working in the Luna repo (local-first episodic memory framework).
+Read the canonical docs before non-trivial work:
+
+- **Doctrine:** `docs/LUNA_BUILD_DOCTRINE.md`
+- **Roadmap:** `docs/LUNA_MEMORY_MILESTONE_ROADMAP.md`
+- **Acceptance test:** `README.md` (10-turn real-week → 24h+ → 3 questions)
+- **Agent orientation:** `AGENTS.md`
+
+This file is the always-loaded summary so the build's mechanical gates are
+present in every prompt. It is not a substitute for the canonical docs.
+
+---
+
+## Best Idea Wins (Universal Gate)
+
+Every change must satisfy all three:
+
+1. **Working** — runs end-to-end on a stated case (scenario or test).
+2. **Fixable** — small surface, inspectable state, next-week-you can debug it.
+3. **Explainable** — design choice defended in plain language in the PR description.
+
+If you can't defend all three, do not open the PR. Iterate first.
+
+Hierarchy is flat: best idea wins regardless of who proposed it.
+
+## Real-World Inspiration vs Constraint
+
+Computer science, math, physics, anatomy, neuroscience are **scaffolding**,
+not constraints. Luna runs in binary; we choose the parameters. Borrow the
+*shapes* of ideas freely (activation, reinforcement, plastic edges). Do not
+hide implementation truth behind metaphor — describe what the code actually
+does in plain terms.
+
+---
+
+## Mechanically Enforced (Build Will Reject)
+
+### CI Gates (`.github/workflows/doctrine.yml`)
+
+Every push/PR runs `cargo test --workspace`, `bash scripts/doctrine_check.sh`,
+and every `scenarios/runtime/*.json` against `luna-cli runtime scenario`.
+Red build = no merge.
+
+### Doctrine Lint (`scripts/doctrine_check.sh`)
+
+Forbidden patterns in production crate code:
+- `if x == "Joe"`, `match x { "Chris" => ... }` — entity-name dispatch.
+  Tests are fine; **control flow dispatching on a hardcoded scenario name is
+  the Aura failure mode** and will fail the build.
+- `scenarios/runtime/` going empty.
+
+### Type-System Gates (Compile-Time Impossible)
+
+- **`luna_core::RecallReason`** — strict newtype on `String`.
+  - `RecallReason::new("")` returns `Err`. Empty/whitespace-only is rejected.
+  - `RecallHit.reason` and `EpisodeRecalled.reason` are `RecallReason`.
+  - **You cannot construct surfaced memory without explaining why.**
+  - Deserialization is lenient: legacy empty strings load as `<unrecorded>`.
+  - Use `RecallReason::new("...").expect("static recall reason is non-empty")`
+    for static call sites.
+
+### PR Template (`.github/pull_request_template.md`)
+
+Every PR must fill:
+- Best Idea Check (working / fixable / explainable boxes)
+- Memory Doctrine Check (failure mode, mechanism, scenario)
+- Hardcoding Review (no scripted facts/answers)
+- Memory Architecture (event log truth, tier preservation)
+- Tests (workspace, scenarios, doctrine check)
+- Doctrine Revision (link if relaxing a rule, else N/A)
+
+---
+
+## Slice Roadmap (Doctrine-as-Build Buildout)
+
+| Slice | Status   | Description                                                       |
+|-------|----------|-------------------------------------------------------------------|
+| 1     | LANDED   | CI + doctrine_check.sh + PR template extensions.                  |
+| 2     | LANDED   | `RecallReason` enforced on `RecallHit`/`EpisodeRecalled`.         |
+| 3a    | PLANNED  | `QuestionCandidate.reason` → `RecallReason`.                      |
+| 3b    | PLANNED  | `WorkingMemory.activation_reason` (needs `Default` design call).  |
+| 3c    | PLANNED  | `MemoryProvenance` constructor requires ≥1 source field set.      |
+| 3d    | PLANNED  | `MemoryNode.provenance` / `MemoryEdge.provenance` non-empty.      |
+| 4+    | PLANNED  | Phrase→answer map lint; per-crate test-presence check.            |
+
+Pick PLANNED slices in order of leverage and isolation. Don't overlap an
+in-flight slice without coordinating.
+
+---
+
+## Reminders for the Cursor Agent Specifically
+
+- Before proposing a change to memory behavior, check if it's already covered
+  by a planned slice above. If yes, name the slice and align with its scope.
+- Before adding a new code path that special-cases a value, ask whether the
+  same outcome can come from the entity-graph mechanism. Special cases are
+  the Aura failure mode and will fail `doctrine_check.sh`.
+- Static strings need `.expect("...")` after `RecallReason::new`. Dynamic
+  strings need to propagate the `Result`.
+- `MemoryProvenance` currently allows all-`None`. Don't construct one until
+  slice 3c lands (a constructor will appear that requires ≥1 source field).

@@ -1,4 +1,6 @@
-use luna_core::{CognitiveObservation, Episode, RecallHit, RecallMode, RecallSet, Result};
+use luna_core::{
+    CognitiveObservation, Episode, RecallHit, RecallMode, RecallReason, RecallSet, Result,
+};
 use std::time::Instant;
 
 pub trait RecallEngine {
@@ -32,7 +34,8 @@ impl RecallEngine for KeywordRecallEngine {
                     episode_id: episode.id,
                     score,
                     assertions: episode.assertions.clone(),
-                    reason: "keyword_overlap".to_string(),
+                    reason: RecallReason::new("keyword_overlap")
+                        .expect("static recall reason is non-empty"),
                 })
             })
             .collect::<Vec<_>>();
@@ -66,7 +69,8 @@ impl RecallEngine for TcfRecallEngine {
                     episode_id: episode.id,
                     score,
                     assertions: episode.assertions.clone(),
-                    reason: "state_contour_activation".to_string(),
+                    reason: RecallReason::new("state_contour_activation")
+                        .expect("static recall reason is non-empty"),
                 })
             })
             .collect::<Vec<_>>();
@@ -135,11 +139,12 @@ mod tests {
             id: Uuid::new_v4(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
-            assertions: vec![StructuredAssertion {
-                domain: "identity".to_string(),
-                kind: "profession".to_string(),
-                value: "mechanical engineer".to_string(),
-            }],
+            assertions: vec![StructuredAssertion::inferred(
+                "identity",
+                "profession",
+                "mechanical engineer",
+            )
+            .with_source_count(2)],
             contour: luna_tcf::contour_from_observation(&observed),
             recall_history: Vec::new(),
             confidence: 0.8,

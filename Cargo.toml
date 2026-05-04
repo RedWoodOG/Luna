@@ -6,6 +6,7 @@ members = [
   "crates/luna-extract",
   "crates/luna-tcf",
   "crates/luna-recall",
+  "crates/luna-runtime",
   "crates/luna-store",
   "crates/luna-metrics",
   "crates/luna-bench",

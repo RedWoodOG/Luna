@@ -1,11 +1,23 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use luna_core::EngineKind;
 use luna_extract::{
-    CommandBackend, CountingBackend, FileExtractionCache, FixtureBackend, LlmBackend,
-    LlmExtractor, LunaExtractor,
+    CommandBackend, CountingBackend, FileExtractionCache, FixtureBackend, FusedExtractor,
+    LlmBackend, LlmExtractor, LunaExtractor,
 };
 use luna_metrics::{BenchmarkReport, BenchmarkSubreport};
-use std::{path::PathBuf, process::ExitCode, str::FromStr, time::Duration};
+use luna_runtime::{
+    default_runtime_log_path, render_conversation_reply, render_runtime_markdown, RuntimeExtractor,
+    RuntimeSession,
+};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    io::{self, Write},
+    path::{Path, PathBuf},
+    process::ExitCode,
+    str::FromStr,
+    time::Duration,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "luna")]
@@ -21,12 +33,129 @@ enum Command {
         #[command(subcommand)]
         command: BenchCommand,
     },
+    /// Product-track runtime commands. These are intentionally
+    /// separate from `bench`: they let Luna learn from live turns and
+    /// expose what it stored without making proof claims.
+    Runtime {
+        #[command(subcommand)]
+        command: RuntimeCommand,
+    },
     Report {
         run_dir: PathBuf,
         #[arg(long, value_enum, default_value = "markdown")]
         format: ReportFormat,
         #[arg(long, default_value = "tcf")]
         engine: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum RuntimeCommand {
+    /// Process one user statement through the live memory loop.
+    Turn {
+        content: String,
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Extractor path for the live turn. `heuristic` is fully
+        /// local and deterministic; `command` invokes an LLM wrapper
+        /// through the same extraction path used by formation.
+        #[arg(long, value_enum, default_value = "heuristic")]
+        extractor: RuntimeExtractorChoice,
+        /// Path to the external program when `--extractor command`.
+        /// The program receives the rendered extraction prompt on
+        /// stdin and must emit a JSON LlmObservation on stdout.
+        #[arg(long)]
+        command: Option<PathBuf>,
+        /// Opaque determinism key for `--extractor command`. Encode
+        /// every flag that affects output into this string so the
+        /// extraction cache invalidates when those flags change.
+        #[arg(long = "model-id")]
+        model_id: Option<String>,
+        /// Arguments passed verbatim to `--command`. Repeat the flag
+        /// for each argument. Example:
+        /// `--command-arg .\scripts\run_llama_server_extract.py`.
+        #[arg(long = "command-arg")]
+        command_args: Vec<String>,
+        /// Per-call timeout in seconds for the command extractor.
+        #[arg(long = "timeout-secs", default_value = "120")]
+        timeout_secs: u64,
+        /// Cache root for command-backed runtime extraction.
+        #[arg(long, default_value = ".luna/runtime_cache")]
+        cache: PathBuf,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
+    /// Start an interactive runtime loop. Type `exit` or `quit` to stop.
+    Chat {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Extractor path for each live turn.
+        #[arg(long, value_enum, default_value = "heuristic")]
+        extractor: RuntimeExtractorChoice,
+        /// Path to the external program when `--extractor command`.
+        #[arg(long)]
+        command: Option<PathBuf>,
+        /// Opaque determinism key for `--extractor command`.
+        #[arg(long = "model-id")]
+        model_id: Option<String>,
+        /// Arguments passed verbatim to `--command`. Repeat the flag
+        /// for each argument.
+        #[arg(long = "command-arg")]
+        command_args: Vec<String>,
+        /// Per-call timeout in seconds for the command extractor.
+        #[arg(long = "timeout-secs", default_value = "120")]
+        timeout_secs: u64,
+        /// Cache root for command-backed runtime extraction.
+        #[arg(long, default_value = ".luna/runtime_cache")]
+        cache: PathBuf,
+        /// Output format for each turn.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+        /// Also print the full memory workbench after Luna's reply.
+        #[arg(long)]
+        workbench: bool,
+    },
+    /// Inspect the rebuilt memory state from the JSONL event log.
+    Inspect {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
+    /// Run a scripted runtime memory scenario against a fresh log.
+    Scenario {
+        /// Scenario JSON file.
+        scenario: PathBuf,
+        /// JSONL event log. Defaults to `.luna/runtime/scenario/<name>.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Extractor path for each scenario turn.
+        #[arg(long, value_enum, default_value = "heuristic")]
+        extractor: RuntimeExtractorChoice,
+        /// Path to the external program when `--extractor command`.
+        #[arg(long)]
+        command: Option<PathBuf>,
+        /// Opaque determinism key for `--extractor command`.
+        #[arg(long = "model-id")]
+        model_id: Option<String>,
+        /// Arguments passed verbatim to `--command`. Repeat the flag
+        /// for each argument.
+        #[arg(long = "command-arg")]
+        command_args: Vec<String>,
+        /// Per-call timeout in seconds for the command extractor.
+        #[arg(long = "timeout-secs", default_value = "120")]
+        timeout_secs: u64,
+        /// Cache root for command-backed runtime extraction.
+        #[arg(long, default_value = ".luna/runtime_cache")]
+        cache: PathBuf,
+        /// Keep the scenario event log instead of deleting it first.
+        #[arg(long)]
+        keep_log: bool,
     },
 }
 
@@ -103,6 +232,12 @@ enum ReportFormat {
     Json,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum RuntimeExtractorChoice {
+    Heuristic,
+    Command,
+}
+
 fn main() -> anyhow::Result<ExitCode> {
     let cli = Cli::parse();
     match cli.command {
@@ -174,6 +309,103 @@ fn main() -> anyhow::Result<ExitCode> {
                 }
             }
         },
+        Command::Runtime { command } => match command {
+            RuntimeCommand::Turn {
+                content,
+                log,
+                extractor,
+                command,
+                model_id,
+                command_args,
+                timeout_secs,
+                cache,
+                format,
+            } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                match extractor {
+                    RuntimeExtractorChoice::Heuristic => {
+                        run_runtime_turn(&log, FusedExtractor::new(), content, format)?;
+                    }
+                    RuntimeExtractorChoice::Command => {
+                        let extractor = build_command_runtime_extractor(
+                            command,
+                            model_id,
+                            command_args,
+                            timeout_secs,
+                            cache,
+                        )?;
+                        run_runtime_turn(&log, extractor, content, format)?;
+                    }
+                }
+                println!("Wrote event log {}", log.display());
+            }
+            RuntimeCommand::Chat {
+                log,
+                extractor,
+                command,
+                model_id,
+                command_args,
+                timeout_secs,
+                cache,
+                format,
+                workbench,
+            } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                match extractor {
+                    RuntimeExtractorChoice::Heuristic => {
+                        run_runtime_chat(&log, FusedExtractor::new(), format, workbench)?;
+                    }
+                    RuntimeExtractorChoice::Command => {
+                        let extractor = build_command_runtime_extractor(
+                            command,
+                            model_id,
+                            command_args,
+                            timeout_secs,
+                            cache,
+                        )?;
+                        run_runtime_chat(&log, extractor, format, workbench)?;
+                    }
+                }
+            }
+            RuntimeCommand::Inspect { log, format } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let session = RuntimeSession::new(&log, FusedExtractor::new());
+                let state = session.inspect()?;
+                match format {
+                    ReportFormat::Markdown => print_memory_state(&state),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
+                }
+            }
+            RuntimeCommand::Scenario {
+                scenario,
+                log,
+                extractor,
+                command,
+                model_id,
+                command_args,
+                timeout_secs,
+                cache,
+                keep_log,
+            } => {
+                let log = log
+                    .unwrap_or_else(|| default_scenario_log_path(&PathBuf::from("."), &scenario));
+                match extractor {
+                    RuntimeExtractorChoice::Heuristic => {
+                        run_runtime_scenario(&scenario, &log, FusedExtractor::new(), keep_log)?;
+                    }
+                    RuntimeExtractorChoice::Command => {
+                        let extractor = build_command_runtime_extractor(
+                            command,
+                            model_id,
+                            command_args,
+                            timeout_secs,
+                            cache,
+                        )?;
+                        run_runtime_scenario(&scenario, &log, extractor, keep_log)?;
+                    }
+                }
+            }
+        },
         Command::Report {
             run_dir,
             format,
@@ -188,6 +420,237 @@ fn main() -> anyhow::Result<ExitCode> {
         }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn run_runtime_turn<E: RuntimeExtractor>(
+    log: &Path,
+    extractor: E,
+    content: String,
+    format: ReportFormat,
+) -> anyhow::Result<()> {
+    let session = RuntimeSession::new(log, extractor);
+    let result = session.process_user_turn(content)?;
+    match format {
+        ReportFormat::Markdown => println!("{}", render_runtime_markdown(&result)),
+        ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&result)?),
+    }
+    Ok(())
+}
+
+fn run_runtime_chat<E: RuntimeExtractor>(
+    log: &Path,
+    extractor: E,
+    format: ReportFormat,
+    workbench: bool,
+) -> anyhow::Result<()> {
+    let session = RuntimeSession::new(log, extractor);
+    println!("# Luna Runtime Chat");
+    println!("Event log: {}", log.display());
+    println!("Type a turn and press Enter. Type `exit` or `quit` to stop.\n");
+
+    let stdin = io::stdin();
+    loop {
+        print!("luna> ");
+        io::stdout().flush()?;
+
+        let mut content = String::new();
+        let bytes = stdin.read_line(&mut content)?;
+        if bytes == 0 {
+            println!();
+            break;
+        }
+
+        let content = content.trim();
+        if content.eq_ignore_ascii_case("exit") || content.eq_ignore_ascii_case("quit") {
+            break;
+        }
+        if content.is_empty() {
+            continue;
+        }
+
+        let result = session.process_user_turn(content.to_string())?;
+        match format {
+            ReportFormat::Markdown => {
+                println!("Luna: {}", render_conversation_reply(content, &result));
+                if workbench {
+                    println!("\n{}", render_runtime_markdown(&result));
+                }
+            }
+            ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&result)?),
+        }
+    }
+
+    println!("Wrote event log {}", log.display());
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct RuntimeScenarioFile {
+    #[serde(default)]
+    name: Option<String>,
+    turns: Vec<String>,
+    #[serde(default)]
+    checks: RuntimeScenarioChecks,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+struct RuntimeScenarioChecks {
+    #[serde(default)]
+    must_contain: Vec<String>,
+    #[serde(default)]
+    must_not_contain: Vec<String>,
+}
+
+fn run_runtime_scenario<E: RuntimeExtractor>(
+    scenario_path: &Path,
+    log: &Path,
+    extractor: E,
+    keep_log: bool,
+) -> anyhow::Result<()> {
+    if !keep_log && log.exists() {
+        fs::remove_file(log)?;
+    }
+    let text = fs::read_to_string(scenario_path)?;
+    let scenario: RuntimeScenarioFile = serde_json::from_str(&text)?;
+    let session = RuntimeSession::new(log, extractor);
+
+    println!(
+        "# Luna Runtime Scenario: {}\n",
+        scenario.name.as_deref().unwrap_or("unnamed")
+    );
+    println!("Turns: {}", scenario.turns.len());
+    println!("Event log: {}\n", log.display());
+
+    for (index, turn) in scenario.turns.iter().enumerate() {
+        let result = session.process_user_turn(turn.clone())?;
+        println!(
+            "{}. {} assertion(s), {} working node(s)",
+            index + 1,
+            result.observation.assertions.len(),
+            result.working_memory.nodes.len()
+        );
+    }
+
+    let state = session.inspect()?;
+    let memory_text = scenario_memory_text(&state);
+    let mut failures = Vec::new();
+    for needle in &scenario.checks.must_contain {
+        if !contains_ci(&memory_text, needle) {
+            failures.push(format!("missing required memory: {needle}"));
+        }
+    }
+    for needle in &scenario.checks.must_not_contain {
+        if contains_ci(&memory_text, needle) {
+            failures.push(format!("forbidden memory present: {needle}"));
+        }
+    }
+
+    if failures.is_empty() {
+        println!(
+            "\nPASS: {} memory check(s)",
+            scenario_check_count(&scenario)
+        );
+        Ok(())
+    } else {
+        println!("\nFAIL: {} issue(s)", failures.len());
+        for failure in &failures {
+            println!("- {failure}");
+        }
+        anyhow::bail!("runtime scenario failed")
+    }
+}
+
+fn scenario_memory_text(state: &luna_runtime::MemoryState) -> String {
+    state
+        .claims
+        .iter()
+        .map(|claim| format!("{}:{}={}", claim.domain, claim.kind, claim.value))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
+    scenario.checks.must_contain.len() + scenario.checks.must_not_contain.len()
+}
+
+fn contains_ci(text: &str, needle: &str) -> bool {
+    text.to_ascii_lowercase()
+        .contains(&needle.to_ascii_lowercase())
+}
+
+fn default_scenario_log_path(root: &Path, scenario_path: &Path) -> PathBuf {
+    let stem = scenario_path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("scenario");
+    root.join(".luna")
+        .join("runtime")
+        .join("scenario")
+        .join(format!("{stem}.jsonl"))
+}
+
+fn build_command_runtime_extractor(
+    command: Option<PathBuf>,
+    model_id: Option<String>,
+    command_args: Vec<String>,
+    timeout_secs: u64,
+    cache: PathBuf,
+) -> anyhow::Result<LunaExtractor<CommandBackend, FileExtractionCache>> {
+    let command =
+        command.ok_or_else(|| anyhow::anyhow!("--extractor command requires --command <path>"))?;
+    let model_id = model_id.ok_or_else(|| {
+        anyhow::anyhow!(
+            "--extractor command requires --model-id <id>; encode every\n\
+             flag that affects determinism (sampling, seed, CPU vs GPU,\n\
+             quantization) into this string so the cache invalidates\n\
+             correctly when those change."
+        )
+    })?;
+    let command_backend = CommandBackend::new(command, command_args, model_id)
+        .with_timeout(Duration::from_secs(timeout_secs));
+    let llm = LlmExtractor::new(command_backend, FileExtractionCache::new(cache));
+    Ok(LunaExtractor::with_default_v1_sources(llm))
+}
+
+fn print_memory_state(state: &luna_runtime::MemoryState) {
+    println!("# Luna Memory State\n");
+    if state.claims.is_empty() {
+        println!("(no claims yet)");
+        return;
+    }
+
+    if !state.entity_groups.is_empty() {
+        println!("## Entity Memory\n");
+        for group in &state.entity_groups {
+            println!("### {} ({})", group.label, group.kind);
+            for claim in &group.claims {
+                println!(
+                    "- {:?}: {}:{} = {}",
+                    claim.status, claim.domain, claim.kind, claim.value
+                );
+            }
+            println!();
+        }
+    }
+
+    println!("## Flat Claims\n");
+    for claim in &state.claims {
+        println!(
+            "- {:?}: {}:{} = {}",
+            claim.status, claim.domain, claim.kind, claim.value
+        );
+    }
+    println!(
+        "\nMemory map: {} node(s), {} edge(s)",
+        state.map.nodes.len(),
+        state.map.edges.len()
+    );
+    for edge in state.map.edges.iter().take(12) {
+        println!(
+            "- {:?}: {} -> {} ({:?}, strength {:.2})",
+            edge.confidence_tier, edge.source, edge.target, edge.relation, edge.strength
+        );
+    }
 }
 
 fn print_delta(label: &str, keyword: f32, tcf: f32) {
@@ -316,9 +779,8 @@ fn run_formation_command(
 ) -> anyhow::Result<ExitCode> {
     let backend: Box<dyn LlmBackend> = match backend_choice {
         "fixture" => {
-            let fixtures = fixtures.ok_or_else(|| {
-                anyhow::anyhow!("--backend fixture requires --fixtures <dir>")
-            })?;
+            let fixtures = fixtures
+                .ok_or_else(|| anyhow::anyhow!("--backend fixture requires --fixtures <dir>"))?;
             if !fixtures.exists() {
                 anyhow::bail!(
                     "fixture directory does not exist: {}\n\
@@ -331,9 +793,8 @@ fn run_formation_command(
             Box::new(FixtureBackend::new(fixtures))
         }
         "command" => {
-            let command = command.ok_or_else(|| {
-                anyhow::anyhow!("--backend command requires --command <path>")
-            })?;
+            let command = command
+                .ok_or_else(|| anyhow::anyhow!("--backend command requires --command <path>"))?;
             let model_id = model_id.ok_or_else(|| {
                 anyhow::anyhow!(
                     "--backend command requires --model-id <id>; encode every\n\
@@ -347,9 +808,7 @@ fn run_formation_command(
             Box::new(command_backend)
         }
         other => {
-            anyhow::bail!(
-                "unknown --backend '{other}' (expected 'fixture' or 'command')"
-            );
+            anyhow::bail!("unknown --backend '{other}' (expected 'fixture' or 'command')");
         }
     };
 

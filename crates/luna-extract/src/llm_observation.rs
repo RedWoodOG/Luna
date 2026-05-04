@@ -34,12 +34,8 @@ pub const ALLOWED_DIMENSIONS: &[&str] = &[
 /// Reliability allowlist. Mirrors the snake-cased serde representation
 /// of [`luna_core::SignalReliability`] so an LLM can name any of the
 /// real reliability tiers (typically `learned`).
-pub const ALLOWED_RELIABILITIES: &[&str] = &[
-    "heuristic",
-    "statistical",
-    "learned",
-    "user_confirmed",
-];
+pub const ALLOWED_RELIABILITIES: &[&str] =
+    &["heuristic", "statistical", "learned", "user_confirmed"];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LlmObservation {
@@ -166,6 +162,16 @@ pub const PROMPT_V3_DOMAIN_KINDS: &[(&str, &str)] = &[
     ("work", "territory"),
     ("relationship", "collaboration"),
     ("relationship", "conflict"),
+    ("person", "name"),
+    ("person", "profession"),
+    ("person", "role"),
+    ("person", "location"),
+    ("person", "age"),
+    ("person", "relationship_status"),
+    ("person", "transportation"),
+    ("person", "trait"),
+    ("person", "interest"),
+    ("person", "goal"),
     ("project", "provenance_engine"),
     ("project", "failed_project"),
     ("project", "creative_work"),
@@ -299,8 +305,7 @@ mod tests {
     #[test]
     fn validation_accepts_explicit_none_signal() {
         let mut obs = ok_observation();
-        obs.signals
-            .insert("identity_relevance".to_string(), None);
+        obs.signals.insert("identity_relevance".to_string(), None);
         assert!(validate_observation(&obs).is_empty());
     }
 
@@ -309,6 +314,17 @@ mod tests {
         let obs = ok_observation();
         // ok_assertion's (domain, kind) is ("work", "current_stressor"),
         // which is in the prompt-v2 allowlist (unchanged from v1).
+        assert!(validate_against_prompt_v3(&obs).is_empty());
+    }
+
+    #[test]
+    fn validate_against_prompt_v3_accepts_person_memory_assertions() {
+        let mut obs = ok_observation();
+        obs.assertions[0].domain = "person".to_string();
+        obs.assertions[0].kind = "location".to_string();
+        obs.assertions[0].value = "Chris lives in Iowa".to_string();
+        obs.assertions[0].evidence_span = Some("Chris lives in Iowa".to_string());
+
         assert!(validate_against_prompt_v3(&obs).is_empty());
     }
 

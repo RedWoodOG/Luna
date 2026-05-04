@@ -65,7 +65,9 @@ const TEMPORAL_CUES: &[(&str, f32)] = &[
 
 impl TemporalDetector {
     pub fn new() -> Self {
-        Self { cues: TEMPORAL_CUES }
+        Self {
+            cues: TEMPORAL_CUES,
+        }
     }
 }
 
@@ -135,7 +137,9 @@ const AFFECT_WORDS: &[(&str, f32)] = &[
 
 impl AffectLexicon {
     pub fn new() -> Self {
-        Self { words: AFFECT_WORDS }
+        Self {
+            words: AFFECT_WORDS,
+        }
     }
 }
 
@@ -246,7 +250,10 @@ impl Default for FirstPersonIdentityDetector {
 
 impl SecondSource for FirstPersonIdentityDetector {
     fn detect(&self, turn: &ConversationTurn) -> HashMap<String, Signal> {
-        let normalized = format!(" {} ", turn.content.to_ascii_lowercase().replace("i'm", "i'm"));
+        let normalized = format!(
+            " {} ",
+            turn.content.to_ascii_lowercase().replace("i'm", "i'm")
+        );
         let mut max_intensity = 0.0_f32;
         for (pattern, intensity) in self.patterns {
             if normalized.contains(pattern) {
@@ -387,8 +394,7 @@ mod tests {
     #[test]
     fn temporal_detector_does_not_read_timestamp() {
         let mut turn = user("The sky is blue.");
-        turn.timestamp =
-            Some(chrono::Utc::now());
+        turn.timestamp = Some(chrono::Utc::now());
         let signals = TemporalDetector::new().detect(&turn);
         assert!(
             signals.is_empty(),
@@ -444,7 +450,8 @@ mod tests {
     #[test]
     fn detectors_only_emit_listed_dimensions() {
         let detectors = default_v1_sources();
-        let turn = user("Yesterday I was terrified, I am a mechanical engineer, deadline tomorrow.");
+        let turn =
+            user("Yesterday I was terrified, I am a mechanical engineer, deadline tomorrow.");
         for detector in &detectors {
             for (dim, _) in detector.detect(&turn) {
                 assert!(
@@ -510,8 +517,9 @@ mod tests {
 
     #[test]
     fn identity_fires_on_what_i_do_professionally() {
-        let signals = FirstPersonIdentityDetector::new()
-            .detect(&user("Engineering is what I do professionally, specifically mechanical engineering."));
+        let signals = FirstPersonIdentityDetector::new().detect(&user(
+            "Engineering is what I do professionally, specifically mechanical engineering.",
+        ));
         assert!(signals.get("identity_relevance").is_some());
     }
 
@@ -547,8 +555,8 @@ mod tests {
 
     #[test]
     fn goal_fires_on_struggling_with() {
-        let signals = GoalPhraseLexicon::new()
-            .detect(&user("Last week I was struggling with my job."));
+        let signals =
+            GoalPhraseLexicon::new().detect(&user("Last week I was struggling with my job."));
         assert!(signals.get("goal_pressure").is_some());
     }
 
@@ -561,15 +569,15 @@ mod tests {
 
     #[test]
     fn goal_fires_on_stressful_thing() {
-        let signals = GoalPhraseLexicon::new()
-            .detect(&user("This week the product launch is the stressful thing."));
+        let signals = GoalPhraseLexicon::new().detect(&user(
+            "This week the product launch is the stressful thing.",
+        ));
         assert!(signals.get("goal_pressure").is_some());
     }
 
     #[test]
     fn goal_fires_on_stressing_me() {
-        let signals = GoalPhraseLexicon::new()
-            .detect(&user("Recently, what was stressing me?"));
+        let signals = GoalPhraseLexicon::new().detect(&user("Recently, what was stressing me?"));
         assert!(signals.get("goal_pressure").is_some());
     }
 
@@ -582,7 +590,8 @@ mod tests {
 
     #[test]
     fn goal_fires_on_prove_myself() {
-        let signals = GoalPhraseLexicon::new().detect(&user("I need to prove myself this quarter."));
+        let signals =
+            GoalPhraseLexicon::new().detect(&user("I need to prove myself this quarter."));
         assert!(signals.get("goal_pressure").is_some());
     }
 
@@ -601,8 +610,9 @@ mod tests {
 
     #[test]
     fn affect_fires_on_stressful() {
-        let signals = AffectLexicon::new()
-            .detect(&user("This week the product launch is the stressful thing."));
+        let signals = AffectLexicon::new().detect(&user(
+            "This week the product launch is the stressful thing.",
+        ));
         assert!(signals.get("emotional_arousal").is_some());
     }
 

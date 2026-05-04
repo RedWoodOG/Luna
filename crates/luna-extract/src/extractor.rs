@@ -74,9 +74,8 @@ impl<B: LlmBackend, C: ExtractionCache> LlmExtractor<B, C> {
             prompt: build_prompt_v3(turn),
         };
         let raw = self.backend.complete(&request)?;
-        let observation: LlmObservation = serde_json::from_str(&raw).map_err(|err| {
-            LunaError::new(format!("backend output is not valid JSON: {err}"))
-        })?;
+        let observation: LlmObservation = serde_json::from_str(&raw)
+            .map_err(|err| LunaError::new(format!("backend output is not valid JSON: {err}")))?;
 
         let violations = validate_against_prompt_v3(&observation);
         if !violations.is_empty() {

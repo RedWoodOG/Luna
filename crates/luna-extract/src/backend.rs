@@ -421,8 +421,7 @@ impl<B: LlmBackend> LlmBackend for CountingBackend<B> {
     }
 
     fn complete(&self, request: &LlmRequest) -> Result<String> {
-        self.count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.inner.complete(request)
     }
 }
@@ -561,11 +560,8 @@ mod tests {
         // `cargo --version` is universally available in any luna dev
         // environment and produces deterministic output across platforms.
         // Verifies spawn, wait, and stdout collection.
-        let backend = CommandBackend::new(
-            "cargo",
-            vec!["--version".to_string()],
-            "cargo-version-test",
-        );
+        let backend =
+            CommandBackend::new("cargo", vec!["--version".to_string()], "cargo-version-test");
         let response = backend
             .complete(&LlmRequest {
                 prompt: "ignored by cargo".to_string(),
@@ -612,11 +608,7 @@ mod tests {
 
     #[test]
     fn command_backend_model_id_is_the_user_supplied_string() {
-        let backend = CommandBackend::new(
-            "noop",
-            vec![],
-            "llama3-8b-q4@cpu-greedy-seed42-v1",
-        );
+        let backend = CommandBackend::new("noop", vec![], "llama3-8b-q4@cpu-greedy-seed42-v1");
         assert_eq!(backend.model_id(), "llama3-8b-q4@cpu-greedy-seed42-v1");
     }
 

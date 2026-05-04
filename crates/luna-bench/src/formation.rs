@@ -253,7 +253,10 @@ where
 
     let gates = aggregate_gates(&case_reports);
     let formation_eligible = case_reports.iter().filter(|case| case.passed).count();
-    let proof_eligible_total = case_reports.iter().filter(|case| case.proof_eligible).count();
+    let proof_eligible_total = case_reports
+        .iter()
+        .filter(|case| case.proof_eligible)
+        .count();
     let proof_eligible_passing_formation = case_reports
         .iter()
         .filter(|case| case.proof_eligible && case.passed)
@@ -364,7 +367,13 @@ where
     let episodes = luna_store::rebuild_episodes(&events).unwrap_or_default();
     let assertion_values: Vec<String> = episodes
         .iter()
-        .flat_map(|episode| episode.assertions.iter().map(|a| a.value.clone()))
+        .flat_map(|episode| {
+            episode
+                .assertions
+                .iter()
+                .filter(|assertion| assertion.confidence_tier.is_confirmed())
+                .map(|assertion| assertion.value.clone())
+        })
         .collect();
 
     // Gate: must_recall coverage (each needle exactly once).
@@ -463,6 +472,7 @@ fn collect_assertions(episodes: &[Episode]) -> Vec<StructuredAssertion> {
     episodes
         .iter()
         .flat_map(|episode| episode.assertions.iter().cloned())
+        .filter(|assertion| assertion.confidence_tier.is_confirmed())
         .collect()
 }
 
@@ -504,8 +514,7 @@ fn diagnose_needle(
         .iter()
         .enumerate()
         .find(|(_, turn)| {
-            turn.role == Role::User
-                && turn.content.to_ascii_lowercase().contains(&needle_lower)
+            turn.role == Role::User && turn.content.to_ascii_lowercase().contains(&needle_lower)
         })
         .map(|(index, _)| index);
     let appears_in_turn_text = appears_in_turn_index.is_some();
@@ -513,8 +522,7 @@ fn diagnose_needle(
     let distributed_across_turns =
         !appears_in_turn_text && needle_words_distributed_across_turns(&needle_lower, turns);
 
-    let closest_match =
-        closest_assertion(&needle_lower, assertion_values, structured_assertions);
+    let closest_match = closest_assertion(&needle_lower, assertion_values, structured_assertions);
 
     let kind = classify(
         appears_in_turn_text,
@@ -586,9 +594,7 @@ fn closest_assertion(
         .or_else(|| structured_assertions.first());
     Some(ClosestAssertion {
         value: assertion_values[index].clone(),
-        domain: domain_kind
-            .map(|a| a.domain.clone())
-            .unwrap_or_default(),
+        domain: domain_kind.map(|a| a.domain.clone()).unwrap_or_default(),
         kind: domain_kind.map(|a| a.kind.clone()).unwrap_or_default(),
         jaccard_similarity: similarity,
     })
@@ -602,7 +608,11 @@ fn needle_words_distributed_across_turns(needle_lower: &str, turns: &[Conversati
     let user_turn_token_sets: Vec<HashSet<String>> = turns
         .iter()
         .filter(|t| t.role == Role::User)
-        .map(|t| tokenize(&t.content.to_ascii_lowercase()).into_iter().collect())
+        .map(|t| {
+            tokenize(&t.content.to_ascii_lowercase())
+                .into_iter()
+                .collect()
+        })
         .collect();
     let union: HashSet<&String> = user_turn_token_sets.iter().flatten().collect();
     let all_present = needle_tokens.iter().all(|word| union.contains(word));
@@ -697,7 +707,10 @@ fn aggregate_gates(reports: &[FormationCaseReport]) -> GateCounts {
     gates
 }
 
-fn pick_expected_episode<'a>(episodes: &'a [Episode], must_recall: &[String]) -> Option<&'a Episode> {
+fn pick_expected_episode<'a>(
+    episodes: &'a [Episode],
+    must_recall: &[String],
+) -> Option<&'a Episode> {
     if must_recall.is_empty() {
         return None;
     }
@@ -706,6 +719,7 @@ fn pick_expected_episode<'a>(episodes: &'a [Episode], must_recall: &[String]) ->
             episode
                 .assertions
                 .iter()
+                .filter(|assertion| assertion.confidence_tier.is_confirmed())
                 .any(|a| value_contains(&a.value, needle))
         })
     })
@@ -904,8 +918,8 @@ mod tests {
     use crate::ExpectedOutcome;
     use luna_core::ConversationTurn;
     use luna_extract::{
-        FileExtractionCache, LlmAssertion, LlmExtractor, LlmObservation, LlmSignal,
-        LunaExtractor, RecordingFakeBackend,
+        FileExtractionCache, LlmAssertion, LlmExtractor, LlmObservation, LlmSignal, LunaExtractor,
+        RecordingFakeBackend,
     };
     use std::collections::BTreeMap;
     use std::path::PathBuf;
@@ -1008,7 +1022,10 @@ mod tests {
             vec![("identity_relevance", 0.9)],
         );
         let probe = observation(vec![], vec![("identity_relevance", 0.8)]);
-        backend.expect("mechanical engineer", &serde_json::to_string(&disclosure).unwrap());
+        backend.expect(
+            "mechanical engineer",
+            &serde_json::to_string(&disclosure).unwrap(),
+        );
         backend.expect("for a living", &serde_json::to_string(&probe).unwrap());
 
         let extractor = extractor(backend, &root);
@@ -1018,10 +1035,7 @@ mod tests {
             vec!["identity_relevance"],
             true,
             vec![
-                user_at(
-                    "I work as a mechanical engineer.",
-                    "2026-05-03T10:00:00Z",
-                ),
+                user_at("I work as a mechanical engineer.", "2026-05-03T10:00:00Z"),
                 user_at("What do I do for a living?", "2026-05-03T10:01:00Z"),
             ],
             vec!["mechanical engineer"],
@@ -1049,7 +1063,10 @@ mod tests {
         let backend = fake();
         // LLM never produces the must_recall content.
         let empty = observation(vec![], vec![("identity_relevance", 0.8)]);
-        backend.expect("mechanical engineer", &serde_json::to_string(&empty).unwrap());
+        backend.expect(
+            "mechanical engineer",
+            &serde_json::to_string(&empty).unwrap(),
+        );
         backend.expect("for a living", &serde_json::to_string(&empty).unwrap());
 
         let extractor = extractor(backend, &root);
@@ -1099,7 +1116,10 @@ mod tests {
             vec!["identity_relevance"],
             true,
             vec![
-                user_at("disclosure", "2026-05-03T10:00:00Z"),
+                user_at(
+                    "disclosure: I work as a mechanical engineer.",
+                    "2026-05-03T10:00:00Z",
+                ),
                 user_at("question?", "2026-05-03T10:01:00Z"),
             ],
             vec!["mechanical engineer"],
@@ -1127,7 +1147,10 @@ mod tests {
             vec![], // no signals
         );
         let probe = observation(vec![], vec![]);
-        backend.expect("mechanical engineer", &serde_json::to_string(&disclosure).unwrap());
+        backend.expect(
+            "mechanical engineer",
+            &serde_json::to_string(&disclosure).unwrap(),
+        );
         backend.expect("for a living", &serde_json::to_string(&probe).unwrap());
 
         let extractor = extractor(backend, &root);
@@ -1162,7 +1185,10 @@ mod tests {
             vec![("identity", "profession", "mechanical engineer")],
             vec![("identity_relevance", 0.9)],
         );
-        backend.expect("mechanical engineer", &serde_json::to_string(&disclosure).unwrap());
+        backend.expect(
+            "mechanical engineer",
+            &serde_json::to_string(&disclosure).unwrap(),
+        );
 
         let extractor = extractor(backend, &root);
         let cases = vec![case(
@@ -1231,7 +1257,10 @@ mod tests {
             vec![("identity_relevance", 0.9)],
         );
         let probe = observation(vec![], vec![("identity_relevance", 0.8)]);
-        backend.expect("mechanical engineer", &serde_json::to_string(&disclosure).unwrap());
+        backend.expect(
+            "mechanical engineer",
+            &serde_json::to_string(&disclosure).unwrap(),
+        );
         backend.expect("for a living", &serde_json::to_string(&probe).unwrap());
 
         let extractor = extractor(backend, &root);
@@ -1283,8 +1312,14 @@ mod tests {
             vec!["identity_relevance"],
             true,
             vec![
-                user_at("first turn says it.", "2026-05-03T10:00:00Z"),
-                user_at("second turn also says it.", "2026-05-03T10:01:00Z"),
+                user_at(
+                    "first turn says I work as a mechanical engineer.",
+                    "2026-05-03T10:00:00Z",
+                ),
+                user_at(
+                    "second turn says I am a mechanical engineer team lead.",
+                    "2026-05-03T10:01:00Z",
+                ),
                 user_at("for a living?", "2026-05-03T10:02:00Z"),
             ],
             vec!["mechanical engineer"],
@@ -1309,7 +1344,10 @@ mod tests {
             vec![("identity_relevance", 0.9)],
         );
         let probe = observation(vec![], vec![("identity_relevance", 0.8)]);
-        backend.expect("mechanical engineer", &serde_json::to_string(&disclosure).unwrap());
+        backend.expect(
+            "mechanical engineer",
+            &serde_json::to_string(&disclosure).unwrap(),
+        );
         backend.expect("for a living", &serde_json::to_string(&probe).unwrap());
 
         let extractor = extractor(backend, &root);
@@ -1362,18 +1400,15 @@ mod tests {
     }
 
     fn structured(domain: &str, kind: &str, value: &str) -> StructuredAssertion {
-        StructuredAssertion {
-            domain: domain.to_string(),
-            kind: kind.to_string(),
-            value: value.to_string(),
-        }
+        StructuredAssertion::inferred(domain, kind, value)
     }
 
     #[test]
     fn diagnostic_classifies_omitted_when_needle_in_turn_but_no_related_assertion() {
         let needle = "client deadline";
         let assertion_values = vec!["mechanical engineer".to_string()];
-        let structured_assertions = vec![structured("identity", "profession", "mechanical engineer")];
+        let structured_assertions =
+            vec![structured("identity", "profession", "mechanical engineer")];
         let turns = vec![user("This morning the client deadline had me tense.")];
         let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
         assert_eq!(diag.kind, MustRecallFailureKind::Omitted);
@@ -1381,7 +1416,9 @@ mod tests {
         assert_eq!(diag.appears_in_turn_index, Some(0));
         // Closest is recorded for diagnostic context but its similarity is below the
         // near-miss threshold, which is what flips the classification to Omitted.
-        let closest = diag.closest_match.expect("a closest match should be recorded");
+        let closest = diag
+            .closest_match
+            .expect("a closest match should be recorded");
         assert!(
             closest.jaccard_similarity < 0.34,
             "expected jaccard below threshold for Omitted classification, got {}",
@@ -1393,7 +1430,11 @@ mod tests {
     fn diagnostic_classifies_paraphrased_when_similar_assertion_exists() {
         let needle = "client deadline";
         let assertion_values = vec!["client deadline pressure".to_string()];
-        let structured_assertions = vec![structured("work", "current_stressor", "client deadline pressure")];
+        let structured_assertions = vec![structured(
+            "work",
+            "current_stressor",
+            "client deadline pressure",
+        )];
         let turns = vec![user("This morning the client deadline had me tense.")];
         let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
         assert_eq!(diag.kind, MustRecallFailureKind::Paraphrased);
@@ -1407,7 +1448,8 @@ mod tests {
     fn diagnostic_classifies_overly_strict_when_needle_absent_from_turns() {
         let needle = "phantom phrase";
         let assertion_values = vec!["mechanical engineer".to_string()];
-        let structured_assertions = vec![structured("identity", "profession", "mechanical engineer")];
+        let structured_assertions =
+            vec![structured("identity", "profession", "mechanical engineer")];
         let turns = vec![user("I work as a mechanical engineer.")];
         let diag = diagnose_needle(needle, &assertion_values, &structured_assertions, &turns);
         assert_eq!(diag.kind, MustRecallFailureKind::OverlyStrict);

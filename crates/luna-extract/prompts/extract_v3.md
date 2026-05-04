@@ -66,6 +66,16 @@ the turn, not a category label.
 | work         | territory           | assigned geographic or scope-based area of responsibility | `"South Texas territory"`                           |
 | relationship | collaboration       | an ongoing working relationship or collaboration          | `"weekly sync with Chris"`                          |
 | relationship | conflict            | interpersonal tension, disagreement, or conflict          | `"argument with the new hire about ownership"`      |
+| person       | name                | another person's name when the speaker identifies them    | `"Chris"`                                           |
+| person       | profession          | another person's stated work or trade                     | `"Chris writes programs"`                           |
+| person       | role                | another person's role in the speaker's life or work       | `"Francois is my co-founder"`                       |
+| person       | location            | where another person lives or is based                    | `"Chris lives in Iowa"`                             |
+| person       | age                 | another person's stated age                               | `"Chris is 37"`                                     |
+| person       | relationship_status | another person's stated romantic/family status            | `"Chris is married"`                                |
+| person       | transportation      | another person's vehicle or transit situation             | `"Francois takes public transportation"`            |
+| person       | trait               | another person's stable descriptive trait                 | `"Francois is short"`                               |
+| person       | interest            | another person's stated interest or fandom                | `"Chris is a basketball fan"`                       |
+| person       | goal                | another person's stated goal or ambition                  | `"Francois wants to take over the industry"`        |
 | project      | provenance_engine   | the speaker's provenance/lineage engine project           | `"Aegis provenance engine"`                         |
 | project      | failed_project      | a specific project that did not succeed                   | `"being early to a problem"`                        |
 | project      | creative_work       | a creative artifact, story, or work produced              | `"AI writing tool"`                                 |
@@ -92,6 +102,14 @@ When a turn carries both a named entity (a person, a project, a
 place) AND a descriptive phrase, **prefer the descriptive phrase as
 `value`.** The named entity helps you pick the (domain, kind), but
 `value` records what the named entity *is* or *did*.
+
+For `person:*` assertions, preserve the person's name inside `value`
+when the fact is about that person. A bare name alone is low-value, but
+`"Chris lives in Iowa"`, `"Francois is my co-founder"`, and `"Chris is
+37"` are valuable because the name anchors who the memory belongs to.
+If a dense turn names multiple people, extract each concrete person
+fact separately when it fits the allowlist. Do not collapse several
+people into one broad relationship claim.
 
 | Good `value`                                  | Bad `value`        |
 |-----------------------------------------------|--------------------|

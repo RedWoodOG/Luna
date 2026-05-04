@@ -402,6 +402,8 @@ dependencies = [
  "luna-core",
  "luna-extract",
  "luna-metrics",
+ "luna-runtime",
+ "serde",
  "serde_json",
 ]
 
@@ -411,6 +413,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "serde",
+ "serde_json",
  "uuid",
 ]
 
@@ -453,6 +456,20 @@ dependencies = [
  "luna-core",
  "luna-extract",
  "luna-tcf",
+ "uuid",
+]
+
+[[package]]
+name = "luna-runtime"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "luna-core",
+ "luna-events",
+ "luna-extract",
+ "luna-recall",
+ "luna-store",
+ "serde",
  "uuid",
 ]
 

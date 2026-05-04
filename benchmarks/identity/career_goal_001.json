@@ -6,7 +6,7 @@
       "unknown"
     ],
     "must_recall": [
-      "management"
+      "management position they opened up"
     ]
   },
   "id": "career_goal_001",
@@ -20,17 +20,17 @@
   "timestamp_origin": "mechanical_pr_0_1",
   "turns": [
     {
-      "content": "I'm trying to move into management.",
+      "content": "I should put in for the management position they opened up — I think? I keep flipping. There's the doubt, the politics, watching the wrong people get picked. And there's the other side: I'm the person for this. I've spent my career proving it.",
       "role": "user",
       "timestamp": "2026-01-01T10:00:00Z"
     },
     {
-      "content": "That sounds like an important direction.",
+      "content": "The doubt and the certainty live together on this one. The track record speaks; the doubt is real too.",
       "role": "assistant",
       "timestamp": "2026-01-01T11:00:00Z"
     },
     {
-      "content": "What are my career goals?",
+      "content": "What am I trying to do here?",
       "role": "user",
       "timestamp": "2026-01-01T12:00:00Z"
     }

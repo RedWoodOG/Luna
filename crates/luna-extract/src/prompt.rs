@@ -124,6 +124,8 @@ mod tests {
         assert!(PROMPT_V3_BYTES.contains("Memory shape priority"));
         assert!(PROMPT_V3_BYTES.contains("Worked examples"));
         assert!(PROMPT_V3_BYTES.contains("example value"));
+        assert!(PROMPT_V3_BYTES.contains("| person"));
+        assert!(PROMPT_V3_BYTES.contains("extract each concrete person"));
         assert!(PROMPT_V3_BYTES.contains("Every signal slot in `signals`"));
     }
 }

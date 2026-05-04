@@ -83,8 +83,20 @@ pub fn fuse_observation(
     let semantic = hashed_vector(&cue_terms_v, 16);
     let intent = hashed_vector(&query_intents_v, 8);
 
-    let assertions: Vec<StructuredAssertion> =
-        llm_obs.assertions.iter().map(to_structured).collect();
+    let assertions: Vec<StructuredAssertion> = llm_obs
+        .assertions
+        .iter()
+        .map(|assertion| {
+            to_structured(
+                assertion,
+                turn,
+                temporal_relevance,
+                emotional_arousal,
+                identity_relevance,
+                goal_pressure,
+            )
+        })
+        .collect();
 
     // Uncertainty mirrors the existing extractor's heuristic: if the
     // turn produced assertions, the system has more to work with;
@@ -123,12 +135,182 @@ fn fuse_dim(by_dim: &HashMap<String, Vec<Signal>>, name: &str) -> Option<Signal>
     Signal::fuse(signals).filter(|signal| signal.can_influence_recall())
 }
 
-fn to_structured(assertion: &LlmAssertion) -> StructuredAssertion {
-    StructuredAssertion {
-        domain: assertion.domain.clone(),
-        kind: assertion.kind.clone(),
-        value: assertion.value.clone(),
+fn to_structured(
+    assertion: &LlmAssertion,
+    turn: &ConversationTurn,
+    temporal_relevance: Option<Signal>,
+    emotional_arousal: Option<Signal>,
+    identity_relevance: Option<Signal>,
+    goal_pressure: Option<Signal>,
+) -> StructuredAssertion {
+    let source_count = assertion_support_source_count(
+        assertion,
+        temporal_relevance,
+        emotional_arousal,
+        identity_relevance,
+        goal_pressure,
+    );
+    let value = if assertion.domain == "person" {
+        anchor_person_value(&assertion.kind, &assertion.value, &turn.content)
+    } else {
+        assertion.value.clone()
+    };
+    StructuredAssertion::inferred(&assertion.domain, &assertion.kind, value)
+        .with_source_count(source_count)
+}
+
+fn anchor_person_value(kind: &str, value: &str, turn_content: &str) -> String {
+    if person_value_has_name(value) {
+        return value.to_string();
     }
+
+    if let Some(anchored) = anchor_they_both_value(value, turn_content) {
+        return anchored;
+    }
+
+    if let Some(anchored) = anchor_group_role_value(kind, value, turn_content) {
+        return anchored;
+    }
+
+    let lower_turn = turn_content.to_ascii_lowercase();
+    let lower_value = value.to_ascii_lowercase();
+    let Some(index) = lower_turn.find(&lower_value) else {
+        return value.to_string();
+    };
+    let prefix = &turn_content[..index];
+    let name = nearest_name(prefix);
+    match name {
+        Some(name) => format_person_value(kind, &name, value),
+        None => value.to_string(),
+    }
+}
+
+fn person_value_has_name(value: &str) -> bool {
+    value
+        .split_whitespace()
+        .next()
+        .map(is_person_name_token)
+        .unwrap_or(false)
+}
+
+fn anchor_they_both_value(value: &str, turn_content: &str) -> Option<String> {
+    let lower_turn = turn_content.to_ascii_lowercase();
+    let lower_value = value.to_ascii_lowercase();
+    let index = lower_turn.find(&lower_value)?;
+    let prefix = &turn_content[..index];
+    let current_clause_start = prefix
+        .rfind(['.', '!', '?', ';', ','])
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+    if !prefix[current_clause_start..]
+        .to_ascii_lowercase()
+        .contains("they both")
+    {
+        return None;
+    }
+    let names = names_before_pronoun(prefix);
+    if names.len() >= 2 {
+        Some(format!("{} both {value}", names.join(" and ")))
+    } else {
+        None
+    }
+}
+
+fn anchor_group_role_value(kind: &str, value: &str, turn_content: &str) -> Option<String> {
+    if kind != "role" {
+        return None;
+    }
+    let lower_turn = turn_content.to_ascii_lowercase();
+    let lower_value = value.to_ascii_lowercase();
+    let index = lower_turn.find(&lower_value)?;
+    let prefix = &turn_content[..index];
+    let current_sentence_start = prefix
+        .rfind(['.', '!', '?', ';'])
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+    let names = names_in_text(&prefix[current_sentence_start..]);
+    if names.len() >= 2 && value.contains("co-founder") {
+        Some(format!("{} are {value}", names.join(" and ")))
+    } else {
+        None
+    }
+}
+
+fn format_person_value(kind: &str, name: &str, value: &str) -> String {
+    match kind {
+        "age" => format!("{name} is {value}"),
+        "interest" | "relationship_status" | "trait" if !value.starts_with("is ") => {
+            let article = if value.starts_with("a ") || value.starts_with("an ") {
+                ""
+            } else if kind == "interest" {
+                "a "
+            } else {
+                ""
+            };
+            format!("{name} is {article}{value}")
+        }
+        _ => format!("{name} {value}"),
+    }
+}
+
+fn names_before_pronoun(prefix: &str) -> Vec<String> {
+    let Some(pronoun_index) = prefix.to_ascii_lowercase().rfind("they both") else {
+        return Vec::new();
+    };
+    let before_pronoun = prefix[..pronoun_index].trim_end();
+    let previous_text = before_pronoun
+        .trim_end_matches(['.', '!', '?', ';'])
+        .trim_end();
+    let sentence_start = previous_text
+        .rfind(['.', '!', '?', ';'])
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+    names_in_text(&previous_text[sentence_start..])
+}
+
+fn nearest_name(prefix: &str) -> Option<String> {
+    let start = prefix
+        .rfind(['.', '!', '?', ';', ','])
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+    names_in_text(&prefix[start..]).pop()
+}
+
+fn names_in_text(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(|token| token.trim_matches(|c: char| !c.is_ascii_alphabetic()))
+        .filter(|token| is_person_name_token(token))
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn is_person_name_token(token: &str) -> bool {
+    let mut chars = token.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_uppercase()
+        && chars.all(|c| c.is_ascii_lowercase())
+        && !matches!(token, "I" | "They" | "The" | "A" | "An" | "My")
+}
+
+fn assertion_support_source_count(
+    assertion: &LlmAssertion,
+    temporal_relevance: Option<Signal>,
+    emotional_arousal: Option<Signal>,
+    identity_relevance: Option<Signal>,
+    goal_pressure: Option<Signal>,
+) -> u8 {
+    let supporting_signal = match assertion.domain.as_str() {
+        "identity" | "person" => identity_relevance,
+        "goal" | "work" => goal_pressure,
+        "emotion" | "relationship" => emotional_arousal,
+        "temporal" => temporal_relevance,
+        _ => None,
+    };
+    supporting_signal
+        .map(|signal| signal.source_count())
+        .unwrap_or(1)
 }
 
 #[cfg(test)]
@@ -309,6 +491,114 @@ mod tests {
         assert_eq!(assertion.domain, "identity");
         assert_eq!(assertion.kind, "profession");
         assert_eq!(assertion.value, "mechanical engineer");
+        assert_eq!(
+            assertion.confidence_tier,
+            luna_core::AssertionConfidenceTier::Inferred
+        );
+    }
+
+    #[test]
+    fn assertion_is_confirmed_when_llm_assertion_has_second_source_support() {
+        let mut signals = empty_signals();
+        signals.insert("identity_relevance".to_string(), Some(llm_signal(0.9)));
+        let llm_obs = LlmObservation {
+            assertions: vec![LlmAssertion {
+                domain: "identity".to_string(),
+                kind: "profession".to_string(),
+                value: "mechanical engineer".to_string(),
+                confidence: 0.9,
+                evidence_span: Some("mechanical engineer".to_string()),
+            }],
+            signals,
+        };
+        let turn = ConversationTurn::user("I work as a mechanical engineer.");
+        let observation = fuse_observation(&llm_obs, &default_v1_sources(), &turn);
+        assert_eq!(
+            observation.assertions[0].confidence_tier,
+            luna_core::AssertionConfidenceTier::Confirmed
+        );
+    }
+
+    #[test]
+    fn person_assertions_are_anchored_to_nearest_name_when_llm_drops_subject() {
+        let llm_obs = LlmObservation {
+            assertions: vec![LlmAssertion {
+                domain: "person".to_string(),
+                kind: "location".to_string(),
+                value: "lives in Iowa".to_string(),
+                confidence: 0.9,
+                evidence_span: Some("lives in Iowa".to_string()),
+            }],
+            signals: empty_signals(),
+        };
+        let turn = ConversationTurn::user("Francois lives in Washington, and Chris lives in Iowa.");
+        let observation = fuse_observation(&llm_obs, &[], &turn);
+
+        assert_eq!(observation.assertions[0].value, "Chris lives in Iowa");
+    }
+
+    #[test]
+    fn plural_person_assertions_are_anchored_to_named_group() {
+        let llm_obs = LlmObservation {
+            assertions: vec![LlmAssertion {
+                domain: "person".to_string(),
+                kind: "profession".to_string(),
+                value: "write programs".to_string(),
+                confidence: 0.9,
+                evidence_span: Some("write programs".to_string()),
+            }],
+            signals: empty_signals(),
+        };
+        let turn = ConversationTurn::user(
+            "Chris and Francois are my co-founders. They both write programs.",
+        );
+        let observation = fuse_observation(&llm_obs, &[], &turn);
+
+        assert_eq!(
+            observation.assertions[0].value,
+            "Chris and Francois both write programs"
+        );
+    }
+
+    #[test]
+    fn later_single_person_facts_do_not_reuse_plural_pronoun_anchor() {
+        let llm_obs = LlmObservation {
+            assertions: vec![LlmAssertion {
+                domain: "person".to_string(),
+                kind: "age".to_string(),
+                value: "37".to_string(),
+                confidence: 0.9,
+                evidence_span: Some("37".to_string()),
+            }],
+            signals: empty_signals(),
+        };
+        let turn = ConversationTurn::user(
+            "Chris and Francois are my co-founders. They both write programs. Chris is 37.",
+        );
+        let observation = fuse_observation(&llm_obs, &[], &turn);
+
+        assert_eq!(observation.assertions[0].value, "Chris is 37");
+    }
+
+    #[test]
+    fn group_role_assertions_preserve_both_names() {
+        let llm_obs = LlmObservation {
+            assertions: vec![LlmAssertion {
+                domain: "person".to_string(),
+                kind: "role".to_string(),
+                value: "my co-founders".to_string(),
+                confidence: 0.9,
+                evidence_span: Some("my co-founders".to_string()),
+            }],
+            signals: empty_signals(),
+        };
+        let turn = ConversationTurn::user("Chris and Francois are my co-founders.");
+        let observation = fuse_observation(&llm_obs, &[], &turn);
+
+        assert_eq!(
+            observation.assertions[0].value,
+            "Chris and Francois are my co-founders"
+        );
     }
 
     #[test]
@@ -419,8 +709,7 @@ mod tests {
         let turn = ConversationTurn::user(
             "Yesterday I am a mechanical engineer.", // contrived: both cues present
         );
-        let detectors: Vec<Box<dyn SecondSource>> =
-            vec![Box::new(TemporalDetector::new())];
+        let detectors: Vec<Box<dyn SecondSource>> = vec![Box::new(TemporalDetector::new())];
         let observation = fuse_observation(&llm_obs, &detectors, &turn);
         assert!(observation.temporal_relevance.is_some());
         assert!(observation.identity_relevance.is_none());

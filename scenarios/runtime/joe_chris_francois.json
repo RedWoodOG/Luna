@@ -1,0 +1,32 @@
+{
+  "name": "joe_chris_francois_dense_memory",
+  "turns": [
+    "ok, I am Joe, I am a software developer, building a ecosystem of things, with my two co-founders. Chris and Francois. They both write programs. Francois Lives in Washington, and Chris lives in Iowa. I am 45 years old, Chris is 37. I am causcasion and Francois is african american. I have two vehicles, and Francois has vehicle but lives in a city that he takes public transportation. I am tall, and francois and chris are short. I have a GF, Chris is Married. I work on lots of programs using AI assitance. I have built many things, but MKPE is my provenance engine, it is the best thing i have made. I have written white papers behind the engine. It has a patent, but for the orchestration layer. I like football, Chriss is a basketball fan. We all like working on programs hoping to build the next amazing software innovation. I want to eventually use AI and create a video gae based on my work. Chris just want to retire his wife, and Francois wants to take over the industry.",
+    "I ate tacos and looked at the weather for a while. This should not change anything important.",
+    "What do you know about Chris?"
+  ],
+  "checks": {
+    "must_contain": [
+      "identity:name=Joe",
+      "identity:profession=software developer",
+      "identity:age=I am 45 years old",
+      "identity:interest=I like football",
+      "person:profession=Chris writes programs",
+      "person:profession=Francois writes programs",
+      "person:location=Chris lives in Iowa",
+      "person:location=Francois Lives in Washington",
+      "person:age=Chris is 37",
+      "person:interest=Chris is a basketball fan",
+      "person:goal=Chris wants to retire his wife",
+      "person:goal=Francois wants to take over the industry"
+    ],
+    "must_not_contain": [
+      "person:profession=writes programs",
+      "person:trait=short",
+      "Chriss",
+      "Chri ",
+      "Francois lives in Iowa",
+      "Chris lives in Washington"
+    ]
+  }
+}

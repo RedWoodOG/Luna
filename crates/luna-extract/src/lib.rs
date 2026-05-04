@@ -205,22 +205,22 @@ fn extract_assertions(normalized: &str) -> Vec<StructuredAssertion> {
             "professionally",
         ],
     ) {
-        assertions.push(StructuredAssertion {
-            domain: "identity".to_string(),
-            kind: "profession".to_string(),
-            value: "mechanical engineer".to_string(),
-        });
+        assertions.push(StructuredAssertion::new(
+            "identity",
+            "profession",
+            "mechanical engineer",
+        ));
     }
 
     if has_any(
         normalized,
         &["i'm an only child", "i am an only child", "only child"],
     ) {
-        assertions.push(StructuredAssertion {
-            domain: "identity".to_string(),
-            kind: "family_structure".to_string(),
-            value: "only child".to_string(),
-        });
+        assertions.push(StructuredAssertion::new(
+            "identity",
+            "family_structure",
+            "only child",
+        ));
     }
 
     assertions

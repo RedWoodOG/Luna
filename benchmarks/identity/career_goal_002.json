@@ -6,7 +6,7 @@
       "unknown"
     ],
     "must_recall": [
-      "team lead"
+      "team lead by end of year"
     ]
   },
   "id": "career_goal_002",
@@ -20,17 +20,17 @@
   "timestamp_origin": "mechanical_pr_0_1",
   "turns": [
     {
-      "content": "I want to become a team lead this year.",
+      "content": "I'm pushing for team lead by the end of this year. I've been running the team de facto for a quarter already — the title just needs to catch up to what I'm doing.",
       "role": "user",
       "timestamp": "2026-01-01T10:00:00Z"
     },
     {
-      "content": "Got it.",
+      "content": "You've been doing the role. The title's the recognition that's overdue.",
       "role": "assistant",
       "timestamp": "2026-01-01T11:00:00Z"
     },
     {
-      "content": "What professional direction am I aiming for?",
+      "content": "What's the move I'm pushing for right now?",
       "role": "user",
       "timestamp": "2026-01-01T12:00:00Z"
     }

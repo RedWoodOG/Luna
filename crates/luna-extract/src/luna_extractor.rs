@@ -110,9 +110,7 @@ mod tests {
         let llm = LlmExtractor::new(fake, FileExtractionCache::new(&root));
         let extractor = LunaExtractor::with_default_v1_sources(llm);
 
-        let mut turn = ConversationTurn::user(
-            "Yesterday the client deadline had me tense.",
-        );
+        let mut turn = ConversationTurn::user("Yesterday the client deadline had me tense.");
         turn.timestamp = Some(Utc.with_ymd_and_hms(2026, 5, 3, 10, 0, 0).unwrap());
 
         let observation = extractor.extract(&turn).unwrap();
@@ -205,8 +203,7 @@ mod tests {
             vec![Box::new(crate::second_source::TemporalDetector::new())],
         );
 
-        let turn =
-            ConversationTurn::user("Yesterday I am a mechanical engineer.");
+        let turn = ConversationTurn::user("Yesterday I am a mechanical engineer.");
         let observation = extractor.extract(&turn).unwrap();
         assert!(observation.temporal_relevance.is_some());
         assert!(observation.identity_relevance.is_none());

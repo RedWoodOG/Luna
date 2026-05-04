@@ -130,7 +130,9 @@ impl ExtractionCache for FileExtractionCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm_observation::{LlmAssertion, LlmObservation, LlmSignal, EXTRACTION_SCHEMA_VERSION};
+    use crate::llm_observation::{
+        LlmAssertion, LlmObservation, LlmSignal, EXTRACTION_SCHEMA_VERSION,
+    };
     use chrono::TimeZone;
     use std::collections::BTreeMap;
 
@@ -258,7 +260,9 @@ mod tests {
     fn hex_is_64_lowercase_chars() {
         let hex = baseline_key().hex();
         assert_eq!(hex.len(), 64);
-        assert!(hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(hex
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     }
 
     #[test]

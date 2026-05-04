@@ -15,4 +15,6 @@ luna-bench = { path = "../luna-bench" }
 luna-core = { path = "../luna-core" }
 luna-extract = { path = "../luna-extract" }
 luna-metrics = { path = "../luna-metrics" }
+luna-runtime = { path = "../luna-runtime" }
+serde.workspace = true
 serde_json.workspace = true
