@@ -650,13 +650,13 @@ impl Default for WorkingMemoryBudget {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkingMemory {
     pub nodes: Vec<MemoryNode>,
     pub edges: Vec<MemoryEdge>,
     pub filtered_node_count: usize,
     pub filtered_edge_count: usize,
-    pub activation_reason: String,
+    pub activation_reason: RecallReason,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

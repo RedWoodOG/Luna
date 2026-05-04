@@ -1234,8 +1234,10 @@ fn activate_working_memory(
         edges: scored_edges,
         filtered_node_count,
         filtered_edge_count,
-        activation_reason: "query/cue/recalled activation with fixed working-memory budget"
-            .to_string(),
+        activation_reason: RecallReason::new(
+            "query/cue/recalled activation with fixed working-memory budget",
+        )
+        .expect("static recall reason is non-empty"),
     }
 }
 
