@@ -84,6 +84,66 @@ The wrapper (`scripts/run_anthropic_extract.py`) reads the prompt on stdin, call
 
 Same caching semantics as Option 1: cache key includes `--model-id`, so a model swap forces re-extraction.
 
+## Option 3 — Ollama (local or cloud models)
+
+Best when you already have Ollama installed. Single tool covers both local-compute and cloud-routed models. Cloud models (e.g. `glm-4.6:cloud`, `gpt-oss:20b-cloud`) execute on Ollama's hosted infrastructure but are invoked through the same local API.
+
+### One-time setup
+
+```bash
+# install ollama (linux/macOS — see https://ollama.com for windows)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# verify ollama is running
+ollama list
+
+# for local models — pull anything that returns reasonable JSON
+ollama pull qwen2.5:7b
+
+# for cloud models — sign in once, then pull the cloud tag
+ollama signin
+ollama pull glm-4.6:cloud           # or whatever cloud tag you want
+```
+
+Verify the model is available:
+
+```bash
+ollama list
+# NAME                ID       SIZE      MODIFIED
+# glm-4.6:cloud       ...      ...       ...
+```
+
+If the exact tag you want is unclear, browse https://ollama.com/library — model pages list their cloud tags. The user-facing name from `ollama list` is the value you pass to `OLLAMA_MODEL`.
+
+### Run
+
+```bash
+export OLLAMA_MODEL=glm-4.6:cloud    # or your local model tag
+
+cargo build -p luna-cli --release
+
+./target/release/luna runtime scenario \
+    scenarios/exploratory/stage7_dense_week.json \
+    --extractor command \
+    --command python3 \
+    --command-arg scripts/run_ollama_extract.py \
+    --model-id glm-4.6-cloud \
+    --timeout-secs 300
+```
+
+`--timeout-secs 300` is the per-call ceiling; cloud models can be slow on the first call of a session (cold start). Drop it for fast local models if you want.
+
+The wrapper (`scripts/run_ollama_extract.py`) targets Ollama's OpenAI-compatible endpoint at `http://127.0.0.1:11434/v1/chat/completions`. Override with `OLLAMA_HOST` if Ollama runs elsewhere.
+
+### Common Ollama failure modes
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `urlopen error [Errno 111] Connection refused` | `ollama serve` not running | `ollama serve` (in another terminal) or restart the daemon |
+| `404` or `model not found` | model not pulled | `ollama pull <model-tag>` |
+| Cloud model: `unauthorized` or sign-in error | not signed in | `ollama signin` |
+| Hangs near timeout | model loading from cold; cloud cold-start | bump `--timeout-secs`; second run will be fast |
+
 ## What success looks like
 
 A passing Stage 7 fixture run prints per-turn assertion counts > 0 and ends with:
