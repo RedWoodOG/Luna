@@ -280,12 +280,39 @@ pub struct RecallFailed {
 pub struct AssertionCorrected {
     pub old_assertion: StructuredAssertion,
     pub new_assertion: StructuredAssertion,
+    /// Confidence delta to apply to the affected episode during replay.
+    /// Negative for penalty, positive for restoration. Required for events
+    /// emitted from `pr-1.0a/event-log-hardening` onward; legacy events
+    /// without this field default to the historical penalty so old logs
+    /// replay identically. See `legacy_correction_delta`.
+    #[serde(default = "legacy_correction_delta")]
+    pub confidence_delta: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContradictionDetected {
     pub left: StructuredAssertion,
     pub right: StructuredAssertion,
+    /// Confidence delta to apply to the affected episode during replay.
+    /// See `AssertionCorrected::confidence_delta`. Legacy default is
+    /// `legacy_contradiction_delta`.
+    #[serde(default = "legacy_contradiction_delta")]
+    pub confidence_delta: f32,
+}
+
+/// Historical confidence penalty applied when an `AssertionCorrected` event
+/// did not carry an explicit delta. Pre-`pr-1.0a/event-log-hardening` the
+/// penalty was hardcoded in `rebuild_episodes`; this constant exists only so
+/// legacy event logs replay byte-identically. New emitters MUST set
+/// `confidence_delta` explicitly.
+fn legacy_correction_delta() -> f32 {
+    -0.22
+}
+
+/// Historical confidence penalty applied when a `ContradictionDetected` event
+/// did not carry an explicit delta. See `legacy_correction_delta`.
+fn legacy_contradiction_delta() -> f32 {
+    -0.22
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -13,3 +13,6 @@ luna-core = { path = "../luna-core" }
 luna-events = { path = "../luna-events" }
 luna-tcf = { path = "../luna-tcf" }
 uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

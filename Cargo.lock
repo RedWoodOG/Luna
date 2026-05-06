@@ -481,6 +481,7 @@ dependencies = [
  "luna-core",
  "luna-events",
  "luna-tcf",
+ "serde_json",
  "uuid",
 ]
 
