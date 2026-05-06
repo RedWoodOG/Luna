@@ -100,8 +100,8 @@ The first probe of Stage 7 is in: see [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md)
 
 Revised priority order (each gates the next):
 
-1. **Establish working extraction on natural prose.** Either wire LLM-backed extraction (`--extractor command`) into a default-able path and a CI strategy, or substantially expand the heuristic patterns. (A) is what the milestone roadmap names as a Stage 7 prerequisite.
-2. **Re-run the Stage 7 dense-recall probe fixtures.** When (1) lands, run them. Graduate to `scenarios/runtime/` if they pass. New findings if they fail.
+1. **Establish working extraction on natural prose.** **Scaffolded** — see [`STAGE7_LLM_SETUP.md`](STAGE7_LLM_SETUP.md). The `command` extractor backend has been there from the start; the entry-point doc was missing. Two backends documented end-to-end: local `llama.cpp` server (offline, deterministic) and Anthropic API via `scripts/run_anthropic_extract.py` (cloud, no local compute). Either runs the existing Stage 7 probe fixtures with no code change. **Awaits a local execution run** (this environment has no LLM endpoint configured).
+2. **Re-run the Stage 7 probe fixtures with a working extractor.** When (1) is exercised locally, run `scenarios/exploratory/stage7_dense_week.json` against the chosen backend. Record the result. If it passes: graduate to `scenarios/runtime/`. If it fails: the failure mode determines the next priority (see the failure-mode table in `STAGE7_LLM_SETUP.md`).
 3. **Add a time-decay process.** `EpisodeDecayed` driven from elapsed event-time so `forgotten_risk` actually moves. Required before the 24h portion of Stage 7 is measurable.
 4. **Build the Stage 7 fixture with a 24h gap and run it.** Needs (1)+(3) and a small harness extension for simulated time.
 5. **Resume the orb-network rebuild only after (4) closes.** The orb work is v2 architecture; it is not the v1.0 critical path.
