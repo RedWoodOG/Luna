@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>terran os · bridge · agentic operations</title>
+<title>terran os · bridge · ai · provenance · governance</title>
 <style>
   :root {
     --bg: #07090d;
@@ -574,10 +574,10 @@
     <div class="tape" id="tape">
       <div class="tape-track" id="tapeTrack"></div>
       <div class="scenario" id="scenarioBar">
-        <span class="phase" data-phase="PLAN">plan</span>
+        <span class="phase" data-phase="INTAKE">intake</span>
         <span class="phase" data-phase="DISPATCH">dispatch</span>
         <span class="phase" data-phase="EXECUTE">execute</span>
-        <span class="phase" data-phase="CONVERGE">converge</span>
+        <span class="phase" data-phase="ATTEST">attest</span>
         <span class="ts" id="phaseTs">+00.0s</span>
       </div>
     </div>
@@ -692,10 +692,10 @@
 // STATE
 //=============================================================
 const State = {
-  scenario: 'PLAN',
+  scenario: 'INTAKE',
   scenarioT: 0,
-  cycle: ['PLAN','DISPATCH','EXECUTE','CONVERGE'],
-  phaseDuration: { PLAN: 6, DISPATCH: 7, EXECUTE: 9, CONVERGE: 6 },
+  cycle: ['INTAKE','DISPATCH','EXECUTE','ATTEST'],
+  phaseDuration: { INTAKE: 6, DISPATCH: 7, EXECUTE: 9, ATTEST: 6 },
 
   nodes: [],          // see makeNode
   filaments: [],      // {id, a, b, kind, alive, lit, binding}
@@ -735,47 +735,57 @@ function makeNode(o) {
   }, o);
 }
 
-// seed working set (the initial scene) — agentic operations
+// seed working set (the initial scene) — ai · provenance · governance
 State.nodes = [
-  // center: active mission / orchestrator
-  makeNode({ id:'mission-1',     tx:500, ty:300, r:46, status:'confirmed',   label:'mission-deploy-v2',    reason:'orchestrator · plan 0.91', mass:3,
-             sources:['intake.spec.event','plan.t-04:21','dispatch.t-03:55']}),
-  makeNode({ id:'agent-research',tx:390, ty:230, r:30, status:'confirmed',   label:'agent-research',       reason:'active · model opus',
-             sources:['spawn.t-03:50','task.gather-context']}),
-  makeNode({ id:'agent-codegen', tx:610, ty:230, r:26, status:'confirmed',   label:'agent-codegen',        reason:'active · model sonnet',
-             sources:['spawn.t-03:48','task.implement-step-7']}),
-  makeNode({ id:'subagent-test', tx:400, ty:390, r:32, status:'inferred',    label:'subagent-test-runner', reason:'inferred · partial trust',
-             sources:['parent.agent-codegen','spawn.t-02:14']}),
-  makeNode({ id:'tool-pending',  tx:615, ty:395, r:28, status:'unconfirmed', label:'tool · fetch-config',  reason:'unconfirmed · awaiting return',
-             sources:['invoked.by.agent-codegen','t-00:07']}),
-  makeNode({ id:'conflict-1',    tx:700, ty:300, r:24, status:'conflict',    label:'output-divergence',    reason:'conflict · t-02:11',
-             sources:['agent-research.claim','agent-codegen.claim']}),
-  makeNode({ id:'approval-gate', tx:300, ty:300, r:22, status:'unknown',     label:'human-approval-gate',  reason:'unknown · awaiting operator',
+  // center: a governed AI operation under provenance
+  makeNode({ id:'op-deploy-v2',  tx:500, ty:300, r:46, status:'confirmed',   label:'op-deploy-v2',       reason:'governed · plan 0.91 · attested 0.62', mass:3,
+             sources:['anthem.intake','luna.event-log','governance.policy.prod-deploy']}),
+  // anthem — AI orchestration engine
+  makeNode({ id:'anthem',        tx:390, ty:230, r:30, status:'confirmed',   label:'anthem · orchestrator', reason:'ai · scheduling 2 agents',
+             sources:['anthem.session','anthem.tool-budget','model.opus','model.sonnet']}),
+  // active agent under anthem
+  makeNode({ id:'agent-codegen', tx:610, ty:230, r:26, status:'confirmed',   label:'agent-codegen',         reason:'ai · model sonnet · in-flight',
+             sources:['anthem.spawn.t-03:48','task.implement-step-7']}),
+  // luna — provenance / event-sourced memory
+  makeNode({ id:'luna',          tx:400, ty:390, r:32, status:'inferred',    label:'luna · provenance',     reason:'lineage · 184 events traced',
+             sources:['luna.event-log','luna.assertions','luna.contour-match 0.91']}),
+  // policy gate — governance evaluation in flight
+  makeNode({ id:'policy-gate',   tx:615, ty:395, r:28, status:'unconfirmed', label:'policy · prod-deploy',  reason:'governance · evaluating',
+             sources:['governance.charter.v3','rule.staged-rollout','rule.no-secret-egress']}),
+  // a divergence between two attested provenance chains
+  makeNode({ id:'conflict-1',    tx:700, ty:300, r:24, status:'conflict',    label:'evidence-divergence',   reason:'provenance · two chains contradict',
+             sources:['luna.chain.research-7','luna.chain.codegen-3','governance.flagged']}),
+  // human-in-the-loop approval — held open until operator acts
+  makeNode({ id:'approval',      tx:300, ty:300, r:22, status:'unknown',     label:'approval · operator',   reason:'governance · awaiting sign-off',
              sources:[]}),
 ];
 
 State.filaments = [
-  { id:'f1', a:'mission-1',     b:'agent-research', kind:'confirmed', alive:true },
-  { id:'f2', a:'mission-1',     b:'agent-codegen',  kind:'confirmed', alive:true },
-  { id:'f3', a:'mission-1',     b:'subagent-test',  kind:'inferred',  alive:true },
-  { id:'f4', a:'agent-codegen', b:'subagent-test',  kind:'confirmed', alive:true },
-  { id:'f5', a:'mission-1',     b:'tool-pending',   kind:'confirmed', alive:true },
-  { id:'f6', a:'agent-codegen', b:'conflict-1',     kind:'confirmed', alive:true },
-  { id:'f7', a:'agent-research',b:'conflict-1',     kind:'inferred',  alive:true },
-  { id:'f8', a:'mission-1',     b:'approval-gate',  kind:'inferred',  alive:true },
+  // op anchored to all three engines + governance/approval
+  { id:'f1', a:'op-deploy-v2',  b:'anthem',         kind:'confirmed', alive:true },
+  { id:'f2', a:'op-deploy-v2',  b:'agent-codegen',  kind:'confirmed', alive:true },
+  { id:'f3', a:'op-deploy-v2',  b:'luna',           kind:'inferred',  alive:true },
+  { id:'f4', a:'op-deploy-v2',  b:'policy-gate',    kind:'confirmed', alive:true },
+  { id:'f5', a:'op-deploy-v2',  b:'approval',       kind:'inferred',  alive:true },
+  // anthem owns agent-codegen
+  { id:'f6', a:'anthem',        b:'agent-codegen',  kind:'confirmed', alive:true },
+  // both agent claims feed the divergence; luna traces the lineage
+  { id:'f7', a:'agent-codegen', b:'conflict-1',     kind:'confirmed', alive:true },
+  { id:'f8', a:'anthem',        b:'conflict-1',     kind:'inferred',  alive:true },
+  { id:'f9', a:'luna',          b:'conflict-1',     kind:'inferred',  alive:true },
 ];
 
-// DISPATCH phase: sub-agents fan out from their parent agents
+// DISPATCH phase: sub-agents fan out from anthem (orchestrator)
 const DISPATCH_QUEUE = [
-  { id:'subagent-fetch',    label:'subagent-fetch-deps', parent:'agent-research', status:'confirmed', reason:'spawned · t+0', target:[290,160], r:18 },
-  { id:'subagent-validate', label:'subagent-validate',   parent:'agent-codegen',  status:'inferred',  reason:'spawned · t+1', target:[770,160], r:20 },
+  { id:'subagent-fetch',    label:'subagent · fetch-deps',  parent:'anthem',        status:'confirmed', reason:'ai · spawned · t+0', target:[290,160], r:18 },
+  { id:'subagent-validate', label:'subagent · validate',    parent:'agent-codegen', status:'inferred',  reason:'ai · spawned · t+1', target:[770,160], r:20 },
 ];
 let dispatchIdx = 0;
 
 // background system telemetry refs (low-relevance ambient traffic)
 const AMBIENT_REFS = [
-  'heartbeat.t','log.compaction','telemetry.tick','health.check',
-  'memory.gc','model.cache.hit','queue.empty','watchdog.ok','metrics.flush'
+  'heartbeat.t','luna.event.append','telemetry.tick','health.check',
+  'governance.audit.flush','model.cache.hit','queue.empty','watchdog.ok','metrics.flush'
 ];
 
 //=============================================================
@@ -867,7 +877,7 @@ function shapeClass(status) {
 function ensureNodeEl(n) {
   if (nodeEls[n.id]) return nodeEls[n.id];
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  g.setAttribute('class', 'node-group' + (n.id === 'mission-1' ? ' node-core' : ''));
+  g.setAttribute('class', 'node-group' + (n.id === 'op-deploy-v2' ? ' node-core' : ''));
   g.setAttribute('data-id', n.id);
 
   const shape = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -1038,14 +1048,14 @@ function advanceScenario(dt) {
   const dur = State.phaseDuration[phase];
 
   // phase behavior
-  if (phase === 'PLAN') {
-    planBehavior(dt);
+  if (phase === 'INTAKE') {
+    intakeBehavior(dt);
   } else if (phase === 'DISPATCH') {
     dispatchBehavior(dt);
   } else if (phase === 'EXECUTE') {
     executeBehavior(dt);
   } else {
-    convergeBehavior(dt);
+    attestBehavior(dt);
   }
 
   if (State.scenarioT >= dur) {
@@ -1057,6 +1067,11 @@ function advanceScenario(dt) {
 }
 
 function onPhaseChange(p) {
+  if (p === 'INTAKE') {
+    // governance + provenance attached at intake
+    pushTapeEvent({ kind:'POLICY_CHECKED',    cls:'',     ref:'charter.v3 · prod-deploy',   ts: tsNow() });
+    pushTapeEvent({ kind:'PROVENANCE_LINKED', cls:'',     ref:'op-deploy-v2 · chain.open',  ts: tsNow() });
+  }
   if (p === 'DISPATCH') {
     // reset sub-agent dispatch queue
     dispatchIdx = 0;
@@ -1066,16 +1081,27 @@ function onPhaseChange(p) {
     burstTraverse(5, 350);
     pushTapeEvent({ kind:'CONTEXT_ASSEMBLED', cls:'', ref:'working-set '+State.budget+'/'+State.budgetMax, ts: tsNow() });
   }
-  if (p === 'CONVERGE') {
-    // sub-agents complete and exit; substrate calms if conflict resolved
+  if (p === 'ATTEST') {
+    // sub-agents complete and exit; provenance closes; governance signs off
     setTimeout(() => retireSubagents(), 3500);
+    pushTapeEvent({ kind:'AUDIT_LOGGED',      cls:'warm', ref:'op-deploy-v2 · attestation', ts: tsNow() });
     if (State.conflictResolved) substrateShift.classList.add('calm');
   }
 }
 
-let planTimer = 0;
-function planBehavior(dt) {
-  // quiet phase: certainty rises slowly as the plan firms
+let intakeTimer = 0;
+function intakeBehavior(dt) {
+  // quiet: governance binds, provenance opens, plan firms
+  intakeTimer += dt;
+  if (intakeTimer > 1.6) {
+    intakeTimer = 0;
+    // alternate provenance / governance heartbeat
+    if (Math.random() < 0.5) {
+      pushTapeEvent({ kind:'PROVENANCE_LINKED', cls:'', ref: pick(['op-deploy-v2.lineage','agent-codegen.chain','anthem.session.t-04']), ts: tsNow() });
+    } else {
+      pushTapeEvent({ kind:'POLICY_CHECKED',    cls:'', ref: pick(['rule.staged-rollout','rule.no-secret-egress','rule.budget-cap']),    ts: tsNow() });
+    }
+  }
   State.certainty = Math.min(0.74, State.certainty + 0.010 * dt);
   renderCertaintyMeter();
   budgetCount.textContent = State.budget;
@@ -1093,8 +1119,9 @@ function dispatchBehavior(dt) {
 }
 
 let executeTimer = 0;
+let evidenceTimer = 0;
 function executeBehavior(dt) {
-  // heavy work: tool calls flying, traverses constant
+  // heavy work: ai tool calls, provenance gathering evidence, governance watching
   executeTimer += dt;
   if (executeTimer > 0.7) {
     executeTimer = 0;
@@ -1102,9 +1129,15 @@ function executeBehavior(dt) {
     pushTapeEvent({
       kind: 'TOOL_INVOKED',
       cls: '',
-      ref: pick(['fs.read(config.toml)','net.fetch(/api/state)','shell.run(cargo build)','db.query(memory)']),
+      ref: pick(['fs.read(config.toml)','net.fetch(/api/state)','shell.run(cargo build)','db.query(luna.events)']),
       ts: tsNow(),
     });
+  }
+  // provenance heartbeat: lineage being traced as evidence accumulates
+  evidenceTimer += dt;
+  if (evidenceTimer > 1.4) {
+    evidenceTimer = 0;
+    pushTapeEvent({ kind:'EVIDENCE_GATHERED', cls:'', ref: pick(['agent-codegen.output→step-7','tool.return→assertion','luna.chain.append']), ts: tsNow() });
   }
   // peripheral haloing pulses with execution rhythm
   $('warmHalo').setAttribute('opacity', 0.5 + 0.3 * Math.sin(performance.now()/700));
@@ -1113,8 +1146,8 @@ function executeBehavior(dt) {
   renderCertaintyMeter();
 }
 
-function convergeBehavior(dt) {
-  // outputs aggregate, certainty resolves upward, system settles
+function attestBehavior(dt) {
+  // outputs aggregate, provenance is closed, governance signs off
   State.certainty = Math.min(0.86, State.certainty + 0.020 * dt);
   renderCertaintyMeter();
 }
@@ -1122,7 +1155,7 @@ function convergeBehavior(dt) {
 function spawnSubagent(cfg) {
   if (nodeById(cfg.id)) return;
   // enter from the parent agent's position (fan-out)
-  const parent = nodeById(cfg.parent || 'mission-1');
+  const parent = nodeById(cfg.parent || 'op-deploy-v2');
   const startX = parent ? parent.x + (Math.random() - 0.5) * 24 : C.x;
   const startY = parent ? parent.y + (Math.random() - 0.5) * 24 : C.y;
   const n = makeNode({
@@ -1132,7 +1165,7 @@ function spawnSubagent(cfg) {
     status: cfg.status,
     label: cfg.label,
     reason: cfg.reason,
-    sources: ['parent.'+cfg.parent, 'spawn.t+'+dispatchIdx],
+    sources: ['anthem.parent.'+cfg.parent, 'luna.chain.opened.t+'+dispatchIdx, 'governance.policy.bound'],
   });
   n.x = startX; n.y = startY;
   State.nodes.push(n);
@@ -1141,7 +1174,8 @@ function spawnSubagent(cfg) {
   const fid = 'fdsp-' + cfg.id;
   State.filaments.push({ id:fid, a:cfg.parent, b:cfg.id, kind: cfg.status === 'inferred' ? 'inferred' : 'confirmed', alive:true, binding:true });
 
-  pushTapeEvent({ kind:'AGENT_SPAWNED',          cls:'',     ref: cfg.id, ts: tsNow() });
+  pushTapeEvent({ kind:'AGENT_SPAWNED',          cls:'',     ref: cfg.label, ts: tsNow() });
+  pushTapeEvent({ kind:'PROVENANCE_LINKED',      cls:'',     ref: cfg.id+' · chain.open', ts: tsNow() });
   pushTapeEvent({ kind:'WORKING_SET_RECOMPUTED', cls:'warm', ref: 'Δ +1 budget '+(++State.budget)+'/'+State.budgetMax, ts: tsNow() });
   budgetCount.textContent = State.budget;
 }
@@ -1198,18 +1232,30 @@ function pushTapeEvent(ev) {
   tapeTrack.appendChild(el);
 }
 
-// seed tape — agentic event kinds
+// seed tape — interleaved kinds across ai · provenance · governance
 const SEED_KINDS = [
-  { kind:'TASK_DISPATCHED',       cls:'',         refs:['agent-research.gather','agent-codegen.implement','subagent-test.run','agent-validate.check'] }, // 0
-  { kind:'TOOL_INVOKED',          cls:'',         refs:['fs.read(config.toml)','net.fetch(/api/state)','shell.run(cargo build)','db.query(memory)']  }, // 1
+  // AI (anthem)
+  { kind:'TASK_DISPATCHED',       cls:'',         refs:['anthem→agent-codegen','anthem→subagent-fetch','agent-codegen→subagent-validate']             }, // 0
+  { kind:'TOOL_INVOKED',          cls:'',         refs:['fs.read(config.toml)','net.fetch(/api/state)','shell.run(cargo build)','db.query(luna.events)'] }, // 1
   { kind:'TOOL_RETURNED',         cls:'warm',     refs:['fs.read · 1.2kb','net.fetch · 200 · 12ms','shell.run · exit 0','db.query · 4 rows']         }, // 2
-  { kind:'AGENT_SPAWNED',         cls:'',         refs:['subagent-test-runner','subagent-fetch-deps','subagent-validate']                            }, // 3
+  { kind:'AGENT_SPAWNED',         cls:'',         refs:['subagent · fetch-deps','subagent · validate','subagent · test-runner']                       }, // 3
+  // System
   { kind:'WORKING_SET_RECOMPUTED',cls:'warm',     refs:['Δ +2 −1 budget 7/12','Δ +1 budget 7/12','Δ −1 budget 6/12']                                  }, // 4
-  { kind:'ASSERTION_FORMED',      cls:'',         refs:['agent-research.claim','agent-codegen.claim','config.valid','step-7.complete']               }, // 5
-  { kind:'CONFLICT_DETECTED',     cls:'conflict', refs:['research ⇄ codegen','plan ⇄ result','tool-out ⇄ assertion']                                  }, // 6
+  { kind:'ASSERTION_FORMED',      cls:'',         refs:['agent-codegen.claim','agent-research.claim','step-7.complete','config.valid']                }, // 5
+  // Conflict (cross-engine)
+  { kind:'CONFLICT_DETECTED',     cls:'conflict', refs:['research ⇄ codegen','chain.research-7 ⇄ chain.codegen-3','tool-out ⇄ assertion']             }, // 6
+  // Governance
   { kind:'HUMAN_APPROVAL_REQ',    cls:'warm',     refs:['deploy-step-7','rollback-config','escalate-conflict']                                        }, // 7
   { kind:'CONTEXT_ASSEMBLED',     cls:'',         refs:['working-set 7/12','depth 2','tokens 18.4k']                                                  }, // 8
-  { kind:'MEMORY_WRITE',          cls:'',         refs:['agent-research.note','plan.refined','step-7.outcome']                                        }, // 9
+  // Provenance (luna)
+  { kind:'PROVENANCE_LINKED',     cls:'',         refs:['agent-codegen.chain','anthem.session.t-04','op-deploy-v2.lineage']                           }, // 9
+  { kind:'EVIDENCE_GATHERED',     cls:'',         refs:['agent-codegen.output→step-7','tool.return→assertion','luna.chain.append']                    }, // 10
+  { kind:'LINEAGE_TRACED',        cls:'warm',     refs:['op-deploy-v2 ← 184 events','agent-codegen ← spawn.t-03:48','step-7 ← 12 sources']            }, // 11
+  { kind:'MEMORY_WRITE',          cls:'',         refs:['luna.assertion','luna.episode','luna.contour-update']                                        }, // 12
+  // Governance
+  { kind:'POLICY_CHECKED',        cls:'',         refs:['rule.staged-rollout','rule.no-secret-egress','rule.budget-cap','charter.v3']                 }, // 13
+  { kind:'GUARDRAIL_HIT',         cls:'conflict', refs:['rule.no-secret-egress','rule.budget-cap','rule.network-allowlist']                           }, // 14
+  { kind:'AUDIT_LOGGED',          cls:'warm',     refs:['op-deploy-v2.attestation','approval.signoff','arbitration.merged']                           }, // 15
 ];
 for (let i = 0; i < 14; i++) {
   const k = pick(SEED_KINDS);
@@ -1244,36 +1290,59 @@ function advanceTape(dt) {
 }
 
 function pickPhaseKind() {
-  // PLAN: assertions + context-assembly. Quiet but meaningful.
-  if (State.scenario === 'PLAN')     return SEED_KINDS[Math.random() < 0.5 ? 8 : 5];
-  // DISPATCH: task-dispatch + agent-spawn traffic.
-  if (State.scenario === 'DISPATCH') return SEED_KINDS[Math.random() < 0.5 ? 0 : 3];
-  // EXECUTE: tool calls + returns; occasional ambient/system noise.
-  if (State.scenario === 'EXECUTE')  {
+  // INTAKE: governance + provenance binding; assertions; context assembly.
+  if (State.scenario === 'INTAKE') {
     const r = Math.random();
-    if (r < 0.45) return SEED_KINDS[1];                                       // TOOL_INVOKED
-    if (r < 0.85) return SEED_KINDS[2];                                       // TOOL_RETURNED
-    return { kind:'EVENT_APPENDED', cls:'', refs: AMBIENT_REFS };             // ambient
+    if (r < 0.30) return SEED_KINDS[13];  // POLICY_CHECKED
+    if (r < 0.60) return SEED_KINDS[9];   // PROVENANCE_LINKED
+    if (r < 0.85) return SEED_KINDS[5];   // ASSERTION_FORMED
+    return SEED_KINDS[8];                 // CONTEXT_ASSEMBLED
   }
-  // CONVERGE: assertions, working-set, occasional approval requests + conflicts.
-  if (State.scenario === 'CONVERGE') {
+  // DISPATCH: task-dispatch + agent-spawn + provenance opening for each spawn.
+  if (State.scenario === 'DISPATCH') {
     const r = Math.random();
-    if (r < 0.4) return SEED_KINDS[5];   // ASSERTION_FORMED
-    if (r < 0.7) return SEED_KINDS[4];   // WORKING_SET_RECOMPUTED
-    if (r < 0.9) return SEED_KINDS[7];   // HUMAN_APPROVAL_REQ
-    return SEED_KINDS[6];                // CONFLICT_DETECTED
+    if (r < 0.40) return SEED_KINDS[0];   // TASK_DISPATCHED
+    if (r < 0.75) return SEED_KINDS[3];   // AGENT_SPAWNED
+    return SEED_KINDS[9];                 // PROVENANCE_LINKED
+  }
+  // EXECUTE: tool calls, evidence gathering, occasional guardrail + ambient.
+  if (State.scenario === 'EXECUTE') {
+    const r = Math.random();
+    if (r < 0.30) return SEED_KINDS[1];   // TOOL_INVOKED
+    if (r < 0.55) return SEED_KINDS[2];   // TOOL_RETURNED
+    if (r < 0.75) return SEED_KINDS[10];  // EVIDENCE_GATHERED
+    if (r < 0.85) return SEED_KINDS[12];  // MEMORY_WRITE
+    if (r < 0.92) return SEED_KINDS[14];  // GUARDRAIL_HIT (governance trip)
+    return { kind:'EVENT_APPENDED', cls:'', refs: AMBIENT_REFS };
+  }
+  // ATTEST: assertions, lineage tracing, audit logging, approval, occasional conflict.
+  if (State.scenario === 'ATTEST') {
+    const r = Math.random();
+    if (r < 0.30) return SEED_KINDS[5];   // ASSERTION_FORMED
+    if (r < 0.50) return SEED_KINDS[11];  // LINEAGE_TRACED
+    if (r < 0.70) return SEED_KINDS[15];  // AUDIT_LOGGED
+    if (r < 0.85) return SEED_KINDS[7];   // HUMAN_APPROVAL_REQ
+    if (r < 0.95) return SEED_KINDS[4];   // WORKING_SET_RECOMPUTED
+    return SEED_KINDS[6];                 // CONFLICT_DETECTED
   }
   return SEED_KINDS[Math.floor(Math.random()*SEED_KINDS.length)];
 }
 
 const REF_TO_NODE = {
-  'mission-1':'mission-1','mission-deploy-v2':'mission-1','plan.refined':'mission-1','step-7.complete':'mission-1','step-7.outcome':'mission-1',
-  'agent-research':'agent-research','agent-research.claim':'agent-research','agent-research.gather':'agent-research','agent-research.note':'agent-research',
-  'agent-codegen':'agent-codegen','agent-codegen.claim':'agent-codegen','agent-codegen.implement':'agent-codegen',
-  'subagent-test':'subagent-test','subagent-test.run':'subagent-test','subagent-test-runner':'subagent-test',
-  'tool-pending':'tool-pending','fs.read(config.toml)':'tool-pending','tool · fetch-config':'tool-pending',
-  'output-divergence':'conflict-1','research ⇄ codegen':'conflict-1','plan ⇄ result':'conflict-1','tool-out ⇄ assertion':'conflict-1',
-  'approval-gate':'approval-gate','deploy-step-7':'approval-gate','escalate-conflict':'approval-gate','rollback-config':'approval-gate',
+  // op
+  'op-deploy-v2':'op-deploy-v2','op-deploy-v2.lineage':'op-deploy-v2','op-deploy-v2 ← 184 events':'op-deploy-v2','op-deploy-v2.attestation':'op-deploy-v2','step-7.complete':'op-deploy-v2',
+  // anthem (ai)
+  'anthem':'anthem','anthem.session.t-04':'anthem','anthem→agent-codegen':'anthem','anthem→subagent-fetch':'anthem',
+  // agent-codegen
+  'agent-codegen':'agent-codegen','agent-codegen.claim':'agent-codegen','agent-codegen.chain':'agent-codegen','agent-codegen.output→step-7':'agent-codegen','agent-codegen→subagent-validate':'agent-codegen','agent-codegen ← spawn.t-03:48':'agent-codegen',
+  // luna (provenance)
+  'luna':'luna','luna.event-log':'luna','luna.chain.append':'luna','luna.assertion':'luna','luna.episode':'luna',
+  // policy gate (governance)
+  'policy-gate':'policy-gate','rule.staged-rollout':'policy-gate','rule.no-secret-egress':'policy-gate','rule.budget-cap':'policy-gate','charter.v3':'policy-gate','rule.network-allowlist':'policy-gate',
+  // conflict
+  'conflict-1':'conflict-1','evidence-divergence':'conflict-1','research ⇄ codegen':'conflict-1','chain.research-7 ⇄ chain.codegen-3':'conflict-1','tool-out ⇄ assertion':'conflict-1',
+  // approval
+  'approval':'approval','deploy-step-7':'approval','escalate-conflict':'approval','rollback-config':'approval','approval.signoff':'approval',
 };
 
 function maybePromoteForRef(el) {
@@ -1352,7 +1421,7 @@ function burstTraverse(count, spacing) {
   for (let i = 0; i < count; i++) setTimeout(runTraverse, i * spacing);
 }
 
-setInterval(() => { if (!State.paused && State.scenario !== 'IDLE') runTraverse(); }, 4200);
+setInterval(() => { if (!State.paused) runTraverse(); }, 4200);
 
 //=============================================================
 // CONFLICT
@@ -1374,13 +1443,14 @@ function resolveConflict() {
   const n = nodeById('conflict-1');
   if (n) {
     n.status = 'confirmed';
-    n.label = 'output-divergence · arbitrated';
-    n.reason = 'arbitrated · merged outputs';
+    n.label = 'evidence-divergence · attested';
+    n.reason = 'arbitrated · provenance merged · audit-logged';
   }
   rootState.textContent = 'quiet';
   substrateShift.classList.add('calm');
   setTimeout(() => substrateShift.classList.remove('calm'), 4000);
-  pushTapeEvent({ kind:'CONFLICT_RESOLVED', cls:'warm', ref:'research ⇄ codegen', ts: tsNow() });
+  pushTapeEvent({ kind:'CONFLICT_RESOLVED', cls:'warm', ref:'chain.research-7 ⇄ chain.codegen-3', ts: tsNow() });
+  pushTapeEvent({ kind:'AUDIT_LOGGED',      cls:'warm', ref:'arbitration.merged · operator.signoff', ts: tsNow() });
   // certainty boost
   State.certainty = Math.min(0.92, State.certainty + 0.1);
   renderCertaintyMeter();
@@ -1413,7 +1483,7 @@ function showInspect(id) {
     <div class="row"><span>activation</span><span class="v">${n.activation.toFixed(2)}</span></div>
     <div class="row"><span>recall reason</span><span class="v">${n.reason}</span></div>
     <div class="src">sources<br>${sources}</div>
-    ${isConflict ? `<div class="resolve" id="resolveBtn">arbitrate · merge agent outputs</div>` : ''}
+    ${isConflict ? `<div class="resolve" id="resolveBtn">arbitrate · merge provenance · sign off</div>` : ''}
   `;
   if (isConflict) {
     setTimeout(() => $('resolveBtn')?.addEventListener('click', () => resolveConflict()), 0);
@@ -1539,12 +1609,12 @@ function flashKey(msg) {
 function renderPending() {
   pendingRow.innerHTML = '';
   const items = [
-    { text: 'approval · deploy-step-7', cls: '' },
-    { text: 'awaiting · tool · fetch-config', cls: '' },
-    { text: 'queued · subagent-validate', cls: '' },
-    { text: 'unknown · human-approval-gate', cls: 'unknown' },
+    { text: 'governance · approval · deploy-step-7', cls: '' },
+    { text: 'governance · policy · prod-deploy · evaluating', cls: '' },
+    { text: 'provenance · chain · op-deploy-v2 · open', cls: '' },
+    { text: 'unknown · operator-signoff', cls: 'unknown' },
   ];
-  if (!State.conflictResolved) items.splice(1, 0, { text: 'arbitrate · output-divergence', cls: '' });
+  if (!State.conflictResolved) items.splice(1, 0, { text: 'arbitrate · evidence-divergence', cls: '' });
   for (const it of items) {
     const d = document.createElement('div');
     d.className = 'held' + (it.cls ? ' ' + it.cls : '');
@@ -1576,7 +1646,7 @@ field.classList.add('depth-' + State.depth);
 requestAnimationFrame((t) => { State.lastT = t; tick(t); });
 
 // gentle initial flash so users see the room is interactive
-setTimeout(() => flashKey('hover any agent · / opens command · click conflict to arbitrate'), 1200);
+setTimeout(() => flashKey('ai · provenance · governance — hover · / · click conflict to arbitrate'), 1200);
 setTimeout(() => flashKey(''), 4200);
 
 </script>
