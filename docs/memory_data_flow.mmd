@@ -1,0 +1,57 @@
+%% Luna memory data flow as of commit a734e70.
+%% Companion to docs/memory_current_state.md.
+%%
+%% Legend:
+%%   green   = source of truth (event log)
+%%   amber   = ephemeral / derived state
+%%   purple  = system substrate (RootOrb)
+%%   red     = doctrine-risk mutation surfaces (see docs/risk_register.md)
+
+flowchart TD
+    User[User turn] --> Extractor[FusedExtractor / LunaExtractor / HeuristicExtractor]
+    Extractor --> CO["CognitiveObservation<br/>semantic + intent vectors<br/>signals · assertions · cue terms"]
+    CO --> FineCapture["apply_runtime_fine_capture<br/>luna-runtime:676-712<br/>person→identity · dedup · normalize"]
+    FineCapture --> NormAssertions[Normalized assertions]
+
+    NormAssertions --> EventGen["Event generation<br/>TurnObserved · AssertionExtracted<br/>EpisodeCreated · EpisodeReinforced<br/>EpisodeRecalled"]
+
+    EventGen --> Log[("JsonlEventLog<br/>.luna/runtime/events.jsonl<br/>append-only · source of truth")]
+
+    Log --> Rebuild["rebuild_episodes<br/>luna-store:7-135<br/>pure replay"]
+    Rebuild --> Episodes["Vec&lt;Episode&gt;<br/>assertions · contour · confidence<br/>coherence · forgotten_risk"]
+
+    Episodes --> RecallEng["RecallEngine<br/>TcfRecallEngine ≥0.5<br/>KeywordRecallEngine ≥0.34"]
+    CO -. current observation .-> RecallEng
+    RecallEng --> RecallSet["RecallSet<br/>top 3 hits<br/>each with RecallReason"]
+
+    Episodes --> MemState["MemoryState::from_episodes<br/>luna-runtime:330-351<br/>entity grouping"]
+    MemState --> MemMap["MemoryMap<br/>typed nodes + edges<br/>provenance · confidence_tier"]
+    RootOrb["RootOrb<br/>root-orb-v1<br/>7 principles"] -. seed_root_orb .-> MemMap
+
+    MemMap --> Activate["activate_working_memory<br/>luna-runtime:1146-1240<br/>budgeted scoring"]
+    Activate --> WM["WorkingMemory<br/>≤5 nodes · ≤10 edges<br/>ephemeral"]
+
+    WM --> Context[Context packet]
+    RecallSet --> Context
+    Context --> Response[Response]
+
+    %% risk annotations
+    R001["R-001 HIGH<br/>confidence -= 0.22 without event<br/>luna-store:108"]
+    R002["R-002 MEDIUM<br/>Utc::now in replay<br/>luna-store:109"]
+    R003["R-003 MEDIUM<br/>normalization before logging<br/>luna-runtime:676-712"]
+    R005["R-005 MEDIUM<br/>silent node merge<br/>luna-runtime:571-580"]
+
+    Rebuild -. silent mutation .-> R001
+    Rebuild -. time drift .-> R002
+    FineCapture -. raw form unrecoverable .-> R003
+    MemState -. merge without event .-> R005
+
+    classDef truth fill:#0d3,stroke:#0a8,color:#fff
+    classDef ephemeral fill:#fa7,stroke:#a40,color:#000
+    classDef risk fill:#a33,stroke:#700,color:#fff
+    classDef substrate fill:#9d7fc4,stroke:#6a4,color:#fff
+
+    class Log truth
+    class Episodes,MemMap,RecallSet,WM,NormAssertions,CO ephemeral
+    class R001,R002,R003,R005 risk
+    class RootOrb substrate
