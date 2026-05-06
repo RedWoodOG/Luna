@@ -6,15 +6,15 @@ Risks identified during the audit (`docs/memory_current_state.md`). Each risk ha
 
 | ID | Severity | Title | Location | Status | Target |
 |----|----------|-------|----------|--------|--------|
-| R-001 | **HIGH** | Confidence penalty without logged event | `luna-store:108` | open | pre-pr-1.0 |
-| R-002 | medium | `Utc::now()` in replay creates time drift | `luna-store:109` | open | pre-pr-1.0 |
+| R-001 | **HIGH** | Confidence penalty without logged event | `luna-store:108` | **closed** `16e1736` | pr-1.0a |
+| R-002 | medium | `Utc::now()` in replay creates time drift | `luna-store:109` | **closed** `16e1736` | pr-1.0a |
 | R-003 | medium | Assertion fine-capture outside event log | `luna-runtime:676-712` | open | pr-1.0 or pr-1.1 |
 | R-004 | medium | Hardcoded assertion-intent mapping | `luna-tcf:201-223` | open | pr-1.4 |
 | R-005 | medium | MemoryMap node/edge merge is silent | `luna-runtime:571-580` | open | pr-1.2 |
 | R-006 | low | Question proposal rules scattered inline | `luna-runtime:1632-1677` | open | post-pr-1.0 |
 | R-007 | low | RootOrb override policy never exercised | `luna-core:557-632` | open | pr-1.0 |
 | R-008 | low | `AssertionCorrected`/`ContradictionDetected` defined but unused | enum variants | open | pr-1.6 |
-| R-009 | medium | Determinism risk during event-schema migration | process-level | open | every PR |
+| R-009 | medium | Determinism risk during event-schema migration | process-level | **gate landed** `16e1736` | every PR |
 | R-010 | low | RootOrb principles not used in scoring or activation | `luna-runtime:593` | open | pr-1.4 (decision) |
 
 ## Detailed entries
@@ -38,6 +38,8 @@ Approach (1) is cleaner long-term. Approach (2) is a smaller diff. Either way, t
 
 **Target.** Must be fixed before `pr-1.6/consolidate-engine`. Ideally before `pr-1.0/orb-schema` so the orb schema lands on a clean substrate.
 
+**Closure note (`16e1736`, `pr-1.0a/event-log-hardening`).** Approach 2 chosen. `ContradictionDetected` and `AssertionCorrected` now carry `confidence_delta: f32`. Replay applies the carried value via `episode.confidence + payload.confidence_delta`. Hardcoded `-0.22` removed from `luna-store`. Backward compat preserved via `#[serde(default = "legacy_contradiction_delta")]` / `legacy_correction_delta`, both documented in `luna-core` as "historical default for events emitted before pr-1.0a." Locked by test `tests::contradiction_uses_payload_delta_not_constant` (proves payload value is honored) and `tests::legacy_contradiction_event_replays_with_default_delta` (proves legacy events still replay identically).
+
 ---
 
 ### R-002 — `Utc::now()` in replay (medium)
@@ -53,6 +55,8 @@ Approach (1) is cleaner long-term. Approach (2) is a smaller diff. Either way, t
 **Mitigation.** Set `episode.updated_at = event.timestamp`. One-line change. Add a determinism test in `luna-store` that rebuilds twice and asserts byte-for-byte equality of the rebuilt vector.
 
 **Target.** Pre-`pr-1.0`. Trivial fix.
+
+**Closure note (`16e1736`, `pr-1.0a/event-log-hardening`).** Replay now uses `event.timestamp` for `episode.updated_at` in both `ContradictionDetected` and `AssertionCorrected` arms. The unused `chrono::Utc` import was removed from `luna-store`. Locked by test `tests::updated_at_uses_event_timestamp_not_now` (sleeps 50ms between two replays and asserts identical `updated_at`).
 
 ---
 
@@ -178,6 +182,8 @@ Option (1) is the path of least disturbance and matches the planned rebuild orde
 - The `luna-store` determinism test must be expanded to byte-for-byte rebuilt-state equality, not just episode count.
 
 **Target.** Every PR in `pr-1.0` through `pr-1.13`. Gate condition.
+
+**Gate-landed note (`16e1736`, `pr-1.0a/event-log-hardening`).** The byte-for-byte determinism test now exists at `luna-store/src/lib.rs::tests::rebuild_is_deterministic_byte_for_byte`. It builds a fixture covering create/reinforce/contradict, calls `rebuild_episodes` twice with a 20ms sleep between calls, and asserts both `serde_json::to_vec(...)` byte-equality and `PartialEq` agreement. Future PRs that touch replay must keep this test passing — that is the gate.
 
 ---
 
