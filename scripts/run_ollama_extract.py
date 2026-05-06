@@ -22,7 +22,12 @@ Required environment
 Optional environment
   OLLAMA_HOST           default: 'http://127.0.0.1:11434'. Override if
                         Ollama runs on a different host or port.
-  LUNA_LLM_MAX_TOKENS   default: 2048.
+  LUNA_LLM_MAX_TOKENS   default: 8192. For reasoning models (GLM-4.x,
+                        Qwen3 with thinking, etc.) bump to 16384 or
+                        32768 — they spend tokens on chain-of-thought
+                        before emitting the answer, and a low ceiling
+                        produces empty `content` with non-empty
+                        `reasoning`.
   LUNA_LLM_DEBUG_OUT    append-mode log path for raw model output.
                         Useful for debugging extraction failures.
 
@@ -66,7 +71,7 @@ def main() -> int:
         return 2
 
     host = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
-    max_tokens = int(os.environ.get("LUNA_LLM_MAX_TOKENS", "2048"))
+    max_tokens = int(os.environ.get("LUNA_LLM_MAX_TOKENS", "8192"))
 
     prompt = sys.stdin.read()
     if not prompt.strip():
@@ -110,9 +115,38 @@ def main() -> int:
     choices = body.get("choices") or []
     if not choices:
         raise RuntimeError(f"Ollama response had no choices: {body}")
-    content = (choices[0].get("message") or {}).get("content", "").strip()
+    message = choices[0].get("message") or {}
+    content = (message.get("content") or "").strip()
+    finish_reason = choices[0].get("finish_reason")
+
     if not content:
-        raise RuntimeError(f"Ollama response had no content: {body}")
+        # Specific diagnostic for the most common failure on reasoning
+        # models: chain-of-thought consumed all tokens before the answer
+        # was emitted. The content field is empty; the reasoning field
+        # holds the partial thinking.
+        if finish_reason == "length":
+            reasoning = (message.get("reasoning") or "").strip()
+            usage = body.get("usage") or {}
+            completion_tokens = usage.get("completion_tokens", "?")
+            reasoning_hint = ""
+            if reasoning:
+                preview = reasoning[:240].replace("\n", " ")
+                reasoning_hint = (
+                    f"\n  Model produced reasoning but ran out of tokens before emitting the answer.\n"
+                    f"  reasoning length: {len(reasoning)} chars; preview: {preview!r}...\n"
+                )
+            raise RuntimeError(
+                f"Ollama response truncated by max_tokens "
+                f"(finish_reason='length', completion_tokens={completion_tokens}, "
+                f"current LUNA_LLM_MAX_TOKENS={max_tokens}).\n"
+                f"  For reasoning models (GLM-4.x, Qwen3 thinking, etc.), bump it:\n"
+                f"    PowerShell: $env:LUNA_LLM_MAX_TOKENS = \"16384\"   # or \"32768\"\n"
+                f"    bash:       export LUNA_LLM_MAX_TOKENS=16384"
+                f"{reasoning_hint}"
+            )
+        raise RuntimeError(
+            f"Ollama response had no content (finish_reason={finish_reason!r}): {body}"
+        )
 
     debug_path = os.environ.get("LUNA_LLM_DEBUG_OUT")
     if debug_path:
