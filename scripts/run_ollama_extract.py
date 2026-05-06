@@ -59,6 +59,36 @@ import urllib.error
 import urllib.request
 
 
+def extract_json_from_content(content: str) -> str:
+    """
+    Tolerantly recover JSON from LLM output that may be wrapped.
+
+    The runtime expects strict JSON on stdout. Many models wrap their
+    output in markdown fences or add a prose preamble. This helper
+    handles the three common deviations:
+
+      - markdown fence: ```json\\n{...}\\n``` or ```\\n{...}\\n```
+      - preamble:       "Here is the JSON: {...}"
+      - postamble:      "{...}\\n\\nNote: ..."
+
+    Returns the substring between the first '{' and the last '}' with
+    any surrounding fence stripped. JSON validation remains the caller's
+    job; this only widens what the runtime can parse.
+    """
+    s = content.strip()
+    if s.startswith("```"):
+        nl = s.find("\n")
+        if nl != -1:
+            s = s[nl + 1:]
+        if s.endswith("```"):
+            s = s[:-3].rstrip()
+    open_idx = s.find("{")
+    close_idx = s.rfind("}")
+    if open_idx != -1 and close_idx > open_idx:
+        s = s[open_idx:close_idx + 1]
+    return s
+
+
 def main() -> int:
     model = os.environ.get("OLLAMA_MODEL")
     if not model:
@@ -155,7 +185,9 @@ def main() -> int:
             handle.write(content.encode("utf-8"))
             handle.write(b"\n")
 
-    sys.stdout.buffer.write(content.encode("utf-8"))
+    # Tolerate fenced or prose-wrapped JSON; runtime parses strict JSON.
+    extracted = extract_json_from_content(content)
+    sys.stdout.buffer.write(extracted.encode("utf-8"))
     return 0
 
 

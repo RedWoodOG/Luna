@@ -4,6 +4,24 @@ import sys
 import urllib.request
 
 
+def extract_json_from_content(content: str) -> str:
+    """Tolerantly recover JSON from LLM output that may be wrapped in
+    markdown fences or surrounded by prose. See the matching helper in
+    run_ollama_extract.py for the full contract."""
+    s = content.strip()
+    if s.startswith("```"):
+        nl = s.find("\n")
+        if nl != -1:
+            s = s[nl + 1:]
+        if s.endswith("```"):
+            s = s[:-3].rstrip()
+    open_idx = s.find("{")
+    close_idx = s.rfind("}")
+    if open_idx != -1 and close_idx > open_idx:
+        s = s[open_idx:close_idx + 1]
+    return s
+
+
 def main() -> int:
     prompt = sys.stdin.read()
     payload = {
@@ -31,7 +49,8 @@ def main() -> int:
             handle.write(b"\n--- LUNA LLM OUTPUT ---\n")
             handle.write(content.encode("utf-8"))
             handle.write(b"\n")
-    sys.stdout.buffer.write(content.encode("utf-8"))
+    extracted = extract_json_from_content(content)
+    sys.stdout.buffer.write(extracted.encode("utf-8"))
     return 0
 
 
