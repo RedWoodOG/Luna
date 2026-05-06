@@ -2,7 +2,7 @@
 
 How to run Stage 7 fixtures against the `command` extractor backend, which is the path the Stage 7 findings (`STAGE7_FINDINGS.md`) named as the v1.0 prerequisite. The infrastructure has been there since the beginning; this document is the missing entry point.
 
-Two backends, identical contract:
+Three backends, identical contract:
 
 ```text
 stdin   = rendered prompt (build_prompt_v3 output)
@@ -11,6 +11,47 @@ exit 0  = cache the result; non-zero = bail, do not cache
 ```
 
 You only need to set up one. Pick whichever fits.
+
+## Windows / PowerShell quick reference
+
+The bash blocks below use Linux/macOS syntax. PowerShell differences:
+
+| What | Bash | PowerShell |
+|---|---|---|
+| Set env var (one shot) | `export VAR=val` | `$env:VAR = "val"` |
+| Line continuation | `\` | `` ` `` (backtick) |
+| Binary path | `./target/release/luna` | `./target/release/luna.exe` |
+| Python interpreter | `python3` | `python` (typical Windows install) |
+
+So a bash invocation like:
+
+```bash
+export OLLAMA_MODEL=glm-4.6:cloud
+./target/release/luna runtime scenario \
+    scenarios/exploratory/stage7_dense_week.json \
+    --extractor command \
+    --command python3 \
+    --command-arg scripts/run_ollama_extract.py \
+    --model-id glm-4.6-cloud \
+    --timeout-secs 300
+```
+
+becomes in PowerShell:
+
+```powershell
+$env:OLLAMA_MODEL = "glm-4.6:cloud"
+./target/release/luna.exe runtime scenario `
+    scenarios/exploratory/stage7_dense_week.json `
+    --extractor command `
+    --command python `
+    --command-arg scripts/run_ollama_extract.py `
+    --model-id glm-4.6-cloud `
+    --timeout-secs 300
+```
+
+Or as a one-liner: drop the backticks and put everything on one line. The same translation applies to every example below.
+
+Make sure you're inside a Luna clone before running anything (`cd $HOME\Luna` or wherever you cloned it). `cargo` will fail if the cwd isn't inside the workspace.
 
 ## Option 1 — Local llama.cpp server (offline, no API costs)
 
