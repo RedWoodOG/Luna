@@ -1,9 +1,23 @@
 <!doctype html>
+<!--
+  ============================================================================
+  DESIGN SIMULATION ONLY · NOT CONNECTED TO LUNA'S RUNTIME
+
+  This file is a self-contained visual prototype of the proposed Terran OS
+  bridge surface for Luna's v2 architecture (AI · provenance · governance).
+  All state shown here is fabricated by inline JavaScript. No part of this
+  file reads from or writes to luna-events, luna-store, luna-runtime, or any
+  other production code.
+
+  Status: design fiction. Track in docs/STATUS.md under "Simulated."
+  Canonical v1.0 roadmap: docs/LUNA_MEMORY_MILESTONE_ROADMAP.md.
+  ============================================================================
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>terran os · bridge · ai · provenance · governance</title>
+<title>terran os · bridge · ai · provenance · governance · DESIGN SIMULATION</title>
 <style>
   :root {
     --bg: #07090d;
@@ -562,11 +576,35 @@
     color: var(--warm-soft);
     font-size: 9px;
   }
+
+  /* Persistent design-simulation watermark. The mockup is intentionally
+     polished; this badge ensures no viewer mistakes it for a running system. */
+  .sim-badge {
+    position: fixed;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 99;
+    pointer-events: none;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: rgba(196,97,91,0.85);
+    background: rgba(7,9,13,0.7);
+    border: 1px solid rgba(196,97,91,0.5);
+    border-radius: 2px;
+    padding: 4px 10px;
+  }
 </style>
 </head>
 <body>
 
   <div class="substrate-shift" id="substrateShift"></div>
+
+  <!-- Design-simulation watermark. Visible on every viewport. See top of file. -->
+  <div class="sim-badge" aria-label="design simulation">
+    design simulation · not connected to runtime · see docs/STATUS.md
+  </div>
 
   <div class="stage">
 

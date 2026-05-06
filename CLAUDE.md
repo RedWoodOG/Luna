@@ -6,8 +6,10 @@ names the **mechanical gates** that the build will reject changes against.
 
 ## Canonical sources (read before non-trivial work)
 
+- **Status (read first):** [`docs/STATUS.md`](docs/STATUS.md) — what's running, what's documented, what's designed, what's simulated. Distinguishes v1.0 work from v2 design.
 - **Doctrine:** [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md)
-- **Roadmap:** [`docs/LUNA_MEMORY_MILESTONE_ROADMAP.md`](docs/LUNA_MEMORY_MILESTONE_ROADMAP.md)
+- **Roadmap (canonical for v1.0):** [`docs/LUNA_MEMORY_MILESTONE_ROADMAP.md`](docs/LUNA_MEMORY_MILESTONE_ROADMAP.md)
+- **Audit + risks:** [`docs/memory_current_state.md`](docs/memory_current_state.md), [`docs/risk_register.md`](docs/risk_register.md)
 - **Acceptance test:** [`README.md`](README.md) (10-turn real-week → 24h+ → 3 questions)
 - **Multi-agent orientation:** [`AGENTS.md`](AGENTS.md) (also for Codex)
 

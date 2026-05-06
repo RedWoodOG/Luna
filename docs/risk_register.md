@@ -6,7 +6,7 @@ Risks identified during the audit (`docs/memory_current_state.md`). Each risk ha
 
 | ID | Severity | Title | Location | Status | Target |
 |----|----------|-------|----------|--------|--------|
-| R-001 | **HIGH** | Confidence penalty without logged event | `luna-store:108` | **closed** `16e1736` | pr-1.0a |
+| R-001 | substrate **HIGH** / current-behavior MEDIUM | Confidence penalty without logged event | `luna-store:108` | **closed** `16e1736` | pr-1.0a |
 | R-002 | medium | `Utc::now()` in replay creates time drift | `luna-store:109` | **closed** `16e1736` | pr-1.0a |
 | R-003 | medium | Assertion fine-capture outside event log | `luna-runtime:676-712` | open | pr-1.0 or pr-1.1 |
 | R-004 | medium | Hardcoded assertion-intent mapping | `luna-tcf:201-223` | open | pr-1.4 |
@@ -19,7 +19,9 @@ Risks identified during the audit (`docs/memory_current_state.md`). Each risk ha
 
 ## Detailed entries
 
-### R-001 — Confidence penalty without logged event (HIGH)
+### R-001 — Confidence penalty without logged event (substrate HIGH / current-behavior MEDIUM)
+
+**Severity framing.** The doctrine violation is in the *substrate* (replay code on a hot path), so substrate severity is HIGH. But `ContradictionDetected` is currently emitted only by tests — no production extraction path produces it from natural input — so today's *exercised* behavior is unaffected. Current-behavior severity is therefore MEDIUM. The original framing implied immediate bleeding; this entry is corrected to be honest about that. The fix is still the right fix; the urgency was inflated.
 
 **Location.** `crates/luna-store/src/lib.rs:108`.
 
