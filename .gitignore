@@ -12,3 +12,9 @@ runs/latest/
 # Survives `cargo clean` and isn't shared via git; cache hits are a
 # determinism aid, not a publishable artifact.
 .luna/
+
+# Python bytecode caches. The repo has Python wrapper scripts in
+# scripts/ (run_ollama_extract.py, etc.); importing them from a test
+# or REPL writes here. Build artifact, never committed.
+__pycache__/
+*.pyc
