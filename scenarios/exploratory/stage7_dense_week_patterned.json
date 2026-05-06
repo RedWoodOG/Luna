@@ -1,0 +1,34 @@
+{
+  "name": "stage7_dense_week_v0_patterned",
+  "description": "Stage 7 fixture v0 — extractor-pattern-friendly variant. Pair to stage7_dense_week.json. Same characters, same week, same questions; sentences rewritten in the explicit patterns the heuristic extractor recognises ('I am X', 'X is the Y lead', 'X lives in Y', 'X is back on the 17th'). The contrast between the two fixtures isolates one variable: input prose style. If this fixture passes and the natural-language version fails, the gap is extraction, not memory.",
+  "turns": [
+    "I am Joe. I run a small platform team. Mira is the backend lead. Daniel is the QA lead. We are starting the Beacon project today. Beacon ships in two weeks.",
+    "Mira pushed back on the Beacon timeline today. Mira says the user-session refresh logic needs another sprint.",
+    "Daniel built the QA harness for Beacon. Daniel found a regression in the auth flow.",
+    "I had tacos for lunch. The weather was cloudy. Nothing important.",
+    "Mira found the root cause of the session bug. The session bug is a race condition in token rotation.",
+    "Daniel is taking a week of vacation. Daniel will be back on the 17th.",
+    "Beacon passed integration tests. Mira's patch held. Daniel found one new edge case.",
+    "We discussed the Q4 roadmap. Aurora is queued behind Beacon.",
+    "Mira shipped the session refresh fix to staging. Daniel will run regression tomorrow.",
+    "Daniel approved Beacon before his vacation. Beacon ships Friday next week.",
+    "When is Daniel back?",
+    "What bug did Mira fix?",
+    "Who is the QA lead?"
+  ],
+  "checks": {
+    "must_contain": [
+      "identity:name=Joe",
+      "Mira",
+      "Daniel",
+      "Beacon",
+      "17th",
+      "session"
+    ],
+    "must_not_contain": [
+      "Marshmallow",
+      "Chris",
+      "Francois"
+    ]
+  }
+}

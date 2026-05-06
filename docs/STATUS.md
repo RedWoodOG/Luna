@@ -96,13 +96,17 @@ Orthogonal to the milestone roadmap. Both should be active concurrently.
 
 ## What needs to happen next
 
-Per the honest plan:
+The first probe of Stage 7 is in: see [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md). Both probe fixtures (`scenarios/exploratory/stage7_dense_week.json` and `..._patterned.json`) **fail**, producing ≤1 assertion across 13 turns. The bottleneck is **extraction**, not memory. The orb-rebuild work — even when finished — operates on top of an extraction layer that today produces nothing on natural prose.
 
-1. **Run the existing system against a v1.0 fixture.** Stage 7. Build a synthetic 10-turn fixture with a 24h time skip and 3 questions. See whether the current code passes. Result determines whether the orb rebuild is a v2 luxury or a v1 necessity.
-2. **Close R-003** (assertion fine-capture before logging). This fires every turn; it's the only open risk that compounds with use.
-3. **Resume the orb rebuild only after Stage 7 passes** — and then label it explicitly as v2.
+Revised priority order (each gates the next):
 
-Defer for now: full audit of `luna-extract` and `luna-bench`; R-005 retrofit (better designed in tethers); regression tests for hot paths beyond `process_turn` and `rebuild_episodes`.
+1. **Establish working extraction on natural prose.** Either wire LLM-backed extraction (`--extractor command`) into a default-able path and a CI strategy, or substantially expand the heuristic patterns. (A) is what the milestone roadmap names as a Stage 7 prerequisite.
+2. **Re-run the Stage 7 dense-recall probe fixtures.** When (1) lands, run them. Graduate to `scenarios/runtime/` if they pass. New findings if they fail.
+3. **Add a time-decay process.** `EpisodeDecayed` driven from elapsed event-time so `forgotten_risk` actually moves. Required before the 24h portion of Stage 7 is measurable.
+4. **Build the Stage 7 fixture with a 24h gap and run it.** Needs (1)+(3) and a small harness extension for simulated time.
+5. **Resume the orb-network rebuild only after (4) closes.** The orb work is v2 architecture; it is not the v1.0 critical path.
+
+Defer: full audit of `luna-extract` and `luna-bench` (now reframed — `luna-extract` in particular is on the critical path, but the audit can wait until (1) is in flight); R-005 retrofit; regression tests for hot paths beyond `process_turn` and `rebuild_episodes`.
 
 ## How to read the repo, in order
 

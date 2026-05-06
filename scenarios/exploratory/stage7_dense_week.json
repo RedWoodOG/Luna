@@ -1,0 +1,38 @@
+{
+  "name": "stage7_dense_week_v0",
+  "description": "Stage 7 fixture v0 — dense recall portion only. The README's v1.0 acceptance test is '10-turn real-week → 24h+ → 3 questions'. This fixture exercises the 10 conversational turns plus the 3 question turns, testing whether facts stated early survive distractor turns and whether two distinct people are not conflated. The 24h time-gap portion of Stage 7 is NOT exercised here because Luna currently has no automatic time-decay process: forgotten_risk is a field but no runtime path drives it from elapsed time, so a 0-second gap and a 24h gap behave identically today. When time-decay lands, this fixture should be re-run with explicit gap semantics. Until then, this is the dense-recall half of Stage 7.",
+  "turns": [
+    "I'm Joe. Running a small platform team. We've got two leads under me. Mira on backend, Daniel on QA. Today we kicked off the Beacon project. It ships in two weeks.",
+    "Mira pushed back on the timeline today. Said the user-session refresh logic needs another sprint. I told her we would see by Wednesday.",
+    "Daniel built out the QA harness for Beacon. Smoke tests are passing. He found a regression in the existing auth flow though.",
+    "Tacos for lunch. Cloudy out. Nothing project related to log here.",
+    "Mira found the root cause of the session bug. It is a race condition in token rotation. She is patching it now.",
+    "Daniel asked for next Monday off, actually he is out for a week. Back on the 17th. Approved.",
+    "Beacon's first integration test ran end-to-end today. Mira's patch held. Daniel's harness caught one new edge case but it is fixable.",
+    "Had a long meeting about Q4 roadmap. Aurora project is queued behind Beacon. Different team though.",
+    "Mira shipped the session refresh fix to staging. Daniel will run regression tomorrow before he leaves.",
+    "Daniel gave Beacon the green light before vacation. Mira is keeping an eye on staging. Beacon ships Friday next week.",
+    "When is Daniel back?",
+    "What bug did Mira fix?",
+    "Who is our QA lead?"
+  ],
+  "checks": {
+    "must_contain": [
+      "identity:name=Joe",
+      "Mira",
+      "Daniel",
+      "Beacon",
+      "17th",
+      "session"
+    ],
+    "must_not_contain": [
+      "person:profession=Mira QA",
+      "person:profession=Daniel backend",
+      "Mira on QA",
+      "Daniel on backend",
+      "Marshmallow",
+      "Chris",
+      "Francois"
+    ]
+  }
+}
