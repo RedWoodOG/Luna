@@ -3,13 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>terran os · bridge</title>
+<title>terran os · bridge · interactive</title>
 <style>
   :root {
     --bg: #07090d;
-    --bg-2: #0b0e14;
     --substrate: #0d1117;
-    --grain: rgba(255,255,255,0.014);
 
     --neutral-dim: #2a3140;
     --neutral: #4a5568;
@@ -18,15 +16,17 @@
     --text: #aab2bf;
     --text-bright: #d6dae0;
 
-    --warm: #d9a05b;       /* activity */
+    --warm: #d9a05b;
     --warm-soft: #b88147;
-    --cool: #7fb8c4;       /* confirmed */
+    --cool: #7fb8c4;
     --cool-soft: #5d8e99;
-    --root: #9d7fc4;       /* RootOrb only */
-    --conflict: #c4615b;   /* substrate shift, attention */
+    --root: #9d7fc4;
+    --conflict: #c4615b;
 
     --filament: rgba(127,184,196,0.18);
     --filament-inferred: rgba(217,160,91,0.18);
+
+    --cs-bg: rgba(7,9,13,0.85);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,9 +38,9 @@
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     overflow: hidden;
     position: relative;
+    cursor: default;
   }
 
-  /* substrate grain — feTurbulence noise */
   body::before {
     content: "";
     position: fixed; inset: 0;
@@ -51,12 +51,10 @@
     z-index: 1;
   }
 
-  /* faint vignette so the room has edges */
   body::after {
     content: "";
     position: fixed; inset: 0;
-    background:
-      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
     pointer-events: none;
     z-index: 2;
   }
@@ -68,12 +66,13 @@
     grid-template-rows: 32px 1fr 96px 18px;
   }
 
-  /* event tape — top edge */
+  /* event tape */
   .tape {
     position: relative;
     border-bottom: 1px solid rgba(255,255,255,0.03);
     overflow: hidden;
     background: linear-gradient(to bottom, rgba(255,255,255,0.012), transparent);
+    cursor: ew-resize;
   }
   .tape-track {
     position: absolute;
@@ -90,7 +89,10 @@
     padding: 0 22px;
     display: inline-flex; gap: 10px;
     opacity: .75;
+    cursor: pointer;
+    transition: opacity .2s, filter .2s;
   }
+  .tape-event:hover { opacity: 1; filter: brightness(1.5); }
   .tape-event .ts { color: var(--neutral); }
   .tape-event .kind { color: var(--cool-soft); }
   .tape-event .kind.warm { color: var(--warm-soft); }
@@ -102,16 +104,53 @@
     to   { opacity: .75; filter: brightness(1); }
   }
 
-  /* main field — central composition */
+  /* scenario indicator (left of tape) */
+  .scenario {
+    position: absolute;
+    top: 0; left: 0; height: 32px;
+    padding: 0 16px;
+    display: flex; align-items: center; gap: 14px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--text-dim);
+    background: linear-gradient(to right, rgba(7,9,13,0.92), rgba(7,9,13,0.6) 70%, transparent);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .scenario .phase {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--neutral);
+  }
+  .scenario .phase.active { color: var(--text-bright); }
+  .scenario .phase.active::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--warm);
+    box-shadow: 0 0 8px var(--warm);
+  }
+  .scenario .phase::before {
+    content: ""; width: 5px; height: 5px; border-radius: 50%;
+    background: var(--neutral-dim);
+  }
+  .scenario .ts {
+    margin-left: 12px;
+    color: var(--neutral);
+    letter-spacing: .04em;
+  }
+
+  /* main field */
   .field {
     position: relative;
     overflow: hidden;
+    cursor: crosshair;
   }
   .field svg {
     position: absolute; inset: 0;
     width: 100%; height: 100%;
     display: block;
   }
+  .field.depth-tactical .scene { transform-origin: 50% 50%; transform: scale(1.35); transition: transform .8s cubic-bezier(.2,.7,.2,1); }
+  .field.depth-strategic .scene { transform-origin: 50% 50%; transform: scale(1); transition: transform .8s cubic-bezier(.2,.7,.2,1); }
+  .field.depth-deep .scene { transform-origin: 50% 50%; transform: scale(1.7); transition: transform .8s cubic-bezier(.2,.7,.2,1); }
 
   /* corner anchors */
   .anchor {
@@ -125,15 +164,13 @@
     pointer-events: none;
   }
   .anchor .row { display: flex; align-items: center; gap: 8px; line-height: 1.6; }
-  .anchor .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--neutral); flex: 0 0 6px;
-  }
-  .anchor.tl { top: 44px; left: 28px; }
-  .anchor.tr { top: 44px; right: 28px; text-align: right; }
+  .anchor .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex: 0 0 6px; }
+  .anchor.tl { top: 14px; left: 28px; }
+  .anchor.tr { top: 14px; right: 28px; text-align: right; }
   .anchor.tr .row { justify-content: flex-end; }
   .anchor.br { bottom: 120px; right: 28px; text-align: right; }
   .anchor.br .row { justify-content: flex-end; }
+  .anchor.bl { bottom: 120px; left: 28px; }
 
   .root-orb {
     width: 10px; height: 10px; border-radius: 50%;
@@ -153,7 +190,6 @@
     50%      { opacity: 1;  box-shadow: 0 0 26px rgba(157,127,196,1), 0 0 4px var(--root); }
   }
 
-  /* certainty meter */
   .meter {
     display: inline-flex; gap: 2px; margin-left: 6px;
     vertical-align: middle;
@@ -161,24 +197,30 @@
   .meter span {
     display: inline-block; width: 4px; height: 8px;
     background: var(--neutral-dim);
+    transition: background .4s;
   }
-  .meter span.on { background: var(--cool-soft); }
-  .meter span.warm { background: var(--warm-soft); }
 
-  /* depth indicator (camera position) */
-  .depth {
+  .depth-readout {
     display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px;
   }
-  .depth .lvl {
+  .depth-readout .lvl {
     font-size: 9.5px; letter-spacing: .14em;
     color: var(--neutral);
+    transition: color .3s;
   }
-  .depth .lvl.active { color: var(--text-bright); }
-  .depth .lvl.active::before {
+  .depth-readout .lvl.active { color: var(--text-bright); }
+  .depth-readout .lvl.active::before {
     content: "▸ "; color: var(--warm); margin-right: 2px;
   }
 
-  /* unresolved / pending zone */
+  .pause-readout {
+    color: var(--warm);
+    opacity: 0;
+    transition: opacity .3s;
+  }
+  .pause-readout.on { opacity: 1; }
+
+  /* pending */
   .pending {
     position: relative;
     border-top: 1px solid rgba(255,255,255,0.03);
@@ -212,26 +254,29 @@
     50%      { opacity: .9; }
   }
 
-  /* footer gesture hint — extremely faint */
+  /* gestures footer */
   .gestures {
     display: flex; align-items: center; justify-content: center;
     gap: 28px;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 9.5px; letter-spacing: .22em; text-transform: uppercase;
-    color: rgba(170,178,191,0.18);
+    color: rgba(170,178,191,0.22);
   }
-  .gestures span::before {
-    content: "·"; margin-right: 8px; color: rgba(170,178,191,0.25);
+  .gestures span { display: inline-flex; gap: 6px; }
+  .gestures span .key {
+    color: var(--warm-soft);
+    font-weight: 600;
   }
-  .gestures span:first-child::before { display: none; }
 
-  /* node labels */
+  /* node visuals */
   .node-label {
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     font-size: 10.5px;
     letter-spacing: .04em;
     fill: var(--text);
     text-anchor: middle;
+    pointer-events: none;
+    transition: fill .3s, opacity .3s;
   }
   .node-label.dim { fill: var(--text-dim); }
   .node-reason {
@@ -240,22 +285,23 @@
     letter-spacing: .06em;
     fill: var(--neutral);
     text-anchor: middle;
+    pointer-events: none;
+    transition: fill .3s, opacity .3s;
   }
 
-  /* node base — confirmed */
+  .node-shape { transition: opacity .3s, stroke .3s, stroke-width .2s; }
+
   .node-confirmed {
     fill: rgba(127,184,196,0.10);
     stroke: var(--cool);
     stroke-width: 1.2;
   }
-  /* inferred — dashed */
   .node-inferred {
     fill: rgba(217,160,91,0.06);
     stroke: var(--warm);
     stroke-width: 1.1;
     stroke-dasharray: 4 3;
   }
-  /* unconfirmed — outline only, pulsing */
   .node-unconfirmed {
     fill: transparent;
     stroke: var(--warm-soft);
@@ -266,14 +312,12 @@
     0%, 100% { opacity: .35; stroke-width: 1; }
     50%      { opacity: 1;   stroke-width: 1.4; }
   }
-  /* unknown — held open negative space */
   .node-unknown {
     fill: transparent;
     stroke: var(--neutral);
     stroke-width: 0.9;
     stroke-dasharray: 1 4;
   }
-  /* conflict — chromatic distortion */
   .node-conflict {
     fill: rgba(196,97,91,0.08);
     stroke: var(--conflict);
@@ -286,9 +330,31 @@
     50%  { transform: translate(0.4px, -0.3px); }
     100% { transform: translate(-0.3px, 0.2px); }
   }
+  .node-conflict.resolving {
+    animation: none;
+    filter: none;
+    transition: stroke .8s, fill .8s;
+    stroke: var(--cool);
+    fill: rgba(127,184,196,0.10);
+  }
 
-  /* core node — slow breath */
-  .node-core {
+  .node-group { cursor: pointer; transition: opacity .3s; }
+  .node-group.dimmed { opacity: 0.18; }
+  .node-group.hovered .node-shape { stroke-width: 2; }
+  .node-group.pinned .node-shape { stroke-width: 2.4; }
+  .node-group.entering { animation: nodeEnter .9s cubic-bezier(.2,.7,.2,1); }
+  .node-group.exiting  { animation: nodeExit .8s ease-in forwards; }
+  @keyframes nodeEnter {
+    from { opacity: 0; transform: scale(0.4); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes nodeExit {
+    from { opacity: 1; }
+    to   { opacity: 0; transform: scale(0.6); }
+  }
+
+  /* core breath */
+  .node-core .node-shape {
     transform-box: fill-box;
     transform-origin: center;
     animation: breath 5.5s ease-in-out infinite;
@@ -303,26 +369,31 @@
     fill: none;
     stroke: var(--filament);
     stroke-width: 0.7;
+    transition: stroke .4s, opacity .3s;
   }
   .filament.inferred {
     stroke: var(--filament-inferred);
     stroke-dasharray: 3 4;
   }
+  .filament.dimmed { opacity: 0.15; }
+  .filament.lit    { stroke: rgba(217,160,91,0.55); stroke-width: 1; }
+  .filament.binding { animation: bindIn .9s ease-out; }
+  @keyframes bindIn {
+    from { stroke-dasharray: 0 200; opacity: 0; }
+    to   { stroke-dasharray: 200 0; opacity: 1; }
+  }
 
-  /* traverse light along a path */
   .traverse {
     fill: none;
     stroke: var(--warm);
-    stroke-width: 1.4;
+    stroke-width: 1.6;
     stroke-linecap: round;
     opacity: 0;
   }
 
-  /* outer ring micro dots */
   .ambient { fill: rgba(170,178,191,0.18); }
   .ambient.warm { fill: rgba(217,160,91,0.32); }
 
-  /* promote burst */
   .promote-ring {
     fill: none;
     stroke: var(--warm);
@@ -330,66 +401,211 @@
     opacity: 0;
   }
 
-  /* substrate warm-shift overlay (crisis, very subtle) */
+  /* substrate warm-shift */
   .substrate-shift {
     position: fixed; inset: 0;
     background: radial-gradient(ellipse at 75% 50%, rgba(196,97,91,0.05), transparent 60%);
     pointer-events: none;
     z-index: 2;
-    opacity: 1;
-    animation: shiftBreath 8s ease-in-out infinite;
+    opacity: 0.6;
+    transition: opacity 1.2s;
   }
-  @keyframes shiftBreath {
-    0%, 100% { opacity: .6; }
-    50%      { opacity: 1; }
-  }
+  .substrate-shift.elevated { opacity: 1.2; }
+  .substrate-shift.calm     { opacity: 0; }
 
-  /* subtle drift on inner ring */
   .inner-ring { animation: drift 38s linear infinite; transform-origin: 50% 50%; transform-box: fill-box; }
   .outer-ring { animation: driftRev 64s linear infinite; transform-origin: 50% 50%; transform-box: fill-box; }
   @keyframes drift    { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes driftRev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+
+  /* in-place inspection (tooltip-like, but flat) */
+  .inspect {
+    position: absolute;
+    pointer-events: none;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    letter-spacing: .03em;
+    color: var(--text);
+    background: var(--cs-bg);
+    border: 1px solid rgba(170,178,191,0.18);
+    border-left: 2px solid var(--cool);
+    padding: 10px 14px;
+    line-height: 1.55;
+    z-index: 6;
+    opacity: 0;
+    transform: translate(0, 4px);
+    transition: opacity .18s, transform .18s;
+    min-width: 220px;
+    max-width: 320px;
+  }
+  .inspect.show { opacity: 1; transform: translate(0, 0); }
+  .inspect .head {
+    color: var(--text-bright);
+    margin-bottom: 6px;
+    font-size: 11px;
+    letter-spacing: .04em;
+  }
+  .inspect .row {
+    display: flex; gap: 10px;
+    color: var(--text-dim);
+    font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+  }
+  .inspect .row .v { color: var(--text); text-transform: none; letter-spacing: .03em; }
+  .inspect .src {
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px dashed rgba(170,178,191,0.12);
+    font-size: 9.5px;
+    color: var(--neutral-bright);
+  }
+  .inspect.conflict { border-left-color: var(--conflict); }
+  .inspect.inferred { border-left-color: var(--warm); }
+  .inspect.unknown  { border-left-color: var(--neutral); }
+  .inspect .resolve {
+    margin-top: 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--conflict);
+    color: var(--conflict);
+    font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+    display: inline-block;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .inspect .resolve:hover { background: rgba(196,97,91,0.12); }
+
+  /* command surface */
+  .command {
+    position: fixed;
+    left: 50%; bottom: 38px;
+    transform: translate(-50%, 12px);
+    width: 540px; max-width: 80vw;
+    background: var(--cs-bg);
+    border: 1px solid rgba(170,178,191,0.2);
+    border-bottom: 2px solid var(--warm);
+    padding: 10px 14px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--text-bright);
+    z-index: 8;
+    opacity: 0;
+    transition: opacity .18s, transform .18s;
+    pointer-events: none;
+  }
+  .command.open {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    pointer-events: auto;
+  }
+  .command::before {
+    content: "› ";
+    color: var(--warm);
+    margin-right: 4px;
+  }
+  .command input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-bright);
+    font: inherit;
+    width: 90%;
+    caret-color: var(--warm);
+  }
+  .command .hint {
+    color: var(--neutral);
+    font-size: 9.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  /* event detail tape hover */
+  .tape-detail {
+    position: absolute;
+    pointer-events: none;
+    background: var(--cs-bg);
+    border: 1px solid rgba(170,178,191,0.18);
+    border-left: 2px solid var(--cool);
+    padding: 8px 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 10px;
+    color: var(--text);
+    z-index: 7;
+    opacity: 0;
+    transition: opacity .18s;
+    min-width: 240px;
+  }
+  .tape-detail.show { opacity: 1; }
+  .tape-detail .head { color: var(--text-bright); margin-bottom: 4px; }
+  .tape-detail .meta { color: var(--text-dim); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+
+  /* keypad ghost */
+  .keyhint {
+    position: fixed; left: 50%; bottom: 110px;
+    transform: translateX(-50%);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+    color: rgba(170,178,191,0.5);
+    background: var(--cs-bg);
+    border: 1px solid rgba(170,178,191,0.18);
+    padding: 8px 12px;
+    z-index: 7;
+    opacity: 0;
+    transition: opacity .25s;
+    pointer-events: none;
+  }
+  .keyhint.show { opacity: 1; }
+
+  .gestures .key {
+    display: inline-block;
+    border: 1px solid rgba(217,160,91,0.4);
+    padding: 1px 5px;
+    border-radius: 2px;
+    color: var(--warm-soft);
+    font-size: 9px;
+  }
 </style>
 </head>
 <body>
 
-  <div class="substrate-shift"></div>
+  <div class="substrate-shift" id="substrateShift"></div>
 
   <div class="stage">
 
     <!-- event tape -->
-    <div class="tape">
+    <div class="tape" id="tape">
       <div class="tape-track" id="tapeTrack"></div>
+      <div class="scenario" id="scenarioBar">
+        <span class="phase" data-phase="ENCODE">encode</span>
+        <span class="phase" data-phase="DISTRACT">distract</span>
+        <span class="phase" data-phase="RETRIEVE">retrieve</span>
+        <span class="phase" data-phase="IDLE">idle</span>
+        <span class="ts" id="phaseTs">+00.0s</span>
+      </div>
     </div>
 
     <!-- main field -->
-    <div class="field">
-      <!-- corner anchors -->
+    <div class="field" id="field">
+
       <div class="anchor tl">
-        <div class="row"><span class="root-orb" id="rootOrb"></span> rootorb · v0.1 · quiet</div>
+        <div class="row"><span class="root-orb" id="rootOrb"></span> rootorb · v0.1 · <span id="rootState">quiet</span></div>
         <div class="row" style="opacity:.55"><span class="dot"></span> system_root · inspectable</div>
       </div>
 
       <div class="anchor tr">
-        <div class="row">working set <span style="color:var(--text-bright)">7</span> / 12 budget</div>
+        <div class="row">working set <span style="color:var(--text-bright)" id="budgetCount">7</span> / <span id="budgetMax">12</span> budget</div>
         <div class="row">
           certainty
-          <span class="meter" aria-hidden="true">
-            <span class="on"></span><span class="on"></span><span class="on"></span>
-            <span class="on"></span><span class="on"></span><span class="on"></span>
-            <span class="warm"></span><span class="warm"></span>
-            <span></span><span></span>
-          </span>
-          <span style="color:var(--text)">62%</span>
+          <span class="meter" id="certaintyMeter" aria-hidden="true"></span>
+          <span style="color:var(--text)" id="certaintyPct">62%</span>
         </div>
-        <div class="row" style="opacity:.55">proof_eligible · false</div>
+        <div class="row" style="opacity:.55">proof_eligible · <span id="proofState">false</span></div>
+        <div class="row pause-readout" id="pauseReadout">▮▮ paused</div>
       </div>
 
       <div class="anchor br">
-        <div class="depth">
-          <div class="lvl">deep</div>
-          <div class="lvl">tactical</div>
-          <div class="lvl active">strategic</div>
+        <div class="depth-readout" id="depthReadout">
+          <div class="lvl" data-depth="deep">deep</div>
+          <div class="lvl" data-depth="tactical">tactical</div>
+          <div class="lvl active" data-depth="strategic">strategic</div>
         </div>
       </div>
 
@@ -426,297 +642,915 @@
           </filter>
         </defs>
 
-        <!-- outer ring ambient (workflow trails / agent presence) -->
-        <g class="outer-ring" id="outerRing"></g>
+        <g class="scene" id="scene">
+          <g class="outer-ring" id="outerRing"></g>
+          <g class="inner-ring" id="innerRing"></g>
 
-        <!-- inner ring adjacent items -->
-        <g class="inner-ring" id="innerRing"></g>
+          <g id="filaments"></g>
+          <path id="traverse" class="traverse" d="" />
 
-        <!-- filaments under nodes -->
-        <g id="filaments">
-          <!-- arc-3 ↔ merrow -->
-          <path class="filament" d="M 500,300 Q 440,270 390,230" />
-          <!-- arc-3 ↔ scene-44 -->
-          <path class="filament" d="M 500,300 Q 560,270 610,230" />
-          <!-- arc-3 ↔ flashback-7 (inferred) -->
-          <path class="filament inferred" d="M 500,300 Q 450,340 400,390" />
-          <!-- merrow ↔ flashback-7 -->
-          <path class="filament" d="M 390,230 Q 350,310 400,390" />
-          <!-- arc-3 ↔ unresolved-thread-2 -->
-          <path class="filament" d="M 500,300 Q 560,340 615,395" />
-          <!-- scene-44 ↔ conflict -->
-          <path class="filament" d="M 610,230 Q 670,260 700,300" />
-          <!-- flashback-7 ↔ unknown-narrator (inferred, faint) -->
-          <path class="filament inferred" d="M 400,390 Q 350,330 300,300" />
+          <circle id="coreHalo" cx="500" cy="300" r="92" fill="url(#coreGlow)" />
+          <circle id="warmHalo" cx="700" cy="300" r="46" fill="url(#warmGlow)" opacity="0.9" />
+
+          <g id="nodes"></g>
+          <circle id="promoteRing" class="promote-ring" cx="0" cy="0" r="0" />
         </g>
-
-        <!-- traverse light path (animated via JS) -->
-        <path id="traverse" class="traverse" d="" />
-
-        <!-- core glow halos -->
-        <circle cx="500" cy="300" r="92" fill="url(#coreGlow)" />
-        <circle cx="700" cy="300" r="46" fill="url(#warmGlow)" />
-
-        <!-- working set nodes -->
-        <g id="nodes">
-          <!-- center: manuscript-arc-3 (confirmed, mass) -->
-          <g class="node-core" data-id="arc-3">
-            <circle class="node-confirmed" cx="500" cy="300" r="46" />
-            <circle cx="500" cy="300" r="3" fill="var(--cool)" />
-            <text class="node-label" x="500" y="265">manuscript-arc-3</text>
-            <text class="node-reason" x="500" y="354">recall · contour-match 0.91</text>
-          </g>
-
-          <!-- upper-left: character-merrow (confirmed) -->
-          <g data-id="merrow">
-            <circle class="node-confirmed" cx="390" cy="230" r="30" />
-            <text class="node-label" x="390" y="206">character-merrow</text>
-            <text class="node-reason" x="390" y="270">co-activation · arc-3</text>
-          </g>
-
-          <!-- upper-right: scene-44 (confirmed) -->
-          <g data-id="scene-44">
-            <circle class="node-confirmed" cx="610" cy="230" r="26" />
-            <text class="node-label" x="610" y="208">scene-44-ordering</text>
-            <text class="node-reason" x="610" y="266">temporal · scene→story</text>
-          </g>
-
-          <!-- lower-left: timeline-flashback-7 (inferred) -->
-          <g data-id="flashback-7">
-            <circle class="node-inferred" cx="400" cy="390" r="32" />
-            <text class="node-label" x="400" y="430">timeline-flashback-7</text>
-            <text class="node-reason dim" x="400" y="446">inferred · ordering Δ</text>
-          </g>
-
-          <!-- lower-right: unresolved-thread-2 (unconfirmed, pulse) -->
-          <g data-id="unresolved-2">
-            <circle class="node-unconfirmed" cx="615" cy="395" r="28" />
-            <text class="node-label dim" x="615" y="436">unresolved-thread-2</text>
-            <text class="node-reason" x="615" y="452">unconfirmed · since t-04:21</text>
-          </g>
-
-          <!-- far right: conflict-witness (conflict, distorted) -->
-          <g data-id="conflict-1">
-            <circle class="node-conflict" cx="700" cy="300" r="24" />
-            <text class="node-label" x="700" y="276" style="fill:var(--conflict)">witness ⇄ record</text>
-            <text class="node-reason" x="700" y="332" style="fill:var(--conflict);opacity:.7">conflict · t-02:11</text>
-          </g>
-
-          <!-- far left: unknown-narrator (held open) -->
-          <g data-id="unknown-1">
-            <circle class="node-unknown" cx="300" cy="300" r="22" />
-            <text class="node-label dim" x="300" y="278">narrator-identity</text>
-            <text class="node-reason" x="300" y="332">unknown · held open</text>
-          </g>
-        </g>
-
-        <!-- promote ring (animated via JS) -->
-        <circle id="promoteRing" class="promote-ring" cx="0" cy="0" r="0" />
       </svg>
+
+      <!-- in-place inspection panel -->
+      <div class="inspect" id="inspect"></div>
+      <!-- tape event detail panel -->
+      <div class="tape-detail" id="tapeDetail"></div>
     </div>
 
-    <!-- pending / unresolved zone -->
+    <!-- pending -->
     <div class="pending">
-      <div class="pending-row">
-        <div class="held">approval · scene-reorder-44</div>
-        <div class="held">awaiting · provenance-merrow.location</div>
-        <div class="held">recompute · activation-pass-queued</div>
-        <div class="held unknown">unknown · narrator-identity</div>
-      </div>
+      <div class="pending-row" id="pendingRow"></div>
     </div>
 
-    <!-- footer gesture hint — barely visible -->
     <div class="gestures">
-      <span>look</span><span>pin</span><span>pull</span><span>push</span><span>scrub</span><span>release</span>
+      <span><span class="key">hover</span> look</span>
+      <span><span class="key">click</span> pin</span>
+      <span><span class="key">↑↓</span> depth</span>
+      <span><span class="key">/</span> command</span>
+      <span><span class="key">space</span> pause</span>
+      <span><span class="key">esc</span> release</span>
     </div>
 
   </div>
 
+  <!-- command surface -->
+  <div class="command" id="commandSurface">
+    <input id="commandInput" type="text" placeholder="filter · pin · trace · recall …" autocomplete="off" spellcheck="false" />
+    <div class="hint" id="commandHint">type a node id, or a memory phrase. enter to pin. esc to close.</div>
+  </div>
+
+  <div class="keyhint" id="keyhint"></div>
+
 <script>
-  // ---------- event tape ----------
-  const KINDS = [
-    { k: 'EVENT_APPENDED',        cls: '',         refs: ['merrow.location','arc-3.scene-12','flashback-7.t-04','witness.statement','scene-44.order'] },
-    { k: 'ASSERTION_FORMED',      cls: '',         refs: ['merrow.allegiance','arc-3.unresolved','scene-44→story','narrator.unknown'] },
-    { k: 'WORKING_SET_RECOMPUTED',cls: 'warm',     refs: ['Δ +2 −1 budget 7/12','Δ +1 budget 7/12','Δ −1 budget 6/12'] },
-    { k: 'ACTIVATION_PASS',       cls: 'warm',     refs: ['contour 0.91','contour 0.74','contour 0.66'] },
-    { k: 'RECALL_TRIGGERED',      cls: '',         refs: ['arc-3','merrow','flashback-7','scene-44'] },
-    { k: 'CONFLICT_DETECTED',     cls: 'conflict', refs: ['witness ⇄ record','timeline ⇄ scene','source ⇄ inference'] },
-    { k: 'PROVENANCE_REQUESTED',  cls: '',         refs: ['merrow.location','flashback-7','arc-3'] },
-    { k: 'ROOTORB_BREATH',        cls: 'warm',     refs: ['v0.1 · quiet'] },
+//=============================================================
+// STATE
+//=============================================================
+const State = {
+  scenario: 'ENCODE',
+  scenarioT: 0,
+  cycle: ['ENCODE','DISTRACT','RETRIEVE','IDLE'],
+  phaseDuration: { ENCODE: 8, DISTRACT: 8, RETRIEVE: 8, IDLE: 6 },
+
+  nodes: [],          // see makeNode
+  filaments: [],      // {id, a, b, kind, alive, lit, binding}
+
+  budget: 7,
+  budgetMax: 12,
+  certainty: 0.62,
+
+  pinned: null,
+  hovered: null,
+  filter: '',
+
+  depth: 'strategic',
+  paused: false,
+  conflictResolved: false,
+
+  lastT: performance.now(),
+};
+
+const C = { x: 500, y: 300 };
+
+function makeNode(o) {
+  return Object.assign({
+    id: o.id,
+    x: o.tx, y: o.ty,
+    tx: o.tx, ty: o.ty,
+    r: o.r,
+    mass: o.mass ?? 1,
+    status: o.status,            // confirmed | inferred | unconfirmed | unknown | conflict
+    label: o.label,
+    reason: o.reason,
+    sources: o.sources ?? [],
+    activation: o.activation ?? 0.6,
+    entering: false,
+    exiting: false,
+    age: 0,
+  }, o);
+}
+
+// seed working set (the initial scene)
+State.nodes = [
+  makeNode({ id:'arc-3',        tx:500, ty:300, r:46, status:'confirmed',  label:'manuscript-arc-3',     reason:'recall · contour-match 0.91', mass:3,
+             sources:['scene-12.event','scene-44.event','reread.t-04:21'] }),
+  makeNode({ id:'merrow',       tx:390, ty:230, r:30, status:'confirmed',  label:'character-merrow',     reason:'co-activation · arc-3',
+             sources:['merrow.intro','merrow.location.event'] }),
+  makeNode({ id:'scene-44',     tx:610, ty:230, r:26, status:'confirmed',  label:'scene-44-ordering',    reason:'temporal · scene→story',
+             sources:['scene-44.event','timeline.delta'] }),
+  makeNode({ id:'flashback-7',  tx:400, ty:390, r:32, status:'inferred',   label:'timeline-flashback-7', reason:'inferred · ordering Δ',
+             sources:['scene-32.event','scene-44.event','inference.t-03']}),
+  makeNode({ id:'unresolved-2', tx:615, ty:395, r:28, status:'unconfirmed',label:'unresolved-thread-2',  reason:'unconfirmed · since t-04:21',
+             sources:['merrow.statement','witness.statement']}),
+  makeNode({ id:'conflict-1',   tx:700, ty:300, r:24, status:'conflict',   label:'witness ⇄ record',     reason:'conflict · t-02:11',
+             sources:['witness.statement','record.archive','merrow.location']}),
+  makeNode({ id:'unknown-1',    tx:300, ty:300, r:22, status:'unknown',    label:'narrator-identity',    reason:'unknown · held open',
+             sources:[]}),
+];
+
+State.filaments = [
+  { id:'f1', a:'arc-3', b:'merrow',        kind:'confirmed', alive:true },
+  { id:'f2', a:'arc-3', b:'scene-44',      kind:'confirmed', alive:true },
+  { id:'f3', a:'arc-3', b:'flashback-7',   kind:'inferred',  alive:true },
+  { id:'f4', a:'merrow', b:'flashback-7',  kind:'confirmed', alive:true },
+  { id:'f5', a:'arc-3', b:'unresolved-2',  kind:'confirmed', alive:true },
+  { id:'f6', a:'scene-44', b:'conflict-1', kind:'confirmed', alive:true },
+  { id:'f7', a:'flashback-7', b:'unknown-1', kind:'inferred', alive:true },
+];
+
+// ENCODE phase candidates (will be added as nodes spawn)
+const ENCODE_QUEUE = [
+  { id:'merrow.location-fact', label:'merrow.location-fact', status:'confirmed', reason:'encoded · t+0', target:[460,170], r:18 },
+  { id:'witness.testimony',    label:'witness.testimony',    status:'inferred',  reason:'encoded · t+1', target:[760,200], r:20 },
+  { id:'scene-12.beat',        label:'scene-12.beat',        status:'confirmed', reason:'encoded · t+2', target:[230,210], r:18 },
+];
+let encodeIdx = 0;
+
+// DISTRACT noise events
+const DISTRACT_REFS = [
+  'tangent.note.A','tangent.note.B','side-character.murle','side-scene.glade',
+  'menu.activity','log.compaction','telemetry.tick','user.idle','heartbeat'
+];
+
+//=============================================================
+// DOM REFS
+//=============================================================
+const $ = id => document.getElementById(id);
+const tapeTrack    = $('tapeTrack');
+const tape         = $('tape');
+const tapeDetail   = $('tapeDetail');
+const rootOrb      = $('rootOrb');
+const rootState    = $('rootState');
+const proofState   = $('proofState');
+const budgetCount  = $('budgetCount');
+const budgetMax    = $('budgetMax');
+const certaintyMeter = $('certaintyMeter');
+const certaintyPct = $('certaintyPct');
+const phaseTs      = $('phaseTs');
+const scenarioBar  = $('scenarioBar');
+const field        = $('field');
+const composition  = $('composition');
+const nodesGroup   = $('nodes');
+const filamentsGroup = $('filaments');
+const traverse     = $('traverse');
+const promoteRing  = $('promoteRing');
+const inspect      = $('inspect');
+const command      = $('commandSurface');
+const commandInput = $('commandInput');
+const innerRing    = $('innerRing');
+const outerRing    = $('outerRing');
+const substrateShift = $('substrateShift');
+const pendingRow   = $('pendingRow');
+const depthReadout = $('depthReadout');
+const pauseReadout = $('pauseReadout');
+const keyhint      = $('keyhint');
+
+//=============================================================
+// CERTAINTY METER
+//=============================================================
+function renderCertaintyMeter() {
+  certaintyMeter.innerHTML = '';
+  const total = 10;
+  const lit = Math.round(State.certainty * total);
+  for (let i = 0; i < total; i++) {
+    const s = document.createElement('span');
+    if (i < lit - 2) s.style.background = 'var(--cool-soft)';
+    else if (i < lit) s.style.background = 'var(--warm-soft)';
+    certaintyMeter.appendChild(s);
+  }
+  certaintyPct.textContent = Math.round(State.certainty * 100) + '%';
+}
+
+//=============================================================
+// AMBIENT RINGS (decorative but present)
+//=============================================================
+function ring(target, count, radius, sizeRange, warmChance) {
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + Math.random() * 0.15;
+    const rJitter = radius + (Math.random() - 0.5) * 18;
+    const x = C.x + Math.cos(a) * rJitter;
+    const y = C.y + Math.sin(a) * rJitter * 0.62;
+    const r = sizeRange[0] + Math.random() * (sizeRange[1] - sizeRange[0]);
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', x);
+    c.setAttribute('cy', y);
+    c.setAttribute('r', r);
+    c.setAttribute('class', 'ambient' + (Math.random() < warmChance ? ' warm' : ''));
+    target.appendChild(c);
+  }
+}
+ring(innerRing, 14, 165, [1.1, 1.8], 0.18);
+ring(outerRing, 26, 245, [0.7, 1.2], 0.10);
+
+//=============================================================
+// NODE RENDER (reconcile to SVG)
+//=============================================================
+const nodeEls = {};      // id -> {g, shape, label, reason}
+const filamentEls = {};  // id -> path
+
+function shapeClass(status) {
+  return ({
+    confirmed:   'node-shape node-confirmed',
+    inferred:    'node-shape node-inferred',
+    unconfirmed: 'node-shape node-unconfirmed',
+    unknown:     'node-shape node-unknown',
+    conflict:    'node-shape node-conflict',
+  })[status] || 'node-shape node-confirmed';
+}
+
+function ensureNodeEl(n) {
+  if (nodeEls[n.id]) return nodeEls[n.id];
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'node-group' + (n.id === 'arc-3' ? ' node-core' : ''));
+  g.setAttribute('data-id', n.id);
+
+  const shape = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  shape.setAttribute('class', shapeClass(n.status));
+  shape.setAttribute('cx', n.x); shape.setAttribute('cy', n.y); shape.setAttribute('r', n.r);
+
+  const inner = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  if (n.status === 'confirmed') {
+    inner.setAttribute('cx', n.x); inner.setAttribute('cy', n.y); inner.setAttribute('r', 3);
+    inner.setAttribute('fill', 'var(--cool)');
+  }
+
+  const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  label.setAttribute('class', 'node-label' + (n.status === 'unconfirmed' || n.status === 'unknown' ? ' dim' : ''));
+  label.setAttribute('x', n.x); label.setAttribute('y', n.y - n.r - 8);
+  label.textContent = n.label;
+
+  const reason = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  reason.setAttribute('class', 'node-reason');
+  reason.setAttribute('x', n.x); reason.setAttribute('y', n.y + n.r + 18);
+  reason.textContent = n.reason;
+
+  g.appendChild(shape);
+  if (n.status === 'confirmed') g.appendChild(inner);
+  g.appendChild(label);
+  g.appendChild(reason);
+  nodesGroup.appendChild(g);
+
+  // entering animation
+  g.classList.add('entering');
+  setTimeout(() => g.classList.remove('entering'), 1000);
+
+  // interaction
+  g.addEventListener('mouseenter', () => onHover(n.id));
+  g.addEventListener('mouseleave', () => onHoverOut(n.id));
+  g.addEventListener('click', (e) => { e.stopPropagation(); onClickNode(n.id); });
+
+  nodeEls[n.id] = { g, shape, inner, label, reason };
+  return nodeEls[n.id];
+}
+
+function removeNodeEl(id) {
+  const el = nodeEls[id]; if (!el) return;
+  el.g.classList.add('exiting');
+  setTimeout(() => {
+    if (el.g.parentNode) el.g.parentNode.removeChild(el.g);
+    delete nodeEls[id];
+  }, 800);
+}
+
+function ensureFilamentEl(f) {
+  if (filamentEls[f.id]) return filamentEls[f.id];
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('class', 'filament' + (f.kind === 'inferred' ? ' inferred' : '') + (f.binding ? ' binding' : ''));
+  filamentsGroup.appendChild(path);
+  filamentEls[f.id] = path;
+  if (f.binding) setTimeout(() => path.classList.remove('binding'), 1000);
+  return path;
+}
+
+function removeFilamentEl(id) {
+  const p = filamentEls[id]; if (!p) return;
+  p.style.transition = 'opacity .5s';
+  p.style.opacity = '0';
+  setTimeout(() => {
+    if (p.parentNode) p.parentNode.removeChild(p);
+    delete filamentEls[id];
+  }, 500);
+}
+
+function pathBetween(a, b) {
+  // gentle curve via offset midpoint
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const offset = 0.18;
+  const cx = mx - dy * offset;
+  const cy = my + dx * offset;
+  return `M ${a.x},${a.y} Q ${cx},${cy} ${b.x},${b.y}`;
+}
+
+function nodeById(id) { return State.nodes.find(n => n.id === id); }
+
+//=============================================================
+// SIMULATION TICK
+//=============================================================
+function tick(now) {
+  const dt = Math.min((now - State.lastT) / 1000, 0.05);
+  State.lastT = now;
+
+  if (!State.paused) {
+    advanceScenario(dt);
+    integrateNodes(dt);
+    advanceTape(dt);
+  }
+
+  renderNodePositions();
+  renderFilaments();
+  renderScenarioBar();
+
+  requestAnimationFrame(tick);
+}
+
+function integrateNodes(dt) {
+  // simple lerp toward target
+  for (const n of State.nodes) {
+    n.x += (n.tx - n.x) * Math.min(1, dt * 5);
+    n.y += (n.ty - n.y) * Math.min(1, dt * 5);
+    n.age += dt;
+  }
+}
+
+function renderNodePositions() {
+  for (const n of State.nodes) {
+    const e = ensureNodeEl(n);
+    e.shape.setAttribute('cx', n.x);
+    e.shape.setAttribute('cy', n.y);
+    e.shape.setAttribute('r', n.r);
+    if (e.inner) { e.inner.setAttribute('cx', n.x); e.inner.setAttribute('cy', n.y); }
+    e.label.setAttribute('x', n.x);
+    e.label.setAttribute('y', n.y - n.r - 8);
+    e.reason.setAttribute('x', n.x);
+    e.reason.setAttribute('y', n.y + n.r + 18);
+
+    // status classes
+    e.shape.setAttribute('class', shapeClass(n.status) + (n.id === 'conflict-1' && State.conflictResolved ? ' resolving' : ''));
+
+    // hover/pin/dim
+    e.g.classList.toggle('hovered', State.hovered === n.id);
+    e.g.classList.toggle('pinned',  State.pinned  === n.id);
+    const dim = (State.pinned && State.pinned !== n.id && !relatedTo(State.pinned, n.id))
+             || (State.filter && !n.label.toLowerCase().includes(State.filter) && !n.id.toLowerCase().includes(State.filter));
+    e.g.classList.toggle('dimmed', dim);
+  }
+}
+
+function renderFilaments() {
+  // remove dead
+  for (const id in filamentEls) {
+    if (!State.filaments.find(f => f.id === id && f.alive)) removeFilamentEl(id);
+  }
+  // ensure live + update path
+  for (const f of State.filaments) {
+    if (!f.alive) continue;
+    const a = nodeById(f.a), b = nodeById(f.b);
+    if (!a || !b) continue;
+    const p = ensureFilamentEl(f);
+    p.setAttribute('d', pathBetween(a, b));
+
+    const focus = State.pinned || State.hovered;
+    const related = focus && (f.a === focus || f.b === focus);
+    p.classList.toggle('lit',     !!related);
+    p.classList.toggle('dimmed',  !!focus && !related);
+  }
+}
+
+function relatedTo(focusId, otherId) {
+  return State.filaments.some(f => f.alive &&
+    ((f.a === focusId && f.b === otherId) || (f.b === focusId && f.a === otherId)));
+}
+
+//=============================================================
+// SCENARIO ENGINE
+//=============================================================
+function advanceScenario(dt) {
+  State.scenarioT += dt;
+  const phase = State.scenario;
+  const dur = State.phaseDuration[phase];
+
+  // phase behavior
+  if (phase === 'ENCODE') {
+    encodeBehavior(dt);
+  } else if (phase === 'DISTRACT') {
+    distractBehavior(dt);
+  } else if (phase === 'RETRIEVE') {
+    retrieveBehavior(dt);
+  } else {
+    idleBehavior(dt);
+  }
+
+  if (State.scenarioT >= dur) {
+    State.scenarioT = 0;
+    const i = State.cycle.indexOf(phase);
+    State.scenario = State.cycle[(i + 1) % State.cycle.length];
+    onPhaseChange(State.scenario);
+  }
+}
+
+function onPhaseChange(p) {
+  if (p === 'ENCODE') {
+    // reset some encode candidates each cycle
+    encodeIdx = 0;
+  }
+  if (p === 'RETRIEVE') {
+    // surge of recall traffic — fire several traverses
+    burstTraverse(5, 350);
+  }
+  if (p === 'IDLE') {
+    // cool down: substrate calms slightly unless conflict still active
+    if (State.conflictResolved) substrateShift.classList.add('calm');
+  }
+  if (p === 'DISTRACT') {
+    // budget pressure rises
+    State.budget = Math.min(State.budgetMax, State.budget + 1);
+  }
+}
+
+let encodeTimer = 0;
+function encodeBehavior(dt) {
+  encodeTimer += dt;
+  if (encodeTimer > 2.6 && encodeIdx < ENCODE_QUEUE.length) {
+    encodeTimer = 0;
+    spawnEncodeNode(ENCODE_QUEUE[encodeIdx++]);
+  }
+  // certainty rises
+  State.certainty = Math.min(0.78, State.certainty + 0.012 * dt);
+  renderCertaintyMeter();
+  budgetCount.textContent = State.budget;
+}
+
+let distractTimer = 0;
+function distractBehavior(dt) {
+  distractTimer += dt;
+  if (distractTimer > 0.9) {
+    distractTimer = 0;
+    pushTapeEvent({
+      kind: 'EVENT_APPENDED',
+      cls: '',
+      ref: pick(DISTRACT_REFS),
+      ts: tsNow(),
+    });
+  }
+  // peripheral filtered items: gentle pulse on the outer ring
+  // (visualized by warmHalo opacity dipping)
+  $('warmHalo').setAttribute('opacity', 0.5 + 0.3 * Math.sin(performance.now()/700));
+  // certainty erodes slowly
+  State.certainty = Math.max(0.45, State.certainty - 0.008 * dt);
+  renderCertaintyMeter();
+
+  // budget pressure: occasionally demote a peripheral inferred node briefly
+  // (demonstration; no actual deletion mid-distract here)
+}
+
+let retrieveTimer = 0;
+function retrieveBehavior(dt) {
+  retrieveTimer += dt;
+  if (retrieveTimer > 0.8) {
+    retrieveTimer = 0;
+    runTraverse();
+    pushTapeEvent({
+      kind: 'RECALL_TRIGGERED',
+      cls: '',
+      ref: pick(['arc-3','merrow','flashback-7','scene-44']),
+      ts: tsNow(),
+    });
+  }
+  // certainty resolves toward higher
+  State.certainty = Math.min(0.84, State.certainty + 0.025 * dt);
+  renderCertaintyMeter();
+}
+
+function idleBehavior(dt) {
+  // mostly nothing — slow breath governed by CSS animations
+  State.certainty += (0.62 - State.certainty) * dt * 0.4;
+  renderCertaintyMeter();
+}
+
+function spawnEncodeNode(cfg) {
+  if (nodeById(cfg.id)) return;
+  // enter from the periphery
+  const startX = C.x + (Math.random() - 0.5) * 700;
+  const startY = C.y + (Math.random() < 0.5 ? -260 : 260);
+  const n = makeNode({
+    id: cfg.id,
+    tx: cfg.target[0], ty: cfg.target[1],
+    r: cfg.r,
+    status: cfg.status,
+    label: cfg.label,
+    reason: cfg.reason,
+    sources: ['encode.event.t+'+encodeIdx],
+  });
+  n.x = startX; n.y = startY;
+  State.nodes.push(n);
+
+  // bind to arc-3 with a fresh filament
+  const fid = 'fenc-' + cfg.id;
+  State.filaments.push({ id:fid, a:'arc-3', b:cfg.id, kind: cfg.status === 'inferred' ? 'inferred' : 'confirmed', alive:true, binding:true });
+
+  pushTapeEvent({ kind:'EVENT_APPENDED', cls:'', ref: cfg.id, ts: tsNow() });
+  pushTapeEvent({ kind:'WORKING_SET_RECOMPUTED', cls:'warm', ref: 'Δ +1 budget '+(++State.budget)+'/'+State.budgetMax, ts: tsNow() });
+  budgetCount.textContent = State.budget;
+}
+
+//=============================================================
+// EVENT TAPE
+//=============================================================
+function pad(n){ return String(n).padStart(2,'0'); }
+function tsNow() {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function makeTapeEl(ev, fresh) {
+  const el = document.createElement('div');
+  el.className = 'tape-event' + (fresh ? ' fresh' : '');
+  el.dataset.kind = ev.kind;
+  el.dataset.ref = ev.ref;
+  el.innerHTML = `
+    <span class="ts">${ev.ts}</span>
+    <span class="kind ${ev.cls}">${ev.kind}</span>
+    <span class="ref">${ev.ref}</span>
+  `;
+  el.addEventListener('mouseenter', (e) => showTapeDetail(ev, e));
+  el.addEventListener('mouseleave', () => tapeDetail.classList.remove('show'));
+  el.addEventListener('click', () => onTapeEventClick(ev));
+  return el;
+}
+
+function pushTapeEvent(ev) {
+  const el = makeTapeEl(ev, true);
+  tapeTrack.appendChild(el);
+}
+
+// seed tape
+const SEED_KINDS = [
+  { kind:'EVENT_APPENDED', cls:'', refs:['merrow.location','arc-3.scene-12','flashback-7.t-04','witness.statement','scene-44.order'] },
+  { kind:'ASSERTION_FORMED', cls:'', refs:['merrow.allegiance','arc-3.unresolved','scene-44→story','narrator.unknown'] },
+  { kind:'WORKING_SET_RECOMPUTED', cls:'warm', refs:['Δ +2 −1 budget 7/12','Δ +1 budget 7/12','Δ −1 budget 6/12'] },
+  { kind:'ACTIVATION_PASS', cls:'warm', refs:['contour 0.91','contour 0.74','contour 0.66'] },
+  { kind:'RECALL_TRIGGERED', cls:'', refs:['arc-3','merrow','flashback-7','scene-44'] },
+  { kind:'CONFLICT_DETECTED', cls:'conflict', refs:['witness ⇄ record','timeline ⇄ scene','source ⇄ inference'] },
+  { kind:'PROVENANCE_REQUESTED', cls:'', refs:['merrow.location','flashback-7','arc-3'] },
+];
+for (let i = 0; i < 14; i++) {
+  const k = pick(SEED_KINDS);
+  pushTapeEvent({ kind: k.kind, cls: k.cls, ref: pick(k.refs), ts: tsNow() });
+}
+
+let tapeOffset = 0;
+const TAPE_SPEED = 22;
+let tapeHovering = false;
+tape.addEventListener('mouseenter', () => tapeHovering = true);
+tape.addEventListener('mouseleave', () => tapeHovering = false);
+
+function advanceTape(dt) {
+  if (tapeHovering) return;
+  tapeOffset += TAPE_SPEED * dt;
+  tapeTrack.style.transform = `translateX(${-tapeOffset}px)`;
+
+  const first = tapeTrack.firstElementChild;
+  if (first) {
+    const w = first.getBoundingClientRect().width;
+    if (tapeOffset > w + 4) {
+      tapeOffset -= w;
+      tapeTrack.style.transform = `translateX(${-tapeOffset}px)`;
+      tapeTrack.removeChild(first);
+      // append a fresh one based on phase
+      const k = pickPhaseKind();
+      pushTapeEvent({ kind: k.kind, cls: k.cls, ref: pick(k.refs), ts: tsNow() });
+      maybePromoteForRef(tapeTrack.lastElementChild);
+      if (k.kind === 'CONFLICT_DETECTED') flashConflict();
+    }
+  }
+}
+
+function pickPhaseKind() {
+  if (State.scenario === 'ENCODE')   return SEED_KINDS[Math.random() < 0.6 ? 0 : 1];
+  if (State.scenario === 'DISTRACT') return { kind:'EVENT_APPENDED', cls:'', refs: DISTRACT_REFS };
+  if (State.scenario === 'RETRIEVE') return SEED_KINDS[Math.random() < 0.5 ? 4 : 3];
+  return SEED_KINDS[Math.floor(Math.random()*SEED_KINDS.length)];
+}
+
+const REF_TO_NODE = {
+  'arc-3':'arc-3','arc-3.scene-12':'arc-3','arc-3.unresolved':'arc-3',
+  'merrow':'merrow','merrow.location':'merrow','merrow.allegiance':'merrow',
+  'scene-44.order':'scene-44','scene-44→story':'scene-44','scene-44':'scene-44',
+  'flashback-7':'flashback-7','flashback-7.t-04':'flashback-7',
+  'witness.statement':'conflict-1','witness ⇄ record':'conflict-1',
+  'narrator.unknown':'unknown-1',
+};
+
+function maybePromoteForRef(el) {
+  if (!el) return;
+  const ref = el.querySelector('.ref')?.textContent?.trim();
+  const id = REF_TO_NODE[ref];
+  if (id && Math.random() < 0.7) promote(id);
+}
+
+function showTapeDetail(ev, e) {
+  const rect = tape.getBoundingClientRect();
+  tapeDetail.style.left = (e.clientX - rect.left + 12) + 'px';
+  tapeDetail.style.top  = (rect.bottom - rect.top + 6) + 'px';
+  tapeDetail.innerHTML = `
+    <div class="head">${ev.kind}</div>
+    <div>${ev.ref}</div>
+    <div class="meta">at ${ev.ts}</div>
+    <div class="meta" style="margin-top:6px">${REF_TO_NODE[ev.ref] ? 'click to promote · '+REF_TO_NODE[ev.ref] : 'no working-set ref'}</div>
+  `;
+  tapeDetail.classList.add('show');
+}
+
+function onTapeEventClick(ev) {
+  const id = REF_TO_NODE[ev.ref];
+  if (id) {
+    promote(id);
+    runTraverseFor(id);
+  }
+}
+
+//=============================================================
+// MOTION VERBS — promote, traverse
+//=============================================================
+function promote(nodeId) {
+  const n = nodeById(nodeId); if (!n) return;
+  promoteRing.setAttribute('cx', n.x);
+  promoteRing.setAttribute('cy', n.y);
+  promoteRing.setAttribute('r', n.r);
+  promoteRing.style.opacity = '0.9';
+  promoteRing.style.transition = 'none';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    promoteRing.style.transition = 'r 1.1s cubic-bezier(.2,.7,.2,1), opacity 1.1s ease-out';
+    promoteRing.setAttribute('r', n.r + 28);
+    promoteRing.style.opacity = '0';
+  }));
+}
+
+function runTraverse(specificPath) {
+  const candidates = State.filaments.filter(f => f.alive);
+  if (!candidates.length) return;
+  const f = pick(candidates);
+  const a = nodeById(f.a), b = nodeById(f.b);
+  if (!a || !b) return;
+  const d = specificPath || pathBetween(a, b);
+  traverse.setAttribute('d', d);
+  const len = traverse.getTotalLength();
+  traverse.style.strokeDasharray = `${len * 0.08} ${len}`;
+  traverse.style.strokeDashoffset = `${len}`;
+  traverse.style.opacity = '0.9';
+  traverse.style.transition = 'none';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    traverse.style.transition = 'stroke-dashoffset 1.6s cubic-bezier(.4,.1,.3,1), opacity 1.6s ease-out';
+    traverse.style.strokeDashoffset = `${-len * 0.08}`;
+    traverse.style.opacity = '0';
+  }));
+}
+
+function runTraverseFor(nodeId) {
+  const f = State.filaments.find(ff => ff.alive && (ff.a === nodeId || ff.b === nodeId));
+  if (!f) return;
+  const a = nodeById(f.a), b = nodeById(f.b);
+  runTraverse(pathBetween(a, b));
+}
+
+function burstTraverse(count, spacing) {
+  for (let i = 0; i < count; i++) setTimeout(runTraverse, i * spacing);
+}
+
+setInterval(() => { if (!State.paused && State.scenario !== 'IDLE') runTraverse(); }, 4200);
+
+//=============================================================
+// CONFLICT
+//=============================================================
+function flashConflict() {
+  rootOrb.classList.add('alert');
+  rootState.textContent = 'attention';
+  substrateShift.classList.add('elevated');
+  setTimeout(() => {
+    rootOrb.classList.remove('alert');
+    rootState.textContent = State.conflictResolved ? 'quiet' : 'watchful';
+    substrateShift.classList.remove('elevated');
+  }, 2400);
+}
+
+function resolveConflict() {
+  if (State.conflictResolved) return;
+  State.conflictResolved = true;
+  const n = nodeById('conflict-1');
+  if (n) {
+    n.status = 'confirmed';
+    n.label = 'witness ⇄ record · resolved';
+    n.reason = 'reconciled · t+now';
+  }
+  rootState.textContent = 'quiet';
+  substrateShift.classList.add('calm');
+  setTimeout(() => substrateShift.classList.remove('calm'), 4000);
+  pushTapeEvent({ kind:'CONFLICT_RESOLVED', cls:'warm', ref:'witness ⇄ record', ts: tsNow() });
+  // certainty boost
+  State.certainty = Math.min(0.92, State.certainty + 0.1);
+  renderCertaintyMeter();
+  // celebratory traverse burst on its filaments
+  burstTraverse(3, 220);
+  // update inspect if open on it
+  if (State.pinned === 'conflict-1') showInspect('conflict-1');
+}
+
+//=============================================================
+// INSPECT (in-place panel)
+//=============================================================
+function showInspect(id) {
+  const n = nodeById(id); if (!n) return;
+  inspect.className = 'inspect ' + (n.status);
+  const fieldRect = field.getBoundingClientRect();
+  const svgEl = composition;
+  const pt = svgEl.createSVGPoint(); pt.x = n.x + n.r + 14; pt.y = n.y - n.r;
+  const ctm = svgEl.getScreenCTM();
+  const screen = pt.matrixTransform(ctm);
+  inspect.style.left = (screen.x - fieldRect.left) + 'px';
+  inspect.style.top  = (screen.y - fieldRect.top)  + 'px';
+
+  const sources = (n.sources || []).map(s => `· ${s}`).join('<br>') || '· (none)';
+  const isConflict = n.status === 'conflict' && !State.conflictResolved;
+  inspect.innerHTML = `
+    <div class="head">${n.label}</div>
+    <div class="row"><span>status</span><span class="v">${n.status}</span></div>
+    <div class="row"><span>mass</span><span class="v">${n.mass.toFixed(1)}</span></div>
+    <div class="row"><span>activation</span><span class="v">${n.activation.toFixed(2)}</span></div>
+    <div class="row"><span>recall reason</span><span class="v">${n.reason}</span></div>
+    <div class="src">sources<br>${sources}</div>
+    ${isConflict ? `<div class="resolve" id="resolveBtn">resolve · reconcile sources</div>` : ''}
+  `;
+  if (isConflict) {
+    setTimeout(() => $('resolveBtn')?.addEventListener('click', () => resolveConflict()), 0);
+  }
+  inspect.classList.add('show');
+}
+function hideInspect() { inspect.classList.remove('show'); }
+
+//=============================================================
+// INTERACTION
+//=============================================================
+function onHover(id) {
+  if (State.pinned) return; // pinned overrides hover
+  State.hovered = id;
+  showInspect(id);
+}
+function onHoverOut(id) {
+  if (State.pinned) return;
+  if (State.hovered === id) State.hovered = null;
+  hideInspect();
+}
+function onClickNode(id) {
+  if (State.pinned === id) {
+    State.pinned = null;
+    hideInspect();
+  } else {
+    State.pinned = id;
+    State.hovered = null;
+    showInspect(id);
+  }
+}
+
+field.addEventListener('click', (e) => {
+  // empty-space click releases pin
+  if (e.target.closest('.node-group')) return;
+  if (e.target.closest('.inspect')) return;
+  if (State.pinned) {
+    State.pinned = null;
+    hideInspect();
+  }
+});
+
+//=============================================================
+// COMMAND SURFACE
+//=============================================================
+function openCommand() {
+  command.classList.add('open');
+  commandInput.value = '';
+  State.filter = '';
+  setTimeout(() => commandInput.focus(), 0);
+}
+function closeCommand() {
+  command.classList.remove('open');
+  State.filter = '';
+}
+commandInput.addEventListener('input', (e) => {
+  State.filter = e.target.value.trim().toLowerCase();
+});
+commandInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeCommand(); }
+  if (e.key === 'Enter')  {
+    // pin first match, traverse all matches
+    const match = State.nodes.find(n =>
+      n.label.toLowerCase().includes(State.filter) ||
+      n.id.toLowerCase().includes(State.filter)
+    );
+    if (match) {
+      State.pinned = match.id;
+      showInspect(match.id);
+      runTraverseFor(match.id);
+    }
+    closeCommand();
+  }
+});
+
+//=============================================================
+// KEYBOARD
+//=============================================================
+document.addEventListener('keydown', (e) => {
+  if (e.target === commandInput) return;
+  if (e.key === '/') { e.preventDefault(); openCommand(); }
+  else if (e.key === 'Escape') {
+    if (command.classList.contains('open')) closeCommand();
+    else { State.pinned = null; hideInspect(); }
+  }
+  else if (e.key === ' ') {
+    e.preventDefault();
+    State.paused = !State.paused;
+    pauseReadout.classList.toggle('on', State.paused);
+    flashKey(State.paused ? 'paused · spacebar' : 'resumed');
+  }
+  else if (e.key === 'ArrowDown') { shiftDepth(+1); }
+  else if (e.key === 'ArrowUp')   { shiftDepth(-1); }
+  else if (e.key === '?') {
+    flashKey('hover · click · ↑↓ · / · space · esc');
+  }
+});
+
+function shiftDepth(dir) {
+  const order = ['strategic','tactical','deep'];
+  const i = order.indexOf(State.depth);
+  const ni = Math.max(0, Math.min(order.length - 1, i + dir));
+  if (ni === i) return;
+  State.depth = order[ni];
+  field.classList.remove('depth-strategic','depth-tactical','depth-deep');
+  field.classList.add('depth-' + State.depth);
+  for (const lvl of depthReadout.querySelectorAll('.lvl')) {
+    lvl.classList.toggle('active', lvl.dataset.depth === State.depth);
+  }
+  flashKey('depth · ' + State.depth);
+}
+
+function flashKey(msg) {
+  keyhint.textContent = msg;
+  keyhint.classList.add('show');
+  clearTimeout(flashKey._t);
+  flashKey._t = setTimeout(() => keyhint.classList.remove('show'), 1400);
+}
+
+//=============================================================
+// PENDING ROW
+//=============================================================
+function renderPending() {
+  pendingRow.innerHTML = '';
+  const items = [
+    { text: 'approval · scene-reorder-44', cls: '' },
+    { text: 'awaiting · provenance-merrow.location', cls: '' },
+    { text: 'recompute · activation-pass-queued', cls: '' },
+    { text: 'unknown · narrator-identity', cls: 'unknown' },
   ];
-
-  const tapeTrack = document.getElementById('tapeTrack');
-  const rootOrb = document.getElementById('rootOrb');
-
-  function pad(n){ return String(n).padStart(2,'0'); }
-  function ts() {
-    const d = new Date();
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  if (!State.conflictResolved) items.splice(1, 0, { text: 'reconcile · witness ⇄ record', cls: '' });
+  for (const it of items) {
+    const d = document.createElement('div');
+    d.className = 'held' + (it.cls ? ' ' + it.cls : '');
+    d.textContent = it.text;
+    pendingRow.appendChild(d);
   }
-  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+}
+renderPending();
+setInterval(renderPending, 2500);
 
-  function makeEvent(fresh=false) {
-    const k = pick(KINDS);
-    const ref = pick(k.refs);
-    const el = document.createElement('div');
-    el.className = 'tape-event' + (fresh ? ' fresh' : '');
-    el.innerHTML = `
-      <span class="ts">${ts()}</span>
-      <span class="kind ${k.cls}">${k.k}</span>
-      <span class="ref">${ref}</span>
-    `;
-    return { el, kind: k };
+//=============================================================
+// SCENARIO BAR
+//=============================================================
+function renderScenarioBar() {
+  for (const ph of scenarioBar.querySelectorAll('.phase')) {
+    ph.classList.toggle('active', ph.dataset.phase === State.scenario);
   }
+  phaseTs.textContent = '+' + State.scenarioT.toFixed(1) + 's';
+}
 
-  // seed the tape with initial history so it doesn't start empty
-  for (let i = 0; i < 16; i++) {
-    tapeTrack.appendChild(makeEvent(false).el);
-  }
+//=============================================================
+// BOOT
+//=============================================================
+budgetMax.textContent = State.budgetMax;
+budgetCount.textContent = State.budget;
+renderCertaintyMeter();
+field.classList.add('depth-' + State.depth);
 
-  // continuous left-drift via JS so we can append + recycle cleanly
-  let tapeOffset = 0;
-  const TAPE_SPEED = 22; // px/s
-  let lastT = performance.now();
+requestAnimationFrame((t) => { State.lastT = t; tick(t); });
 
-  function tickTape(now) {
-    const dt = (now - lastT) / 1000;
-    lastT = now;
-    tapeOffset += TAPE_SPEED * dt;
-    tapeTrack.style.transform = `translateX(${-tapeOffset}px)`;
-
-    // recycle leftmost event when fully off-screen
-    const first = tapeTrack.firstElementChild;
-    if (first) {
-      const w = first.getBoundingClientRect().width;
-      if (tapeOffset > w + 4) {
-        tapeOffset -= w;
-        tapeTrack.style.transform = `translateX(${-tapeOffset}px)`;
-        tapeTrack.removeChild(first);
-        // append a fresh one on the right
-        const ev = makeEvent(true);
-        tapeTrack.appendChild(ev.el);
-        onNewEvent(ev.kind);
-      }
-    }
-    requestAnimationFrame(tickTape);
-  }
-  requestAnimationFrame(tickTape);
-
-  // ---------- promote burst when a relevant event arrives ----------
-  const NODE_POSITIONS = {
-    'arc-3':        { x: 500, y: 300, r: 46 },
-    'merrow':       { x: 390, y: 230, r: 30 },
-    'scene-44':     { x: 610, y: 230, r: 26 },
-    'flashback-7':  { x: 400, y: 390, r: 32 },
-    'unresolved-2': { x: 615, y: 395, r: 28 },
-    'conflict-1':   { x: 700, y: 300, r: 24 },
-    'unknown-1':    { x: 300, y: 300, r: 22 },
-  };
-  const REF_TO_NODE = {
-    'arc-3': 'arc-3',
-    'arc-3.scene-12': 'arc-3',
-    'arc-3.unresolved': 'arc-3',
-    'merrow': 'merrow',
-    'merrow.location': 'merrow',
-    'merrow.allegiance': 'merrow',
-    'scene-44.order': 'scene-44',
-    'scene-44→story': 'scene-44',
-    'flashback-7': 'flashback-7',
-    'flashback-7.t-04': 'flashback-7',
-    'witness.statement': 'conflict-1',
-    'witness ⇄ record': 'conflict-1',
-    'narrator.unknown': 'unknown-1',
-  };
-
-  const promoteRing = document.getElementById('promoteRing');
-  function promote(nodeId) {
-    const p = NODE_POSITIONS[nodeId];
-    if (!p) return;
-    promoteRing.setAttribute('cx', p.x);
-    promoteRing.setAttribute('cy', p.y);
-    promoteRing.setAttribute('r', p.r);
-    promoteRing.style.opacity = '0.9';
-    promoteRing.style.transition = 'none';
-    // double rAF so transition picks up
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      promoteRing.style.transition = 'r 1.1s cubic-bezier(.2,.7,.2,1), opacity 1.1s ease-out';
-      promoteRing.setAttribute('r', p.r + 28);
-      promoteRing.style.opacity = '0';
-    }));
-  }
-
-  function onNewEvent(kind) {
-    // find a referenced node, occasionally
-    const lastEv = tapeTrack.lastElementChild;
-    if (!lastEv) return;
-    const ref = lastEv.querySelector('.ref')?.textContent?.trim();
-    const nodeId = REF_TO_NODE[ref];
-    if (nodeId && Math.random() < 0.7) promote(nodeId);
-
-    if (kind.k === 'CONFLICT_DETECTED') {
-      rootOrb.classList.add('alert');
-      setTimeout(() => rootOrb.classList.remove('alert'), 2400);
-    }
-  }
-
-  // ---------- traverse light along a filament ----------
-  const FILAMENT_PATHS = [
-    'M 500,300 Q 440,270 390,230',  // arc-3 → merrow
-    'M 500,300 Q 560,270 610,230',  // arc-3 → scene-44
-    'M 500,300 Q 450,340 400,390',  // arc-3 → flashback-7
-    'M 390,230 Q 350,310 400,390',  // merrow → flashback-7
-    'M 500,300 Q 560,340 615,395',  // arc-3 → unresolved-2
-    'M 610,230 Q 670,260 700,300',  // scene-44 → conflict-1
-  ];
-
-  const traverse = document.getElementById('traverse');
-  let traverseAnim = null;
-
-  function runTraverse() {
-    if (!traverse) return;
-    const d = pick(FILAMENT_PATHS);
-    traverse.setAttribute('d', d);
-    // measure path
-    const len = traverse.getTotalLength();
-    traverse.style.strokeDasharray = `${len * 0.08} ${len}`;
-    traverse.style.strokeDashoffset = `${len}`;
-    traverse.style.opacity = '0.85';
-    traverse.style.transition = 'none';
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      traverse.style.transition = 'stroke-dashoffset 1.6s cubic-bezier(.4,.1,.3,1), opacity 1.6s ease-out';
-      traverse.style.strokeDashoffset = `${-len * 0.08}`;
-      traverse.style.opacity = '0';
-    }));
-  }
-  setInterval(runTraverse, 4200);
-  setTimeout(runTraverse, 900);
-
-  // ---------- inner & outer ring micro dots ----------
-  const innerRing = document.getElementById('innerRing');
-  const outerRing = document.getElementById('outerRing');
-  const cx = 500, cy = 300;
-
-  function ring(target, count, radius, sizeRange, warmChance) {
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + Math.random() * 0.15;
-      const rJitter = radius + (Math.random() - 0.5) * 18;
-      const x = cx + Math.cos(a) * rJitter;
-      const y = cy + Math.sin(a) * rJitter * 0.62; // elliptical
-      const r = sizeRange[0] + Math.random() * (sizeRange[1] - sizeRange[0]);
-      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      c.setAttribute('cx', x);
-      c.setAttribute('cy', y);
-      c.setAttribute('r', r);
-      c.setAttribute('class', 'ambient' + (Math.random() < warmChance ? ' warm' : ''));
-      target.appendChild(c);
-    }
-  }
-
-  ring(innerRing, 14, 165, [1.1, 1.8], 0.18);
-  ring(outerRing, 26, 245, [0.7, 1.2], 0.10);
-
-  // ---------- gentle ambient breath on inner ring opacity (tied to nothing real, kept small) ----------
-  // Intentionally minimal. Motion budget stays bound to event traffic.
+// gentle initial flash so users see the room is interactive
+setTimeout(() => flashKey('hover any node · / opens command'), 1200);
+setTimeout(() => flashKey(''), 4200);
 
 </script>
 
