@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.dev/schema/memory_schema_v1/memory_event.schema.json",
+  "title": "MemoryEvent",
+  "description": "Base envelope for any event appended to the memory log. SKELETON: this fixes the discriminator and required envelope fields so cross-schema references are stable. Detailed event-type payload schemas land in pr-1.0 (memory.observation, memory.recall, memory.attestation) and pr-1.6 (memory.consolidation references consolidation_event.schema.json).",
+  "type": "object",
+  "required": ["event_id", "event_type", "schema_version", "timestamp"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Discriminator. Examples: 'memory.observation', 'memory.recall', 'memory.consolidation', 'memory.attestation', 'memory.tether.bind', 'memory.halo.decay'."
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "memory_schema_v1"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "type": "object",
+      "description": "Who/what produced the event. Detailed in pr-1.0."
+    },
+    "payload": {
+      "description": "Type-specific payload. See per-event schemas (e.g. consolidation_event.schema.json) for concrete shapes."
+    },
+    "lineage": {
+      "type": "array",
+      "description": "Optional list of prior event ids this event derived from.",
+      "items": { "type": "string", "format": "uuid" }
+    }
+  }
+}

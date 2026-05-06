@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.dev/schema/memory_schema_v1/orb.schema.json",
+  "title": "MemoryOrb",
+  "description": "A unit of compressed cognitive continuity. SKELETON: this fixes the required envelope fields so consolidation_event references (input_orbs, output_orbs, previous_versions) have a stable target. The detailed schema (core structure, halo cursor, tether shape) lands in pr-1.0/orb-schema.",
+  "type": "object",
+  "required": ["orb_id", "kind", "core_version", "schema_version"],
+  "properties": {
+    "orb_id": {
+      "type": "string",
+      "description": "Stable identifier. Conventionally namespaced (e.g. 'orb.system_root', 'orb.user_preference.review_style')."
+    },
+    "kind": {
+      "enum": [
+        "system_root",
+        "user_preference",
+        "project",
+        "relationship",
+        "skill",
+        "place",
+        "tool",
+        "research",
+        "domain",
+        "trauma_or_error"
+      ],
+      "description": "The species of orb. system_root is the original RootOrb generalized; the rest are user-domain specializations. New kinds require a schema migration."
+    },
+    "core_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonically increasing. Each successful consolidation produces a new core_version."
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "memory_schema_v1"
+    },
+    "core": {
+      "type": "object",
+      "description": "Dense, compressed claims. Detailed in pr-1.0."
+    },
+    "halo_ref": {
+      "type": "object",
+      "description": "Cursor/query into the event log defining the orb's halo. Detailed in pr-1.1."
+    },
+    "tethers": {
+      "type": "array",
+      "description": "Typed graph edges to other orbs. Detailed in pr-1.2."
+    },
+    "ancestors": {
+      "type": "array",
+      "description": "Orb ids whose lineage this orb descends from (for merged or branched orbs).",
+      "items": { "type": "string" }
+    },
+    "privileged": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, the halo cannot be compressed without an ATTESTATION event covering the consolidation. Enforced by luna-govern at runtime."
+    },
+    "policy_bindings": {
+      "type": "array",
+      "description": "Optional governance rule references that participate in this orb's resonance.",
+      "items": { "type": "string" }
+    }
+  }
+}

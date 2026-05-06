@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.dev/schema/memory_schema_v1/consolidation_event.schema.json",
+  "title": "ConsolidationEvent",
+  "description": "An auditable receipt for a memory transformation. Emitted whenever an orb's state changes through consolidation, branching, or merging. Every transformation is itself a logged event. The receipt MUST contain enough information to (a) reconstruct the new orb state from the prior state plus this event, and (b) trace every claim in the new state back to source events in the underlying log.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "actor",
+    "operation",
+    "trigger",
+    "input_events",
+    "input_orbs",
+    "output_orbs",
+    "delta",
+    "replay_bundle_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this consolidation event."
+    },
+    "event_type": {
+      "type": "string",
+      "const": "memory.consolidation",
+      "description": "Discriminator. Always 'memory.consolidation' for this schema."
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "memory_schema_v1",
+      "description": "Schema version this event was emitted under. Immutable once written."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp at which this transformation was committed to the event log."
+    },
+    "actor": {
+      "type": "object",
+      "description": "Who or what initiated this consolidation.",
+      "required": ["kind", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["system", "operator", "policy", "scheduled"],
+          "description": "system: runtime-driven. operator: human in the loop. policy: a governance rule fired. scheduled: periodic worker."
+        },
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for the actor."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Optional session reference if actor is operator-initiated."
+        }
+      }
+    },
+    "operation": {
+      "enum": ["consolidate", "branch", "merge"],
+      "description": "The kind of transformation performed. consolidate: compress halo into core. branch: split parent into specialized child(ren). merge: fuse siblings into a unified descendant."
+    },
+    "trigger": {
+      "type": "object",
+      "description": "What caused this consolidation to fire.",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "periodic",
+            "halo_size",
+            "semantic_pressure",
+            "contradiction",
+            "manual",
+            "attested",
+            "session_close",
+            "branch_proposal",
+            "merge_proposal"
+          ],
+          "description": "The class of trigger. semantic_pressure covers vector/graph disagreement (the bimodality signal for differentiation)."
+        },
+        "metric": {
+          "type": "object",
+          "description": "Optional metric value that crossed threshold (e.g. bimodality, halo_size).",
+          "additionalProperties": false,
+          "required": ["name", "value", "threshold"],
+          "properties": {
+            "name": { "type": "string" },
+            "value": { "type": "number" },
+            "threshold": { "type": "number" }
+          }
+        },
+        "policy_ref": {
+          "type": "string",
+          "description": "Optional policy/rule reference that justified the trigger."
+        },
+        "proposal_event_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Optional reference to a prior proposal event (e.g. a merge_proposal) this consolidation acts on."
+        }
+      }
+    },
+    "input_events": {
+      "type": "array",
+      "description": "Event ids from the underlying log that fed this consolidation. The substrate of the transformation. Empty array is permitted only for system-initialization events.",
+      "items": { "type": "string", "format": "uuid" },
+      "minItems": 0
+    },
+    "input_orbs": {
+      "type": "array",
+      "description": "Orbs participating in this consolidation. For 'consolidate' this is the single target. For 'branch' it is the parent. For 'merge' it is the siblings being fused.",
+      "items": { "$ref": "#/$defs/orb_ref" },
+      "minItems": 1
+    },
+    "output_orbs": {
+      "type": "array",
+      "description": "Orbs produced or updated by this consolidation. For 'consolidate' a single target with a new core_version. For 'branch' the parent (updated) and at least one child. For 'merge' the unified descendant plus any archived siblings.",
+      "items": { "$ref": "#/$defs/orb_ref" },
+      "minItems": 1
+    },
+    "previous_versions": {
+      "type": "array",
+      "description": "Prior core versions of input orbs, retained as ancestors so lineage is never erased. Each entry includes a content hash sufficient to reconstruct the prior core if needed.",
+      "items": {
+        "type": "object",
+        "required": ["orb_id", "core_version", "core_hash"],
+        "additionalProperties": false,
+        "properties": {
+          "orb_id": { "type": "string" },
+          "core_version": { "type": "integer", "minimum": 1 },
+          "core_hash": {
+            "type": "string",
+            "description": "Content-addressed hash of the prior core (e.g. 'sha256:...')."
+          }
+        }
+      }
+    },
+    "delta": {
+      "type": "object",
+      "description": "The actual change to memory state. Required. Replayable. Every claim added, changed, or retired must reference its supporting evidence in the event log.",
+      "required": [
+        "claims_added",
+        "claims_changed",
+        "claims_retired",
+        "halo_events_folded",
+        "halo_events_dropped"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "claims_added": {
+          "type": "array",
+          "description": "New claims introduced into the output core.",
+          "items": { "$ref": "#/$defs/claim" }
+        },
+        "claims_changed": {
+          "type": "array",
+          "description": "Claims whose content, weight, or evidence changed.",
+          "items": {
+            "type": "object",
+            "required": ["claim_id", "before", "after"],
+            "additionalProperties": false,
+            "properties": {
+              "claim_id": { "type": "string" },
+              "before": { "$ref": "#/$defs/claim" },
+              "after": { "$ref": "#/$defs/claim" },
+              "rationale": {
+                "type": "string",
+                "description": "Optional human-readable rationale for the change."
+              }
+            }
+          }
+        },
+        "claims_retired": {
+          "type": "array",
+          "description": "Claims removed from the output core. They remain reconstructable from the event log; retirement is never destructive of source events.",
+          "items": {
+            "type": "object",
+            "required": ["claim_id", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "claim_id": { "type": "string" },
+              "reason": {
+                "enum": [
+                  "superseded",
+                  "contradicted",
+                  "decayed",
+                  "withdrawn",
+                  "attested_removal"
+                ]
+              },
+              "superseded_by": {
+                "type": "string",
+                "description": "Optional claim_id that replaces this one."
+              }
+            }
+          }
+        },
+        "halo_events_folded": {
+          "type": "array",
+          "description": "Event ids absorbed from the halo into the new core. These events contributed to one or more claims.",
+          "items": { "type": "string", "format": "uuid" }
+        },
+        "halo_events_dropped": {
+          "type": "array",
+          "description": "Event ids that decayed out of the halo. They still exist in the event log; they are simply no longer in the orb's active halo.",
+          "items": { "type": "string", "format": "uuid" }
+        },
+        "tether_changes": {
+          "type": "array",
+          "description": "Tethers added, modified, or dissolved as a result of this consolidation.",
+          "items": {
+            "type": "object",
+            "required": ["change", "tether"],
+            "additionalProperties": false,
+            "properties": {
+              "change": { "enum": ["bind", "rebind", "break"] },
+              "tether": { "$ref": "#/$defs/tether" }
+            }
+          }
+        }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "description": "Aggregate confidence after this transformation. Optional but strongly recommended.",
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "horizon": {
+          "enum": ["session", "project", "long_term"]
+        },
+        "open_questions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "contradictions": {
+          "type": "array",
+          "description": "Known contradictions that survive into the new core (e.g. when a branch was deferred).",
+          "items": {
+            "type": "object",
+            "required": ["claim_a", "claim_b", "status"],
+            "additionalProperties": false,
+            "properties": {
+              "claim_a": { "type": "string" },
+              "claim_b": { "type": "string" },
+              "status": { "enum": ["unresolved", "deferred", "branched"] }
+            }
+          }
+        }
+      }
+    },
+    "policy_version": {
+      "type": "string",
+      "description": "Identifier for the governance policy version active at the time of this consolidation."
+    },
+    "attestation": {
+      "type": "object",
+      "description": "Optional governance attestation. REQUIRED at runtime if this transformation touches a privileged orb or compresses a privileged halo (enforcement is in luna-govern; the schema makes the field first-class).",
+      "required": ["operator_id", "signed_at", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "operator_id": { "type": "string" },
+        "signed_at": { "type": "string", "format": "date-time" },
+        "scope": {
+          "type": "string",
+          "description": "What this attestation covers (e.g. 'core_v3', 'halo_compression', 'merge_decision', 'branch_decision')."
+        },
+        "signature": {
+          "type": "string",
+          "description": "Cryptographic signature or attestation hash. Format defined by luna-govern."
+        }
+      }
+    },
+    "replay_bundle_hash": {
+      "type": "string",
+      "description": "Content-addressed hash of the bundle (input_events + input_orbs + delta + previous_versions) sufficient to deterministically replay this transformation. Used for verification and rollback. Format: '<algo>:<hex>' e.g. 'sha256:...'."
+    }
+  },
+  "$defs": {
+    "orb_ref": {
+      "type": "object",
+      "required": ["orb_id", "core_version", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "orb_id": { "type": "string" },
+        "core_version": { "type": "integer", "minimum": 1 },
+        "role": {
+          "enum": [
+            "target",
+            "parent",
+            "child",
+            "sibling",
+            "ancestor",
+            "descendant",
+            "archived"
+          ],
+          "description": "The orb's relationship to this transformation. target: the orb being consolidated. parent: the orb being branched. child: a new orb produced by branching. sibling: an orb being merged. descendant: the unified orb produced by merging. ancestor: a prior version preserved for lineage. archived: a sibling fused into a descendant and now retired."
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "required": ["claim_id", "content", "weight", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": { "type": "string" },
+        "content": {
+          "type": "string",
+          "description": "The compressed claim text."
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Activation weight in the orb core. Higher = more frequently surfaced."
+        },
+        "evidence": {
+          "type": "array",
+          "description": "Event ids from the underlying log that support this claim. MUST be non-empty for added or changed claims; this is the provenance contract.",
+          "items": { "type": "string", "format": "uuid" },
+          "minItems": 1
+        },
+        "confidence_horizon": {
+          "enum": ["session", "project", "long_term"],
+          "description": "How long the system expects this claim to remain valid."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "tether": {
+      "type": "object",
+      "required": ["from_orb", "to_orb", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "from_orb": { "type": "string" },
+        "to_orb": { "type": "string" },
+        "kind": {
+          "enum": [
+            "derived_from",
+            "specializes",
+            "contradicts",
+            "co_active_with",
+            "ancestor_of"
+          ]
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "operation": { "const": "branch" } },
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {
+          "input_orbs": {
+            "minItems": 1,
+            "description": "Branch requires at least the parent orb as input."
+          },
+          "output_orbs": {
+            "minItems": 2,
+            "description": "Branch must produce the parent (with updated core) plus at least one child."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "operation": { "const": "merge" } },
+        "required": ["operation"]
+      },
+      "then": {
+        "properties": {
+          "input_orbs": {
+            "minItems": 2,
+            "description": "Merge requires at least two input orbs (the siblings being fused)."
+          },
+          "output_orbs": {
+            "minItems": 1,
+            "description": "Merge produces a unified descendant. Old siblings should also appear with role 'archived' or 'ancestor' to preserve lineage."
+          }
+        }
+      }
+    }
+  ]
+}

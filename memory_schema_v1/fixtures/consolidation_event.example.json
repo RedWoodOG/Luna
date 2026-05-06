@@ -1,0 +1,99 @@
+{
+  "event_id": "01952c9e-7d20-7c41-9c00-b8e3b2c0a1f1",
+  "event_type": "memory.consolidation",
+  "schema_version": "memory_schema_v1",
+  "timestamp": "2026-05-06T14:22:03Z",
+  "actor": {
+    "kind": "scheduled",
+    "id": "luna.consolidate.scheduler"
+  },
+  "operation": "consolidate",
+  "trigger": {
+    "kind": "halo_size",
+    "metric": {
+      "name": "halo_event_count",
+      "value": 14,
+      "threshold": 12
+    }
+  },
+  "input_events": [
+    "01952c8a-1234-7c41-9c00-aaaaaaaaaaaa",
+    "01952c8b-2345-7c41-9c00-bbbbbbbbbbbb",
+    "01952c8c-3456-7c41-9c00-cccccccccccc"
+  ],
+  "input_orbs": [
+    {
+      "orb_id": "orb.user_preference.review_style",
+      "core_version": 2,
+      "role": "target"
+    }
+  ],
+  "output_orbs": [
+    {
+      "orb_id": "orb.user_preference.review_style",
+      "core_version": 3,
+      "role": "target"
+    }
+  ],
+  "previous_versions": [
+    {
+      "orb_id": "orb.user_preference.review_style",
+      "core_version": 2,
+      "core_hash": "sha256:9f1c4b2e7a3d1c5e8b0a7d4f2e6c9b1a3d5e7f9b1c3e5a7d9f1b3c5e7a9d1f3b"
+    }
+  ],
+  "delta": {
+    "claims_added": [
+      {
+        "claim_id": "claim.review.brutal-deep",
+        "content": "user prefers brutal, deep technical reviews when label = 'review'",
+        "weight": 0.84,
+        "evidence": [
+          "01952c8a-1234-7c41-9c00-aaaaaaaaaaaa",
+          "01952c8b-2345-7c41-9c00-bbbbbbbbbbbb"
+        ],
+        "confidence_horizon": "project",
+        "tags": ["preference", "review"]
+      }
+    ],
+    "claims_changed": [
+      {
+        "claim_id": "claim.review.tone",
+        "before": {
+          "claim_id": "claim.review.tone",
+          "content": "user prefers concise responses",
+          "weight": 0.62,
+          "evidence": ["01952b00-9999-7c41-9c00-deadbeefcafe"]
+        },
+        "after": {
+          "claim_id": "claim.review.tone",
+          "content": "user prefers concise responses except in review contexts",
+          "weight": 0.71,
+          "evidence": [
+            "01952b00-9999-7c41-9c00-deadbeefcafe",
+            "01952c8c-3456-7c41-9c00-cccccccccccc"
+          ]
+        },
+        "rationale": "scoped by review-context evidence"
+      }
+    ],
+    "claims_retired": [],
+    "halo_events_folded": [
+      "01952c8a-1234-7c41-9c00-aaaaaaaaaaaa",
+      "01952c8b-2345-7c41-9c00-bbbbbbbbbbbb",
+      "01952c8c-3456-7c41-9c00-cccccccccccc"
+    ],
+    "halo_events_dropped": [],
+    "tether_changes": []
+  },
+  "confidence": {
+    "score": 0.78,
+    "horizon": "project",
+    "open_questions": [
+      "does this preference hold for non-code review contexts?"
+    ],
+    "contradictions": []
+  },
+  "policy_version": "governance.charter.v3",
+  "replay_bundle_hash": "sha256:b4a7c5d3e2f1a8b6c4d7e9f2a3b5c8d1e4f6a9b2c3d5e7f8a1b4c6d9e2f3a5b7"
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.dev/schema/memory_schema_v1/memory_brief.schema.json",
+  "title": "MemoryBrief",
+  "description": "The synthesized recall artifact returned by hybrid recall. NOT chunks; guidance. The model receives stable claims, context-specific preferences, active tensions, recent changes, and explicit unknowns — not raw text fragments. SKELETON: detailed in pr-1.4/memory-brief.",
+  "type": "object",
+  "required": ["brief_id", "schema_version", "generated_at", "active_orbs"],
+  "properties": {
+    "brief_id": { "type": "string", "format": "uuid" },
+    "schema_version": { "type": "string", "const": "memory_schema_v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "active_orbs": {
+      "type": "array",
+      "description": "Orbs activated for this recall, ordered by activation strength."
+    },
+    "stable_claims": {
+      "type": "array",
+      "description": "High-confidence claims surviving across consolidations."
+    },
+    "context_specific": {
+      "type": "array",
+      "description": "Branch-orb claims relevant to the current scope (e.g. 'in review contexts, prefer brutal depth')."
+    },
+    "active_tensions": {
+      "type": "array",
+      "description": "Known unresolved contradictions surfaced for the model to handle, not flatten."
+    },
+    "recent_changes": {
+      "type": "array",
+      "description": "Consolidation events that affected the surfaced orbs in the last N cycles."
+    },
+    "do_not_assume": {
+      "type": "array",
+      "description": "Open questions and explicit unknowns the model should not fabricate around."
+    },
+    "recall_reasons": {
+      "type": "array",
+      "description": "Per-orb explanation of why it was surfaced (vector hits + graph traversals). The provenance of the recall itself."
+    }
+  }
+}
