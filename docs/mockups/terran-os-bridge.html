@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>terran os · bridge · interactive</title>
+<title>terran os · bridge · agentic operations</title>
 <style>
   :root {
     --bg: #07090d;
@@ -574,10 +574,10 @@
     <div class="tape" id="tape">
       <div class="tape-track" id="tapeTrack"></div>
       <div class="scenario" id="scenarioBar">
-        <span class="phase" data-phase="ENCODE">encode</span>
-        <span class="phase" data-phase="DISTRACT">distract</span>
-        <span class="phase" data-phase="RETRIEVE">retrieve</span>
-        <span class="phase" data-phase="IDLE">idle</span>
+        <span class="phase" data-phase="PLAN">plan</span>
+        <span class="phase" data-phase="DISPATCH">dispatch</span>
+        <span class="phase" data-phase="EXECUTE">execute</span>
+        <span class="phase" data-phase="CONVERGE">converge</span>
         <span class="ts" id="phaseTs">+00.0s</span>
       </div>
     </div>
@@ -692,10 +692,10 @@
 // STATE
 //=============================================================
 const State = {
-  scenario: 'ENCODE',
+  scenario: 'PLAN',
   scenarioT: 0,
-  cycle: ['ENCODE','DISTRACT','RETRIEVE','IDLE'],
-  phaseDuration: { ENCODE: 8, DISTRACT: 8, RETRIEVE: 8, IDLE: 6 },
+  cycle: ['PLAN','DISPATCH','EXECUTE','CONVERGE'],
+  phaseDuration: { PLAN: 6, DISPATCH: 7, EXECUTE: 9, CONVERGE: 6 },
 
   nodes: [],          // see makeNode
   filaments: [],      // {id, a, b, kind, alive, lit, binding}
@@ -735,46 +735,47 @@ function makeNode(o) {
   }, o);
 }
 
-// seed working set (the initial scene)
+// seed working set (the initial scene) — agentic operations
 State.nodes = [
-  makeNode({ id:'arc-3',        tx:500, ty:300, r:46, status:'confirmed',  label:'manuscript-arc-3',     reason:'recall · contour-match 0.91', mass:3,
-             sources:['scene-12.event','scene-44.event','reread.t-04:21'] }),
-  makeNode({ id:'merrow',       tx:390, ty:230, r:30, status:'confirmed',  label:'character-merrow',     reason:'co-activation · arc-3',
-             sources:['merrow.intro','merrow.location.event'] }),
-  makeNode({ id:'scene-44',     tx:610, ty:230, r:26, status:'confirmed',  label:'scene-44-ordering',    reason:'temporal · scene→story',
-             sources:['scene-44.event','timeline.delta'] }),
-  makeNode({ id:'flashback-7',  tx:400, ty:390, r:32, status:'inferred',   label:'timeline-flashback-7', reason:'inferred · ordering Δ',
-             sources:['scene-32.event','scene-44.event','inference.t-03']}),
-  makeNode({ id:'unresolved-2', tx:615, ty:395, r:28, status:'unconfirmed',label:'unresolved-thread-2',  reason:'unconfirmed · since t-04:21',
-             sources:['merrow.statement','witness.statement']}),
-  makeNode({ id:'conflict-1',   tx:700, ty:300, r:24, status:'conflict',   label:'witness ⇄ record',     reason:'conflict · t-02:11',
-             sources:['witness.statement','record.archive','merrow.location']}),
-  makeNode({ id:'unknown-1',    tx:300, ty:300, r:22, status:'unknown',    label:'narrator-identity',    reason:'unknown · held open',
+  // center: active mission / orchestrator
+  makeNode({ id:'mission-1',     tx:500, ty:300, r:46, status:'confirmed',   label:'mission-deploy-v2',    reason:'orchestrator · plan 0.91', mass:3,
+             sources:['intake.spec.event','plan.t-04:21','dispatch.t-03:55']}),
+  makeNode({ id:'agent-research',tx:390, ty:230, r:30, status:'confirmed',   label:'agent-research',       reason:'active · model opus',
+             sources:['spawn.t-03:50','task.gather-context']}),
+  makeNode({ id:'agent-codegen', tx:610, ty:230, r:26, status:'confirmed',   label:'agent-codegen',        reason:'active · model sonnet',
+             sources:['spawn.t-03:48','task.implement-step-7']}),
+  makeNode({ id:'subagent-test', tx:400, ty:390, r:32, status:'inferred',    label:'subagent-test-runner', reason:'inferred · partial trust',
+             sources:['parent.agent-codegen','spawn.t-02:14']}),
+  makeNode({ id:'tool-pending',  tx:615, ty:395, r:28, status:'unconfirmed', label:'tool · fetch-config',  reason:'unconfirmed · awaiting return',
+             sources:['invoked.by.agent-codegen','t-00:07']}),
+  makeNode({ id:'conflict-1',    tx:700, ty:300, r:24, status:'conflict',    label:'output-divergence',    reason:'conflict · t-02:11',
+             sources:['agent-research.claim','agent-codegen.claim']}),
+  makeNode({ id:'approval-gate', tx:300, ty:300, r:22, status:'unknown',     label:'human-approval-gate',  reason:'unknown · awaiting operator',
              sources:[]}),
 ];
 
 State.filaments = [
-  { id:'f1', a:'arc-3', b:'merrow',        kind:'confirmed', alive:true },
-  { id:'f2', a:'arc-3', b:'scene-44',      kind:'confirmed', alive:true },
-  { id:'f3', a:'arc-3', b:'flashback-7',   kind:'inferred',  alive:true },
-  { id:'f4', a:'merrow', b:'flashback-7',  kind:'confirmed', alive:true },
-  { id:'f5', a:'arc-3', b:'unresolved-2',  kind:'confirmed', alive:true },
-  { id:'f6', a:'scene-44', b:'conflict-1', kind:'confirmed', alive:true },
-  { id:'f7', a:'flashback-7', b:'unknown-1', kind:'inferred', alive:true },
+  { id:'f1', a:'mission-1',     b:'agent-research', kind:'confirmed', alive:true },
+  { id:'f2', a:'mission-1',     b:'agent-codegen',  kind:'confirmed', alive:true },
+  { id:'f3', a:'mission-1',     b:'subagent-test',  kind:'inferred',  alive:true },
+  { id:'f4', a:'agent-codegen', b:'subagent-test',  kind:'confirmed', alive:true },
+  { id:'f5', a:'mission-1',     b:'tool-pending',   kind:'confirmed', alive:true },
+  { id:'f6', a:'agent-codegen', b:'conflict-1',     kind:'confirmed', alive:true },
+  { id:'f7', a:'agent-research',b:'conflict-1',     kind:'inferred',  alive:true },
+  { id:'f8', a:'mission-1',     b:'approval-gate',  kind:'inferred',  alive:true },
 ];
 
-// ENCODE phase candidates (will be added as nodes spawn)
-const ENCODE_QUEUE = [
-  { id:'merrow.location-fact', label:'merrow.location-fact', status:'confirmed', reason:'encoded · t+0', target:[460,170], r:18 },
-  { id:'witness.testimony',    label:'witness.testimony',    status:'inferred',  reason:'encoded · t+1', target:[760,200], r:20 },
-  { id:'scene-12.beat',        label:'scene-12.beat',        status:'confirmed', reason:'encoded · t+2', target:[230,210], r:18 },
+// DISPATCH phase: sub-agents fan out from their parent agents
+const DISPATCH_QUEUE = [
+  { id:'subagent-fetch',    label:'subagent-fetch-deps', parent:'agent-research', status:'confirmed', reason:'spawned · t+0', target:[290,160], r:18 },
+  { id:'subagent-validate', label:'subagent-validate',   parent:'agent-codegen',  status:'inferred',  reason:'spawned · t+1', target:[770,160], r:20 },
 ];
-let encodeIdx = 0;
+let dispatchIdx = 0;
 
-// DISTRACT noise events
-const DISTRACT_REFS = [
-  'tangent.note.A','tangent.note.B','side-character.murle','side-scene.glade',
-  'menu.activity','log.compaction','telemetry.tick','user.idle','heartbeat'
+// background system telemetry refs (low-relevance ambient traffic)
+const AMBIENT_REFS = [
+  'heartbeat.t','log.compaction','telemetry.tick','health.check',
+  'memory.gc','model.cache.hit','queue.empty','watchdog.ok','metrics.flush'
 ];
 
 //=============================================================
@@ -866,7 +867,7 @@ function shapeClass(status) {
 function ensureNodeEl(n) {
   if (nodeEls[n.id]) return nodeEls[n.id];
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  g.setAttribute('class', 'node-group' + (n.id === 'arc-3' ? ' node-core' : ''));
+  g.setAttribute('class', 'node-group' + (n.id === 'mission-1' ? ' node-core' : ''));
   g.setAttribute('data-id', n.id);
 
   const shape = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -1037,14 +1038,14 @@ function advanceScenario(dt) {
   const dur = State.phaseDuration[phase];
 
   // phase behavior
-  if (phase === 'ENCODE') {
-    encodeBehavior(dt);
-  } else if (phase === 'DISTRACT') {
-    distractBehavior(dt);
-  } else if (phase === 'RETRIEVE') {
-    retrieveBehavior(dt);
+  if (phase === 'PLAN') {
+    planBehavior(dt);
+  } else if (phase === 'DISPATCH') {
+    dispatchBehavior(dt);
+  } else if (phase === 'EXECUTE') {
+    executeBehavior(dt);
   } else {
-    idleBehavior(dt);
+    convergeBehavior(dt);
   }
 
   if (State.scenarioT >= dur) {
@@ -1056,89 +1057,74 @@ function advanceScenario(dt) {
 }
 
 function onPhaseChange(p) {
-  if (p === 'ENCODE') {
-    // reset some encode candidates each cycle
-    encodeIdx = 0;
+  if (p === 'DISPATCH') {
+    // reset sub-agent dispatch queue
+    dispatchIdx = 0;
   }
-  if (p === 'RETRIEVE') {
-    // surge of recall traffic — fire several traverses
+  if (p === 'EXECUTE') {
+    // surge of tool-call traffic — fire several traverses, mark context assembly
     burstTraverse(5, 350);
+    pushTapeEvent({ kind:'CONTEXT_ASSEMBLED', cls:'', ref:'working-set '+State.budget+'/'+State.budgetMax, ts: tsNow() });
   }
-  if (p === 'IDLE') {
-    // cool down: substrate calms slightly unless conflict still active
+  if (p === 'CONVERGE') {
+    // sub-agents complete and exit; substrate calms if conflict resolved
+    setTimeout(() => retireSubagents(), 3500);
     if (State.conflictResolved) substrateShift.classList.add('calm');
-  }
-  if (p === 'DISTRACT') {
-    // budget pressure rises
-    State.budget = Math.min(State.budgetMax, State.budget + 1);
   }
 }
 
-let encodeTimer = 0;
-function encodeBehavior(dt) {
-  encodeTimer += dt;
-  if (encodeTimer > 2.6 && encodeIdx < ENCODE_QUEUE.length) {
-    encodeTimer = 0;
-    spawnEncodeNode(ENCODE_QUEUE[encodeIdx++]);
-  }
-  // certainty rises
-  State.certainty = Math.min(0.78, State.certainty + 0.012 * dt);
+let planTimer = 0;
+function planBehavior(dt) {
+  // quiet phase: certainty rises slowly as the plan firms
+  State.certainty = Math.min(0.74, State.certainty + 0.010 * dt);
   renderCertaintyMeter();
   budgetCount.textContent = State.budget;
 }
 
-let distractTimer = 0;
-function distractBehavior(dt) {
-  distractTimer += dt;
-  if (distractTimer > 0.9) {
-    distractTimer = 0;
-    pushTapeEvent({
-      kind: 'EVENT_APPENDED',
-      cls: '',
-      ref: pick(DISTRACT_REFS),
-      ts: tsNow(),
-    });
+let dispatchTimer = 0;
+function dispatchBehavior(dt) {
+  // sub-agents fan out from their parents
+  dispatchTimer += dt;
+  if (dispatchTimer > 2.4 && dispatchIdx < DISPATCH_QUEUE.length) {
+    dispatchTimer = 0;
+    spawnSubagent(DISPATCH_QUEUE[dispatchIdx++]);
   }
-  // peripheral filtered items: gentle pulse on the outer ring
-  // (visualized by warmHalo opacity dipping)
-  $('warmHalo').setAttribute('opacity', 0.5 + 0.3 * Math.sin(performance.now()/700));
-  // certainty erodes slowly
-  State.certainty = Math.max(0.45, State.certainty - 0.008 * dt);
-  renderCertaintyMeter();
-
-  // budget pressure: occasionally demote a peripheral inferred node briefly
-  // (demonstration; no actual deletion mid-distract here)
+  budgetCount.textContent = State.budget;
 }
 
-let retrieveTimer = 0;
-function retrieveBehavior(dt) {
-  retrieveTimer += dt;
-  if (retrieveTimer > 0.8) {
-    retrieveTimer = 0;
+let executeTimer = 0;
+function executeBehavior(dt) {
+  // heavy work: tool calls flying, traverses constant
+  executeTimer += dt;
+  if (executeTimer > 0.7) {
+    executeTimer = 0;
     runTraverse();
     pushTapeEvent({
-      kind: 'RECALL_TRIGGERED',
+      kind: 'TOOL_INVOKED',
       cls: '',
-      ref: pick(['arc-3','merrow','flashback-7','scene-44']),
+      ref: pick(['fs.read(config.toml)','net.fetch(/api/state)','shell.run(cargo build)','db.query(memory)']),
       ts: tsNow(),
     });
   }
-  // certainty resolves toward higher
-  State.certainty = Math.min(0.84, State.certainty + 0.025 * dt);
+  // peripheral haloing pulses with execution rhythm
+  $('warmHalo').setAttribute('opacity', 0.5 + 0.3 * Math.sin(performance.now()/700));
+  // certainty climbs as outputs aggregate
+  State.certainty = Math.min(0.80, State.certainty + 0.015 * dt);
   renderCertaintyMeter();
 }
 
-function idleBehavior(dt) {
-  // mostly nothing — slow breath governed by CSS animations
-  State.certainty += (0.62 - State.certainty) * dt * 0.4;
+function convergeBehavior(dt) {
+  // outputs aggregate, certainty resolves upward, system settles
+  State.certainty = Math.min(0.86, State.certainty + 0.020 * dt);
   renderCertaintyMeter();
 }
 
-function spawnEncodeNode(cfg) {
+function spawnSubagent(cfg) {
   if (nodeById(cfg.id)) return;
-  // enter from the periphery
-  const startX = C.x + (Math.random() - 0.5) * 700;
-  const startY = C.y + (Math.random() < 0.5 ? -260 : 260);
+  // enter from the parent agent's position (fan-out)
+  const parent = nodeById(cfg.parent || 'mission-1');
+  const startX = parent ? parent.x + (Math.random() - 0.5) * 24 : C.x;
+  const startY = parent ? parent.y + (Math.random() - 0.5) * 24 : C.y;
   const n = makeNode({
     id: cfg.id,
     tx: cfg.target[0], ty: cfg.target[1],
@@ -1146,18 +1132,39 @@ function spawnEncodeNode(cfg) {
     status: cfg.status,
     label: cfg.label,
     reason: cfg.reason,
-    sources: ['encode.event.t+'+encodeIdx],
+    sources: ['parent.'+cfg.parent, 'spawn.t+'+dispatchIdx],
   });
   n.x = startX; n.y = startY;
   State.nodes.push(n);
 
-  // bind to arc-3 with a fresh filament
-  const fid = 'fenc-' + cfg.id;
-  State.filaments.push({ id:fid, a:'arc-3', b:cfg.id, kind: cfg.status === 'inferred' ? 'inferred' : 'confirmed', alive:true, binding:true });
+  // bind to parent agent with a fresh filament
+  const fid = 'fdsp-' + cfg.id;
+  State.filaments.push({ id:fid, a:cfg.parent, b:cfg.id, kind: cfg.status === 'inferred' ? 'inferred' : 'confirmed', alive:true, binding:true });
 
-  pushTapeEvent({ kind:'EVENT_APPENDED', cls:'', ref: cfg.id, ts: tsNow() });
+  pushTapeEvent({ kind:'AGENT_SPAWNED',          cls:'',     ref: cfg.id, ts: tsNow() });
   pushTapeEvent({ kind:'WORKING_SET_RECOMPUTED', cls:'warm', ref: 'Δ +1 budget '+(++State.budget)+'/'+State.budgetMax, ts: tsNow() });
   budgetCount.textContent = State.budget;
+}
+
+function retireSubagents() {
+  // sub-agents complete their tasks and exit the working set
+  let retired = 0;
+  for (const cfg of DISPATCH_QUEUE) {
+    const idx = State.nodes.findIndex(nn => nn.id === cfg.id);
+    if (idx >= 0) {
+      removeNodeEl(cfg.id);
+      State.nodes.splice(idx, 1);
+      for (const f of State.filaments) {
+        if (f.a === cfg.id || f.b === cfg.id) f.alive = false;
+      }
+      State.budget = Math.max(0, State.budget - 1);
+      retired++;
+    }
+  }
+  budgetCount.textContent = State.budget;
+  if (retired) {
+    pushTapeEvent({ kind:'AGENT_HALTED', cls:'warm', ref:'subagents · task-complete · '+retired, ts: tsNow() });
+  }
 }
 
 //=============================================================
@@ -1191,15 +1198,18 @@ function pushTapeEvent(ev) {
   tapeTrack.appendChild(el);
 }
 
-// seed tape
+// seed tape — agentic event kinds
 const SEED_KINDS = [
-  { kind:'EVENT_APPENDED', cls:'', refs:['merrow.location','arc-3.scene-12','flashback-7.t-04','witness.statement','scene-44.order'] },
-  { kind:'ASSERTION_FORMED', cls:'', refs:['merrow.allegiance','arc-3.unresolved','scene-44→story','narrator.unknown'] },
-  { kind:'WORKING_SET_RECOMPUTED', cls:'warm', refs:['Δ +2 −1 budget 7/12','Δ +1 budget 7/12','Δ −1 budget 6/12'] },
-  { kind:'ACTIVATION_PASS', cls:'warm', refs:['contour 0.91','contour 0.74','contour 0.66'] },
-  { kind:'RECALL_TRIGGERED', cls:'', refs:['arc-3','merrow','flashback-7','scene-44'] },
-  { kind:'CONFLICT_DETECTED', cls:'conflict', refs:['witness ⇄ record','timeline ⇄ scene','source ⇄ inference'] },
-  { kind:'PROVENANCE_REQUESTED', cls:'', refs:['merrow.location','flashback-7','arc-3'] },
+  { kind:'TASK_DISPATCHED',       cls:'',         refs:['agent-research.gather','agent-codegen.implement','subagent-test.run','agent-validate.check'] }, // 0
+  { kind:'TOOL_INVOKED',          cls:'',         refs:['fs.read(config.toml)','net.fetch(/api/state)','shell.run(cargo build)','db.query(memory)']  }, // 1
+  { kind:'TOOL_RETURNED',         cls:'warm',     refs:['fs.read · 1.2kb','net.fetch · 200 · 12ms','shell.run · exit 0','db.query · 4 rows']         }, // 2
+  { kind:'AGENT_SPAWNED',         cls:'',         refs:['subagent-test-runner','subagent-fetch-deps','subagent-validate']                            }, // 3
+  { kind:'WORKING_SET_RECOMPUTED',cls:'warm',     refs:['Δ +2 −1 budget 7/12','Δ +1 budget 7/12','Δ −1 budget 6/12']                                  }, // 4
+  { kind:'ASSERTION_FORMED',      cls:'',         refs:['agent-research.claim','agent-codegen.claim','config.valid','step-7.complete']               }, // 5
+  { kind:'CONFLICT_DETECTED',     cls:'conflict', refs:['research ⇄ codegen','plan ⇄ result','tool-out ⇄ assertion']                                  }, // 6
+  { kind:'HUMAN_APPROVAL_REQ',    cls:'warm',     refs:['deploy-step-7','rollback-config','escalate-conflict']                                        }, // 7
+  { kind:'CONTEXT_ASSEMBLED',     cls:'',         refs:['working-set 7/12','depth 2','tokens 18.4k']                                                  }, // 8
+  { kind:'MEMORY_WRITE',          cls:'',         refs:['agent-research.note','plan.refined','step-7.outcome']                                        }, // 9
 ];
 for (let i = 0; i < 14; i++) {
   const k = pick(SEED_KINDS);
@@ -1234,19 +1244,36 @@ function advanceTape(dt) {
 }
 
 function pickPhaseKind() {
-  if (State.scenario === 'ENCODE')   return SEED_KINDS[Math.random() < 0.6 ? 0 : 1];
-  if (State.scenario === 'DISTRACT') return { kind:'EVENT_APPENDED', cls:'', refs: DISTRACT_REFS };
-  if (State.scenario === 'RETRIEVE') return SEED_KINDS[Math.random() < 0.5 ? 4 : 3];
+  // PLAN: assertions + context-assembly. Quiet but meaningful.
+  if (State.scenario === 'PLAN')     return SEED_KINDS[Math.random() < 0.5 ? 8 : 5];
+  // DISPATCH: task-dispatch + agent-spawn traffic.
+  if (State.scenario === 'DISPATCH') return SEED_KINDS[Math.random() < 0.5 ? 0 : 3];
+  // EXECUTE: tool calls + returns; occasional ambient/system noise.
+  if (State.scenario === 'EXECUTE')  {
+    const r = Math.random();
+    if (r < 0.45) return SEED_KINDS[1];                                       // TOOL_INVOKED
+    if (r < 0.85) return SEED_KINDS[2];                                       // TOOL_RETURNED
+    return { kind:'EVENT_APPENDED', cls:'', refs: AMBIENT_REFS };             // ambient
+  }
+  // CONVERGE: assertions, working-set, occasional approval requests + conflicts.
+  if (State.scenario === 'CONVERGE') {
+    const r = Math.random();
+    if (r < 0.4) return SEED_KINDS[5];   // ASSERTION_FORMED
+    if (r < 0.7) return SEED_KINDS[4];   // WORKING_SET_RECOMPUTED
+    if (r < 0.9) return SEED_KINDS[7];   // HUMAN_APPROVAL_REQ
+    return SEED_KINDS[6];                // CONFLICT_DETECTED
+  }
   return SEED_KINDS[Math.floor(Math.random()*SEED_KINDS.length)];
 }
 
 const REF_TO_NODE = {
-  'arc-3':'arc-3','arc-3.scene-12':'arc-3','arc-3.unresolved':'arc-3',
-  'merrow':'merrow','merrow.location':'merrow','merrow.allegiance':'merrow',
-  'scene-44.order':'scene-44','scene-44→story':'scene-44','scene-44':'scene-44',
-  'flashback-7':'flashback-7','flashback-7.t-04':'flashback-7',
-  'witness.statement':'conflict-1','witness ⇄ record':'conflict-1',
-  'narrator.unknown':'unknown-1',
+  'mission-1':'mission-1','mission-deploy-v2':'mission-1','plan.refined':'mission-1','step-7.complete':'mission-1','step-7.outcome':'mission-1',
+  'agent-research':'agent-research','agent-research.claim':'agent-research','agent-research.gather':'agent-research','agent-research.note':'agent-research',
+  'agent-codegen':'agent-codegen','agent-codegen.claim':'agent-codegen','agent-codegen.implement':'agent-codegen',
+  'subagent-test':'subagent-test','subagent-test.run':'subagent-test','subagent-test-runner':'subagent-test',
+  'tool-pending':'tool-pending','fs.read(config.toml)':'tool-pending','tool · fetch-config':'tool-pending',
+  'output-divergence':'conflict-1','research ⇄ codegen':'conflict-1','plan ⇄ result':'conflict-1','tool-out ⇄ assertion':'conflict-1',
+  'approval-gate':'approval-gate','deploy-step-7':'approval-gate','escalate-conflict':'approval-gate','rollback-config':'approval-gate',
 };
 
 function maybePromoteForRef(el) {
@@ -1347,13 +1374,13 @@ function resolveConflict() {
   const n = nodeById('conflict-1');
   if (n) {
     n.status = 'confirmed';
-    n.label = 'witness ⇄ record · resolved';
-    n.reason = 'reconciled · t+now';
+    n.label = 'output-divergence · arbitrated';
+    n.reason = 'arbitrated · merged outputs';
   }
   rootState.textContent = 'quiet';
   substrateShift.classList.add('calm');
   setTimeout(() => substrateShift.classList.remove('calm'), 4000);
-  pushTapeEvent({ kind:'CONFLICT_RESOLVED', cls:'warm', ref:'witness ⇄ record', ts: tsNow() });
+  pushTapeEvent({ kind:'CONFLICT_RESOLVED', cls:'warm', ref:'research ⇄ codegen', ts: tsNow() });
   // certainty boost
   State.certainty = Math.min(0.92, State.certainty + 0.1);
   renderCertaintyMeter();
@@ -1386,7 +1413,7 @@ function showInspect(id) {
     <div class="row"><span>activation</span><span class="v">${n.activation.toFixed(2)}</span></div>
     <div class="row"><span>recall reason</span><span class="v">${n.reason}</span></div>
     <div class="src">sources<br>${sources}</div>
-    ${isConflict ? `<div class="resolve" id="resolveBtn">resolve · reconcile sources</div>` : ''}
+    ${isConflict ? `<div class="resolve" id="resolveBtn">arbitrate · merge agent outputs</div>` : ''}
   `;
   if (isConflict) {
     setTimeout(() => $('resolveBtn')?.addEventListener('click', () => resolveConflict()), 0);
@@ -1512,12 +1539,12 @@ function flashKey(msg) {
 function renderPending() {
   pendingRow.innerHTML = '';
   const items = [
-    { text: 'approval · scene-reorder-44', cls: '' },
-    { text: 'awaiting · provenance-merrow.location', cls: '' },
-    { text: 'recompute · activation-pass-queued', cls: '' },
-    { text: 'unknown · narrator-identity', cls: 'unknown' },
+    { text: 'approval · deploy-step-7', cls: '' },
+    { text: 'awaiting · tool · fetch-config', cls: '' },
+    { text: 'queued · subagent-validate', cls: '' },
+    { text: 'unknown · human-approval-gate', cls: 'unknown' },
   ];
-  if (!State.conflictResolved) items.splice(1, 0, { text: 'reconcile · witness ⇄ record', cls: '' });
+  if (!State.conflictResolved) items.splice(1, 0, { text: 'arbitrate · output-divergence', cls: '' });
   for (const it of items) {
     const d = document.createElement('div');
     d.className = 'held' + (it.cls ? ' ' + it.cls : '');
@@ -1549,7 +1576,7 @@ field.classList.add('depth-' + State.depth);
 requestAnimationFrame((t) => { State.lastT = t; tick(t); });
 
 // gentle initial flash so users see the room is interactive
-setTimeout(() => flashKey('hover any node · / opens command'), 1200);
+setTimeout(() => flashKey('hover any agent · / opens command · click conflict to arbitrate'), 1200);
 setTimeout(() => flashKey(''), 4200);
 
 </script>
