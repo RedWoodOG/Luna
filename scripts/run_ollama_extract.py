@@ -101,6 +101,17 @@ def main() -> int:
         return 2
 
     host = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+    # 0.0.0.0 is a valid server bind address ("listen on all interfaces") but
+    # never a valid outbound client target on Windows (WinError 10049). Linux
+    # often tolerates it; Windows refuses. Rewrite with a warning so the next
+    # person who copies it from `ollama serve`'s startup line doesn't hit the
+    # same wall.
+    if "0.0.0.0" in host:
+        sys.stderr.write(
+            f"OLLAMA_HOST contains 0.0.0.0 ({host!r}); rewriting to 127.0.0.1.\n"
+            f"  0.0.0.0 is a server bind address, not a client destination.\n"
+        )
+        host = host.replace("0.0.0.0", "127.0.0.1")
     max_tokens = int(os.environ.get("LUNA_LLM_MAX_TOKENS", "8192"))
 
     prompt = sys.stdin.read()
