@@ -1,8 +1,10 @@
-use luna_genesis::GenesisRegistry;
-use luna_ledger::{InMemoryLedger, TopologyMutation};
-use luna_node::NodeRegistry;
-use luna_tether::TetherRegistry;
+use luna_ledger::TopologyMutation;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy)]
+pub struct InspectionPass {
+    _private: (),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MutationRejected {
@@ -38,39 +40,65 @@ pub enum InspectorRejectReason {
     DuplicateNode { node_id: String },
     DuplicateTether { tether_id: String },
     ReverseMeaningNotDistinct { tether_id: String },
+    GenesisSourceMismatch { node_id: String },
+    DuplicateCertificate { certificate_id: String },
+    ApplyRejected { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct InspectionContext {
+    pub source_event_hash: Option<String>,
+    pub node_exists: bool,
+    pub node_source_event_id: Option<String>,
+    pub node_source_event_hash: Option<String>,
+    pub node_has_genesis: bool,
+    pub certificate_exists: bool,
+    pub source_endpoint_exists: bool,
+    pub target_endpoint_exists: bool,
+    pub tether_exists: bool,
 }
 
 pub fn inspect_mutation(
     mutation: &TopologyMutation,
-    ledger: &InMemoryLedger,
-    nodes: &NodeRegistry,
-    genesis: &GenesisRegistry,
-    tethers: &TetherRegistry,
-) -> Result<(), MutationRejected> {
+    context: &InspectionContext,
+) -> Result<InspectionPass, MutationRejected> {
     match mutation {
         TopologyMutation::NodeCreated(event) => {
-            inspect_source_event(&event.source_event_id, &event.source_event_hash, ledger)?;
-            if nodes.get(&event.node_id).is_some() {
+            inspect_source_event(&event.source_event_id, &event.source_event_hash, context)?;
+            if context.node_exists {
                 return reject(InspectorRejectReason::DuplicateNode {
                     node_id: event.node_id.clone(),
                 });
             }
         }
         TopologyMutation::GenesisAttached(event) => {
-            inspect_source_event(&event.source_event_id, &event.source_event_hash, ledger)?;
-            if nodes.get(&event.node_id).is_none() {
+            inspect_source_event(&event.source_event_id, &event.source_event_hash, context)?;
+            if !context.node_exists {
                 return reject(InspectorRejectReason::NodeMissing {
                     node_id: event.node_id.clone(),
                 });
             }
-            if genesis.certificate_for_node(&event.node_id).is_some() {
+            if context.certificate_exists {
+                return reject(InspectorRejectReason::DuplicateCertificate {
+                    certificate_id: event.certificate_id.clone(),
+                });
+            }
+            if context.node_has_genesis {
                 return reject(InspectorRejectReason::DuplicateGenesis {
+                    node_id: event.node_id.clone(),
+                });
+            }
+            if context.node_source_event_id.as_deref() != Some(event.source_event_id.as_str())
+                || context.node_source_event_hash.as_deref()
+                    != Some(event.source_event_hash.as_str())
+            {
+                return reject(InspectorRejectReason::GenesisSourceMismatch {
                     node_id: event.node_id.clone(),
                 });
             }
         }
         TopologyMutation::TetherCreated(event) => {
-            inspect_source_event(&event.source_event_id, &event.source_event_hash, ledger)?;
+            inspect_source_event(&event.source_event_id, &event.source_event_hash, context)?;
             if event.kind.is_none() {
                 return reject(InspectorRejectReason::DirectionMissing {
                     tether_id: event.tether_id.clone(),
@@ -81,19 +109,19 @@ pub fn inspect_mutation(
                     tether_id: event.tether_id.clone(),
                 });
             }
-            if nodes.get(&event.source_node_id).is_none() {
+            if !context.source_endpoint_exists {
                 return reject(InspectorRejectReason::EndpointMissing {
                     tether_id: event.tether_id.clone(),
                     node_id: event.source_node_id.clone(),
                 });
             }
-            if nodes.get(&event.target_node_id).is_none() {
+            if !context.target_endpoint_exists {
                 return reject(InspectorRejectReason::EndpointMissing {
                     tether_id: event.tether_id.clone(),
                     node_id: event.target_node_id.clone(),
                 });
             }
-            if tethers.get(&event.tether_id).is_some() {
+            if context.tether_exists {
                 return reject(InspectorRejectReason::DuplicateTether {
                     tether_id: event.tether_id.clone(),
                 });
@@ -101,20 +129,20 @@ pub fn inspect_mutation(
         }
     }
 
-    Ok(())
+    Ok(InspectionPass { _private: () })
 }
 
 fn inspect_source_event(
     event_id: &str,
     expected_hash: &str,
-    ledger: &InMemoryLedger,
+    context: &InspectionContext,
 ) -> Result<(), MutationRejected> {
-    let event = ledger.get(event_id).ok_or_else(|| {
+    let actual_hash = context.source_event_hash.as_deref().ok_or_else(|| {
         MutationRejected::new(InspectorRejectReason::SourceEventMissing {
             event_id: event_id.to_string(),
         })
     })?;
-    if event.hash != expected_hash {
+    if actual_hash != expected_hash {
         return reject(InspectorRejectReason::SourceEventHashMismatch {
             event_id: event_id.to_string(),
         });

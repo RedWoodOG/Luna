@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use luna_core::{LunaError, Result};
+use luna_inspector::InspectionPass;
 use luna_ledger::{GenesisAttached, RawEvent};
 use luna_node::MemoryNode;
 use serde::{Deserialize, Serialize};
@@ -99,6 +100,7 @@ impl GenesisRegistry {
         attached: &GenesisAttached,
         node: &MemoryNode,
         event: &RawEvent,
+        _pass: &InspectionPass,
     ) -> Result<()> {
         let certificate = GenesisCertificate::from_attached(attached, node, event)?;
         certificate.verify_hash()?;

@@ -1,4 +1,5 @@
 use luna_core::{LunaError, Result};
+use luna_inspector::InspectionPass;
 use luna_ledger::TetherCreated;
 pub use luna_ledger::TetherKind;
 use serde::{Deserialize, Serialize};
@@ -99,7 +100,7 @@ pub struct TetherRegistry {
 }
 
 impl TetherRegistry {
-    pub fn apply_created(&mut self, event: &TetherCreated) -> Result<()> {
+    pub fn apply_created(&mut self, event: &TetherCreated, _pass: &InspectionPass) -> Result<()> {
         let tether = Tether::from_created(event)?;
         tether.validate()?;
         if self.tethers.contains_key(&tether.id) {

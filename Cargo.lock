@@ -446,6 +446,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "luna-core",
+ "luna-inspector",
  "luna-ledger",
  "luna-node",
  "serde",
@@ -457,11 +458,7 @@ dependencies = [
 name = "luna-inspector"
 version = "0.1.0"
 dependencies = [
- "luna-core",
- "luna-genesis",
  "luna-ledger",
- "luna-node",
- "luna-tether",
  "serde",
 ]
 
@@ -488,6 +485,7 @@ name = "luna-node"
 version = "0.1.0"
 dependencies = [
  "luna-core",
+ "luna-inspector",
  "luna-ledger",
  "serde",
 ]
@@ -567,6 +565,7 @@ name = "luna-tether"
 version = "0.1.0"
 dependencies = [
  "luna-core",
+ "luna-inspector",
  "luna-ledger",
  "luna-node",
  "serde",

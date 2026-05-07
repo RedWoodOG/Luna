@@ -94,6 +94,9 @@ Milestone 1 rejection reasons:
 - `DuplicateNode`
 - `DuplicateTether`
 - `ReverseMeaningNotDistinct`
+- `GenesisSourceMismatch`
+- `DuplicateCertificate`
+- `ApplyRejected`
 
 ## Direct Registry Mutation
 

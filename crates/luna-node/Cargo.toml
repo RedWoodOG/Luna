@@ -9,5 +9,6 @@ path = "src/lib.rs"
 
 [dependencies]
 luna-core = { path = "../luna-core" }
+luna-inspector = { path = "../luna-inspector" }
 luna-ledger = { path = "../luna-ledger" }
 serde.workspace = true

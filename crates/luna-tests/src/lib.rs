@@ -6,50 +6,46 @@
 //! Direct registry mutation is not a public M1 write path.
 //!
 //! ```compile_fail
-//! use luna_ledger::NodeKind;
-//! use luna_node::{MemoryNode, NodeRegistry};
+//! use luna_ledger::{NodeCreated, NodeKind};
+//! use luna_node::NodeRegistry;
 //!
 //! let mut registry = NodeRegistry::default();
-//! let node = MemoryNode::new(
+//! let event = NodeCreated::new(
 //!     "node-1",
 //!     NodeKind::Event,
 //!     "project journal",
-//!     Some("event-1"),
-//!     Some("hash"),
-//! ).unwrap();
-//! registry.insert(node).unwrap();
+//!     "event-1",
+//!     "hash",
+//! );
+//! registry.apply_created(&event).unwrap();
 //! ```
 //!
 //! Direct tether construction and registry mutation are not public M1 write paths.
 //!
 //! ```compile_fail
-//! use luna_ledger::{NodeKind, TetherKind};
-//! use luna_node::MemoryNode;
-//! use luna_tether::{Tether, TetherRegistry};
+//! use luna_ledger::{TetherCreated, TetherKind};
+//! use luna_tether::TetherRegistry;
 //!
-//! let source = MemoryNode::new(
-//!     "node-1",
-//!     NodeKind::Event,
-//!     "source",
-//!     Some("event-1"),
-//!     Some("hash"),
-//! ).unwrap();
-//! let target = MemoryNode::new(
-//!     "node-2",
-//!     NodeKind::Evidence,
-//!     "target",
-//!     Some("event-1"),
-//!     Some("hash"),
-//! ).unwrap();
-//! let tether = Tether::new(
+//! let event = TetherCreated::new(
 //!     "tether-1",
-//!     &source,
-//!     &target,
+//!     "node-1",
+//!     "node-2",
 //!     Some(TetherKind::SupportedBy),
 //!     TetherKind::EvidenceFor,
 //!     "event-1",
 //!     "hash",
-//! ).unwrap();
+//! );
 //! let mut registry = TetherRegistry::default();
-//! registry.insert(tether).unwrap();
+//! registry.apply_created(&event).unwrap();
+//! ```
+//!
+//! Direct genesis registry mutation is not a public M1 write path.
+//!
+//! ```compile_fail
+//! use luna_genesis::GenesisRegistry;
+//! use luna_ledger::GenesisAttached;
+//!
+//! let event = GenesisAttached::new("genesis-1", "node-1", "event-1", "hash");
+//! let mut registry = GenesisRegistry::default();
+//! registry.apply_attached(&event).unwrap();
 //! ```

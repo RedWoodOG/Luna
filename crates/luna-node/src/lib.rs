@@ -1,4 +1,5 @@
 use luna_core::{LunaError, Result};
+use luna_inspector::InspectionPass;
 use luna_ledger::NodeCreated;
 pub use luna_ledger::NodeKind;
 use serde::{Deserialize, Serialize};
@@ -72,7 +73,7 @@ pub struct NodeRegistry {
 }
 
 impl NodeRegistry {
-    pub fn apply_created(&mut self, event: &NodeCreated) -> Result<()> {
+    pub fn apply_created(&mut self, event: &NodeCreated, _pass: &InspectionPass) -> Result<()> {
         let node = MemoryNode::from_created(event)?;
         if self.nodes.contains_key(&node.id) {
             return Err(LunaError::new(format!("node {} already exists", node.id)));

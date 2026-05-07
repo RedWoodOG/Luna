@@ -1,6 +1,8 @@
 use luna_core::{LunaError, Result};
 use luna_genesis::{GenesisCertificate, GenesisRegistry};
-use luna_inspector::{inspect_mutation, MutationRejected};
+use luna_inspector::{
+    inspect_mutation, InspectionContext, InspectionPass, InspectorRejectReason, MutationRejected,
+};
 use luna_ledger::{InMemoryLedger, LedgerEvent, RawEvent, TopologyMutation};
 use luna_node::NodeRegistry;
 use luna_tether::TetherRegistry;
@@ -26,22 +28,68 @@ impl ReplayedTopology {
         &mut self,
         mutation: TopologyMutation,
     ) -> std::result::Result<(), MutationRejected> {
-        inspect_mutation(
-            &mutation,
-            &self.ledger,
-            &self.nodes,
-            &self.genesis_certificates,
-            &self.tethers,
-        )?;
+        let context = self.inspection_context(&mutation);
+        let pass = inspect_mutation(&mutation, &context)?;
+        let mut staged = self.clone();
+        staged.apply_mutation(&mutation, &pass).map_err(|err| {
+            MutationRejected::new(InspectorRejectReason::ApplyRejected {
+                message: err.to_string(),
+            })
+        })?;
         self.ledger
             .append_mutation(mutation.clone())
             .expect("append-only in-memory mutation append cannot fail");
-        self.apply_mutation(&mutation)
-            .expect("inspector-approved topology mutation must apply");
+        self.nodes = staged.nodes;
+        self.genesis_certificates = staged.genesis_certificates;
+        self.tethers = staged.tethers;
         Ok(())
     }
 
-    fn apply_mutation(&mut self, mutation: &TopologyMutation) -> Result<()> {
+    fn inspection_context(&self, mutation: &TopologyMutation) -> InspectionContext {
+        match mutation {
+            TopologyMutation::NodeCreated(event) => InspectionContext {
+                source_event_hash: self
+                    .ledger
+                    .get(&event.source_event_id)
+                    .map(|event| event.hash.clone()),
+                node_exists: self.nodes.get(&event.node_id).is_some(),
+                ..InspectionContext::default()
+            },
+            TopologyMutation::GenesisAttached(event) => {
+                let node = self.nodes.get(&event.node_id);
+                InspectionContext {
+                    source_event_hash: self
+                        .ledger
+                        .get(&event.source_event_id)
+                        .map(|event| event.hash.clone()),
+                    node_exists: node.is_some(),
+                    node_source_event_id: node.map(|node| node.source_event_id().to_string()),
+                    node_source_event_hash: node.map(|node| node.source_event_hash().to_string()),
+                    node_has_genesis: self
+                        .genesis_certificates
+                        .certificate_for_node(&event.node_id)
+                        .is_some(),
+                    certificate_exists: self
+                        .genesis_certificates
+                        .get(&event.certificate_id)
+                        .is_some(),
+                    ..InspectionContext::default()
+                }
+            }
+            TopologyMutation::TetherCreated(event) => InspectionContext {
+                source_event_hash: self
+                    .ledger
+                    .get(&event.source_event_id)
+                    .map(|event| event.hash.clone()),
+                source_endpoint_exists: self.nodes.get(&event.source_node_id).is_some(),
+                target_endpoint_exists: self.nodes.get(&event.target_node_id).is_some(),
+                tether_exists: self.tethers.get(&event.tether_id).is_some(),
+                ..InspectionContext::default()
+            },
+        }
+    }
+
+    fn apply_mutation(&mut self, mutation: &TopologyMutation, pass: &InspectionPass) -> Result<()> {
         match mutation {
             TopologyMutation::NodeCreated(event) => {
                 verify_node_provenance(
@@ -49,7 +97,7 @@ impl ReplayedTopology {
                     event.source_event_hash.as_str(),
                     &self.ledger,
                 )?;
-                self.nodes.apply_created(event)
+                self.nodes.apply_created(event, pass)
             }
             TopologyMutation::GenesisAttached(event) => {
                 let node = self.nodes.get(&event.node_id).ok_or_else(|| {
@@ -65,11 +113,11 @@ impl ReplayedTopology {
                     ))
                 })?;
                 self.genesis_certificates
-                    .apply_attached(event, node, raw_event)
+                    .apply_attached(event, node, raw_event, pass)
             }
             TopologyMutation::TetherCreated(event) => {
                 verify_tether_provenance(event, &self.ledger, &self.nodes)?;
-                self.tethers.apply_created(event)
+                self.tethers.apply_created(event, pass)
             }
         }
     }
@@ -97,8 +145,6 @@ impl TopologyReplay {
                 }
             }
         }
-
-        verify_every_node_has_genesis(&topology)?;
         Ok(topology)
     }
 }
@@ -190,22 +236,6 @@ fn verify_tether_provenance(
             "tether {} source hash does not match event {}",
             tether.tether_id, event.id
         )));
-    }
-    Ok(())
-}
-
-fn verify_every_node_has_genesis(topology: &ReplayedTopology) -> Result<()> {
-    for node in topology.nodes.nodes().values() {
-        if topology
-            .genesis_certificates
-            .certificate_for_node(node.id())
-            .is_none()
-        {
-            return Err(LunaError::new(format!(
-                "node {} is missing a genesis certificate",
-                node.id()
-            )));
-        }
     }
     Ok(())
 }

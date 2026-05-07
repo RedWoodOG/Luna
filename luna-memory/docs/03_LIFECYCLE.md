@@ -90,6 +90,8 @@ Rules:
 - Registry application consumes mutation events; direct registry mutation is not
   the public write path.
 - Replay reads the same raw and mutation ledger events in order.
+- Any successful commit prefix must replay, even if later related mutations have
+  not happened yet.
 
 ## 8. Monitor Roles
 

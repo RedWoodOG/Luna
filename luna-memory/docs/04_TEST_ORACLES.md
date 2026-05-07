@@ -78,6 +78,17 @@ live state equals replayed state.
 Attempt to commit `NodeCreated` with a missing source event. Inspector rejection
 must be `SourceEventMissing`.
 
+### `test_source_hash_mismatch_rejects_with_specific_error`
+
+Attempt to commit a mutation whose source event id exists but whose source hash
+does not match the raw event. Inspector rejection must be
+`SourceEventHashMismatch`.
+
+### `test_duplicate_node_rejects_with_specific_error`
+
+Attempt to commit a second node with the same id. Inspector rejection must be
+`DuplicateNode`.
+
 ### `test_tether_missing_direction_rejects_with_specific_error`
 
 Attempt to commit `TetherCreated` without a forward direction. Inspector
@@ -88,10 +99,41 @@ rejection must be `DirectionMissing`.
 Attempt to attach a second genesis certificate to the same node. Inspector
 rejection must be `DuplicateGenesis`.
 
+### `test_duplicate_certificate_id_rejects_with_specific_error`
+
+Attempt to reuse a genesis certificate id. Inspector rejection must be
+`DuplicateCertificate`.
+
+### `test_missing_genesis_node_rejects_with_specific_error`
+
+Attempt to attach genesis to a missing node. Inspector rejection must be
+`NodeMissing`.
+
+### `test_genesis_source_mismatch_rejects_before_ledger_append`
+
+Attempt to attach genesis using a different raw event than the node's source.
+Inspector rejection must be `GenesisSourceMismatch`, and the ledger length must
+not change.
+
 ### `test_unresolved_tether_endpoint_rejects_with_specific_error`
 
 Attempt to create a tether whose endpoint is absent from the topology. Inspector
 rejection must be `EndpointMissing`.
+
+### `test_duplicate_tether_rejects_with_specific_error`
+
+Attempt to reuse a tether id. Inspector rejection must be `DuplicateTether`.
+
+### `test_reverse_meaning_rejects_with_specific_error`
+
+Attempt to create a tether whose forward and reverse meanings are identical.
+Inspector rejection must be `ReverseMeaningNotDistinct`.
+
+### `test_each_successful_commit_prefix_replays`
+
+After each successful commit prefix, replay the accepted ledger prefix and assert
+it equals the live prefix. This catches crash/audit windows between related
+mutation events.
 
 ### Compile-fail direct mutation contracts
 

@@ -8,9 +8,5 @@ description = "Synchronous invariant inspectors for Luna topology mutations."
 path = "src/lib.rs"
 
 [dependencies]
-luna-core = { path = "../luna-core" }
-luna-genesis = { path = "../luna-genesis" }
 luna-ledger = { path = "../luna-ledger" }
-luna-node = { path = "../luna-node" }
-luna-tether = { path = "../luna-tether" }
 serde.workspace = true
