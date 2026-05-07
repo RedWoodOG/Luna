@@ -1,6 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs::OpenOptions,
+    io::{BufRead, BufReader, Write},
+    path::Path,
+};
 
 pub trait Sentinel: Send + Sync {
     fn name(&self) -> &'static str;
@@ -25,6 +30,7 @@ pub trait Sentinel: Send + Sync {
                 recommendation,
                 timestamp,
                 schedule: self.schedule(),
+                topology_event_count: None,
             },
         }
     }
@@ -41,7 +47,7 @@ pub enum DefectClass {
 pub enum SentinelSchedule {
     OnDemand,
     EveryEvents(u64),
-    EverySeconds(i64),
+    EverySeconds(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,6 +69,7 @@ pub struct SentinelReport {
     pub recommendation: String,
     pub timestamp: DateTime<Utc>,
     pub schedule: SentinelSchedule,
+    pub topology_event_count: Option<u64>,
 }
 
 impl SentinelReport {
@@ -80,6 +87,7 @@ impl SentinelReport {
             recommendation: "no defect observed".to_string(),
             timestamp,
             schedule,
+            topology_event_count: None,
         }
     }
 }
@@ -101,7 +109,66 @@ impl SentinelReportLog {
     pub fn reports_mut_for_tests(&mut self) -> Option<&mut Vec<SentinelReport>> {
         None
     }
+
+    pub fn append_jsonl(path: &Path, report: &SentinelReport) -> Result<(), SentinelError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|err| SentinelError::Io {
+                message: err.to_string(),
+            })?;
+        }
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .map_err(|err| SentinelError::Io {
+                message: err.to_string(),
+            })?;
+        let line = serde_json::to_string(report).map_err(|err| SentinelError::Io {
+            message: err.to_string(),
+        })?;
+        writeln!(file, "{line}").map_err(|err| SentinelError::Io {
+            message: err.to_string(),
+        })?;
+        Ok(())
+    }
+
+    pub fn load_jsonl(path: &Path) -> Result<Vec<SentinelReport>, SentinelError> {
+        let file = std::fs::File::open(path).map_err(|err| SentinelError::Io {
+            message: err.to_string(),
+        })?;
+        let reader = BufReader::new(file);
+        let mut reports = Vec::new();
+        for line in reader.lines() {
+            let line = line.map_err(|err| SentinelError::Io {
+                message: err.to_string(),
+            })?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            reports.push(
+                serde_json::from_str(&line).map_err(|err| SentinelError::Io {
+                    message: err.to_string(),
+                })?,
+            );
+        }
+        Ok(reports)
+    }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SentinelError {
+    Io { message: String },
+}
+
+impl std::fmt::Display for SentinelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io { message } => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for SentinelError {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewRawEvent {
@@ -180,6 +247,7 @@ pub struct ViewAssertion {
     subject_node_id: String,
     predicate: String,
     value: String,
+    single_valued: bool,
 }
 
 impl ViewAssertion {
@@ -192,6 +260,20 @@ impl ViewAssertion {
             subject_node_id: subject_node_id.into(),
             predicate: predicate.into(),
             value: value.into(),
+            single_valued: true,
+        }
+    }
+
+    pub fn multi_valued(
+        subject_node_id: impl Into<String>,
+        predicate: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        Self {
+            subject_node_id: subject_node_id.into(),
+            predicate: predicate.into(),
+            value: value.into(),
+            single_valued: false,
         }
     }
 }
@@ -326,6 +408,9 @@ impl Sentinel for ContradictionSentinel {
         let mut by_key: BTreeMap<(String, String), BTreeMap<String, Vec<String>>> = BTreeMap::new();
         for tether in topology_view.tethers() {
             if let Some(assertion) = &tether.assertion {
+                if !assertion.single_valued {
+                    continue;
+                }
                 by_key
                     .entry((
                         assertion.subject_node_id.clone(),
@@ -432,6 +517,18 @@ impl Sentinel for ProvenanceIntegritySentinel {
         }
 
         for tether in topology_view.tethers() {
+            if !nodes.contains_key(tether.source_node_id.as_str()) {
+                evidence.push(format!(
+                    "tether:{}->source_node:{}",
+                    tether.tether_id, tether.source_node_id
+                ));
+            }
+            if !nodes.contains_key(tether.target_node_id.as_str()) {
+                evidence.push(format!(
+                    "tether:{}->target_node:{}",
+                    tether.tether_id, tether.target_node_id
+                ));
+            }
             if events.get(tether.source_event_id.as_str()).copied()
                 != Some(tether.source_event_hash.as_str())
             {
@@ -496,17 +593,15 @@ impl Sentinel for SplinterPressureSentinel {
                 - orb.precision_history[orb.precision_history.len() - 2];
             if density_delta > 0.0 && precision_delta < 0.0 {
                 let score = density_delta + precision_delta.abs();
-                if score >= self.threshold {
-                    total_score += score;
-                    evidence.push(format!(
-                        "orb:{} density_delta={:.3} precision_delta={:.3}",
-                        orb.orb_id, density_delta, precision_delta
-                    ));
-                }
+                total_score += score;
+                evidence.push(format!(
+                    "orb:{} density_delta={:.3} precision_delta={:.3}",
+                    orb.orb_id, density_delta, precision_delta
+                ));
             }
         }
 
-        if evidence.is_empty() {
+        if evidence.is_empty() || total_score < self.threshold {
             SentinelEvaluation::Quiet
         } else {
             SentinelEvaluation::Flag {
@@ -544,7 +639,37 @@ impl SentinelRuntime {
     }
 
     pub fn register(&mut self, sentinel: Box<dyn Sentinel>) {
+        if self
+            .sentinels
+            .iter()
+            .any(|existing| existing.name() == sentinel.name())
+        {
+            return;
+        }
         self.sentinels.push(sentinel);
+    }
+
+    pub fn run_on_demand(
+        &mut self,
+        topology_view: &TopologyView,
+        event_count: u64,
+        now: DateTime<Utc>,
+    ) -> Vec<SentinelReport> {
+        if !self.enabled {
+            return Vec::new();
+        }
+
+        let mut reports = Vec::new();
+        for sentinel in &self.sentinels {
+            if !matches!(sentinel.schedule(), SentinelSchedule::OnDemand) {
+                continue;
+            }
+            let mut report = sentinel.report(topology_view, now);
+            report.topology_event_count = Some(event_count);
+            self.log.append(report.clone());
+            reports.push(report);
+        }
+        reports
     }
 
     pub fn run_due(
@@ -560,6 +685,9 @@ impl SentinelRuntime {
         let mut reports = Vec::new();
         for index in 0..self.sentinels.len() {
             let sentinel = self.sentinels[index].as_ref();
+            if matches!(sentinel.schedule(), SentinelSchedule::OnDemand) {
+                continue;
+            }
             if matches!(sentinel.schedule(), SentinelSchedule::EverySeconds(_))
                 && !self.last_time_run.contains_key(sentinel.name())
             {
@@ -569,7 +697,8 @@ impl SentinelRuntime {
             if !self.is_due(sentinel, event_count, now) {
                 continue;
             }
-            let report = sentinel.report(topology_view, now);
+            let mut report = sentinel.report(topology_view, now);
+            report.topology_event_count = Some(event_count);
             self.mark_run(sentinel.name(), sentinel.schedule(), event_count, now);
             self.log.append(report.clone());
             reports.push(report);
@@ -587,18 +716,17 @@ impl SentinelRuntime {
             SentinelSchedule::EveryEvents(interval) => {
                 interval > 0
                     && event_count > 0
-                    && event_count % interval == 0
-                    && self
-                        .last_event_run
-                        .get(sentinel.name())
-                        .copied()
-                        .unwrap_or_default()
-                        != event_count
+                    && event_count.saturating_sub(
+                        self.last_event_run
+                            .get(sentinel.name())
+                            .copied()
+                            .unwrap_or_default(),
+                    ) >= interval
             }
             SentinelSchedule::EverySeconds(interval) => self
                 .last_time_run
                 .get(sentinel.name())
-                .map(|last| now.signed_duration_since(*last).num_seconds() >= interval)
+                .map(|last| now.signed_duration_since(*last).num_seconds() >= interval as i64)
                 .unwrap_or(false),
         }
     }
