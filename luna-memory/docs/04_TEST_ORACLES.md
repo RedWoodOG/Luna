@@ -206,6 +206,55 @@ contaminate the rolling baseline.
 Historical gauge readings produce reviewable threshold suggestions. Calibration
 does not mutate runtime thresholds.
 
+## Milestone 3 Oracles
+
+### `test_contradiction_sentinel_fires_on_known_bad_input`
+
+Contradiction sentinel flags incompatible assertion tethers for the same node
+and reports the conflicting tether ids.
+
+### `test_sentinels_stay_quiet_on_known_good_input`
+
+Contradiction, provenance, and splinter sentinels return `Quiet` for clean
+topology input.
+
+### `test_provenance_integrity_sentinel_fires_on_hash_mismatch`
+
+Provenance sentinel reports node/certificate/tether provenance chains that do
+not resolve to ledger raw event hashes or node provenance.
+
+### `test_splinter_pressure_sentinel_fires_on_density_precision_divergence`
+
+Splinter pressure sentinel flags placeholder orb history when density rises
+while retrieval precision drops beyond threshold.
+
+### `test_sentinel_reports_are_reproducible_from_same_view`
+
+The same sentinel, topology view, and timestamp produce identical reports.
+
+### `test_sentinel_report_log_is_append_only`
+
+Appending reports preserves order and no mutable report accessor is available to
+tests.
+
+### `test_runtime_functions_with_all_sentinels_disabled`
+
+Sentinel runtime with all sentinels disabled runs safely and appends no reports.
+
+### `test_runtime_respects_event_and_time_schedules`
+
+Sentinel runtime observes `EveryEvents` and `EverySeconds` schedules without
+blocking writes.
+
+### `test_sentinel_contract_metadata_is_declared`
+
+Each sentinel declares stable name, defect class, and schedule.
+
+### Compile-fail read-only topology view contract
+
+Sentinels receive a read-only topology view; tests verify safe callers cannot
+mutate view internals.
+
 ## Future Oracle Template
 
 Every future feature must define:

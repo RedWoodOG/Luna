@@ -93,7 +93,33 @@ Implemented:
 - CLI calibration command that writes reviewable threshold suggestions from
   historical JSONL reading data.
 
-## Milestone 3: Dense Orb Formation
+## Milestone 3: Sentinel Orbs
+
+Status: COMPLETE
+
+Goal:
+
+- Add advisory topology sentinels for contradiction, provenance integrity, and
+  splinter pressure defects.
+
+Required proof:
+
+- Sentinels declare name, defect class, score semantics, evidence, recommendation,
+  and schedule.
+- Sentinels consume read-only topology views.
+- Sentinel reports are append-only and separate from topology truth.
+- The system works with all sentinels disabled.
+
+Implemented:
+
+- `luna-sentinels` trait and read-only `TopologyView`.
+- Append-only `SentinelReportLog`.
+- Scheduler supporting on demand, every N events, and every N seconds.
+- Contradiction sentinel.
+- Provenance integrity sentinel.
+- Splinter pressure sentinel over placeholder orb histories.
+
+## Milestone 4: Dense Orb Formation
 
 Status: NEXT
 
@@ -106,7 +132,7 @@ Required proof:
 - Orb membership can be serialized, logged, replayed, and rejected when cohesion
   rules fail.
 
-## Milestone 4: Compression Without Lineage Loss
+## Milestone 5: Compression Without Lineage Loss
 
 Goal:
 
@@ -117,7 +143,7 @@ Required proof:
 
 - Compression fidelity and provenance survival are measured separately.
 
-## Milestone 5: Recognition Sparks
+## Milestone 6: Recognition Sparks
 
 Goal:
 
@@ -126,19 +152,6 @@ Goal:
 Required proof:
 
 - Activation reports source, confidence, signals, lineage, and conflicts.
-
-## Milestone 6: Sentinel Orbs
-
-Goal:
-
-- Monitor defects such as contradiction pressure, provenance loss, retrieval
-  precision drop, and unsafe topology transitions.
-
-Required proof:
-
-- Sentinels flag, recommend, score, or block; they do not rewrite truth.
-- Sentinels consume inspector/gauge/auditor evidence but do not collapse into
-  those roles.
 
 ## Milestone 7: Auditor Deep Replay
 

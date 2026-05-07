@@ -151,6 +151,43 @@ Expected behavior:
 - Architecture review rejects the abstraction.
 - The behavior is split into inspector, gauge, sentinel, or auditor jurisdiction.
 
+## Sentinel False Positive
+
+Failure:
+
+- A sentinel flags clean topology as defective.
+
+Expected behavior:
+
+- Report includes sentinel name, defect class, score, evidence, recommendation,
+  and timestamp.
+- Human or later auditor review can inspect the evidence.
+- Sentinel report does not mutate topology.
+
+## Sentinel False Negative
+
+Failure:
+
+- A sentinel stays quiet on topology containing its defect class.
+
+Expected behavior:
+
+- The missed case becomes a test oracle.
+- Sentinel scoring or evidence extraction changes only through tests.
+
+## Sentinel Defect
+
+Failure:
+
+- A sentinel computes the wrong score, cites wrong evidence, or runs on the wrong
+  schedule.
+
+Expected behavior:
+
+- Sentinel is fixed like any other feature: data structure, lifecycle rule,
+  failure mode, test oracle, replay proof.
+- Sentinels do not self-correct truth or delete prior reports.
+
 ## Theory Drift
 
 Failure:

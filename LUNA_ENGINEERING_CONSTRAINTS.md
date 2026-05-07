@@ -87,6 +87,16 @@ Forbidden sentinel actions:
 - Redefine provenance.
 - Auto-confirm contradictions.
 
+Every sentinel must declare:
+
+- Defect class.
+- Evidence type.
+- Score semantics.
+- Schedule.
+
+Sentinel reports are advisory. Luna must function correctly when every sentinel
+is disabled.
+
 ## 8. No Monitor Role Collapse
 
 Monitoring must stay separated by jurisdiction:

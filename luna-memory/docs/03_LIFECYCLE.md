@@ -137,3 +137,29 @@ Rules:
 - Runtime correctness cannot depend on gauges being enabled.
 - Calibration reads historical gauge JSONL data and writes suggested threshold
   config for human review; it does not tune thresholds automatically at runtime.
+
+## 10. Sentinel Scheduling And Evaluation
+
+Milestone 3 adds advisory topology sentinels.
+
+Evaluation path:
+
+```text
+schedule due
+-> read topology view
+-> evaluate sentinel
+-> Quiet or Flag(score, evidence, recommendation)
+-> append sentinel report log
+```
+
+Rules:
+
+- Sentinels consume read-only topology views.
+- Sentinels declare name, defect class, score semantics, evidence type, and
+  schedule.
+- Schedules may be on demand, every N events, or every N seconds.
+- Sentinel report logs are separate from the source-of-truth topology ledger and
+  gauge reading log.
+- Sentinels do not delete evidence, redefine provenance, or auto-confirm
+  contradictions.
+- Runtime correctness cannot depend on sentinels being enabled.

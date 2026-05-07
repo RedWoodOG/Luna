@@ -227,3 +227,42 @@ Required fields:
 
 The suggested threshold is in the same unit as `DriftConfig`: standard-deviation
 multiples, not raw metric units.
+
+## Topology View
+
+Sentinels consume `TopologyView`, a read-only snapshot of the topology.
+
+Required fields:
+
+- `raw_events`
+- `nodes`
+- `genesis_certificates`
+- `tethers`
+- `orbs`
+
+Invariants:
+
+- Sentinels receive shared read-only access.
+- The view has no mutation API.
+- Reports are derived from the view and do not become topology truth.
+
+## Sentinel Report
+
+Sentinel reports are advisory defect observations.
+
+Required fields:
+
+- `sentinel_name`: stable sentinel identifier.
+- `defect_class`: defect category.
+- `score`: numerical severity.
+- `evidence`: concrete topology ids or provenance chains.
+- `recommendation`: human/actionable recommendation.
+- `timestamp`: report time.
+- `schedule`: cadence that produced the report.
+
+Invariants:
+
+- Sentinel report logs are append-only.
+- Sentinel reports never mutate topology.
+- Sentinel reports never redefine provenance or confirm contradictions.
+- The system must work correctly with zero enabled sentinels.
