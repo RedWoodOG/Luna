@@ -27,11 +27,12 @@ Required fields:
 - `label`: human-readable label.
 - `source_event_id`: event that produced the node.
 - `source_event_hash`: hash of the source event.
-- `genesis_certificate_id`: certificate that created the node.
 
 Invariant:
 
 - A node cannot be constructed without source event id and source event hash.
+- A node must have exactly one genesis certificate in the topology registry
+  before replay can promote the reconstructed state.
 
 ## Genesis Certificate
 

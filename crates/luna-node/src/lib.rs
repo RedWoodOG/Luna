@@ -17,7 +17,6 @@ pub struct MemoryNode {
     pub label: String,
     pub source_event_id: String,
     pub source_event_hash: String,
-    pub genesis_certificate_id: Option<String>,
 }
 
 impl MemoryNode {
@@ -27,15 +26,11 @@ impl MemoryNode {
         label: impl Into<String>,
         source_event_id: Option<&str>,
         source_event_hash: Option<&str>,
-        genesis_certificate_id: Option<&str>,
     ) -> Result<Self> {
         let id = require_non_empty("node id", id.into())?;
         let label = require_non_empty("node label", label.into())?;
         let source_event_id = require_some_non_empty("source event id", source_event_id)?;
         let source_event_hash = require_some_non_empty("source event hash", source_event_hash)?;
-        let genesis_certificate_id = genesis_certificate_id
-            .map(|value| require_non_empty("genesis certificate id", value.to_string()))
-            .transpose()?;
 
         Ok(Self {
             id,
@@ -43,7 +38,6 @@ impl MemoryNode {
             label,
             source_event_id,
             source_event_hash,
-            genesis_certificate_id,
         })
     }
 
@@ -59,7 +53,6 @@ impl MemoryNode {
             label,
             Some(event.id.as_str()),
             Some(event.hash.as_str()),
-            None,
         )
         .expect("raw event supplies non-empty node provenance")
     }

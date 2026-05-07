@@ -2,7 +2,7 @@ use luna_genesis::{GenesisCertificate, GenesisRegistry};
 use luna_ledger::{EventPayload, EventSource, InMemoryLedger, RawEvent, RawEventDraft};
 use luna_node::{MemoryNode, NodeKind};
 use luna_replay::{ReplayEvent, ReplayedTopology, TopologyReplay};
-use luna_tether::{Tether, TetherKind, TetherRegistry};
+use luna_tether::{Tether, TetherKind};
 
 fn sample_event() -> RawEvent {
     RawEvent::from_draft(RawEventDraft::new(

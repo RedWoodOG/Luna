@@ -32,12 +32,7 @@ impl Tether {
         event: &RawEvent,
     ) -> Result<Self> {
         let kind = kind.ok_or_else(|| LunaError::new("tether direction is required"))?;
-        if kind == reverse_kind {
-            return Err(LunaError::new(
-                "reverse tether meaning must be distinct from forward meaning",
-            ));
-        }
-        Ok(Self {
+        let tether = Self {
             id: require_non_empty("tether id", id.into())?,
             source_node_id: source.id.clone(),
             target_node_id: target.id.clone(),
@@ -45,11 +40,13 @@ impl Tether {
             reverse_kind,
             source_event_id: event.id.clone(),
             source_event_hash: event.hash.clone(),
-        })
+        };
+        tether.validate()?;
+        Ok(tether)
     }
 
     pub fn reverse(&self, id: impl Into<String>) -> Result<Self> {
-        Ok(Self {
+        let tether = Self {
             id: require_non_empty("tether id", id.into())?,
             source_node_id: self.target_node_id.clone(),
             target_node_id: self.source_node_id.clone(),
@@ -57,7 +54,23 @@ impl Tether {
             reverse_kind: self.kind,
             source_event_id: self.source_event_id.clone(),
             source_event_hash: self.source_event_hash.clone(),
-        })
+        };
+        tether.validate()?;
+        Ok(tether)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        require_non_empty("tether id", self.id.clone())?;
+        require_non_empty("source node id", self.source_node_id.clone())?;
+        require_non_empty("target node id", self.target_node_id.clone())?;
+        require_non_empty("source event id", self.source_event_id.clone())?;
+        require_non_empty("source event hash", self.source_event_hash.clone())?;
+        if self.kind == self.reverse_kind {
+            return Err(LunaError::new(
+                "reverse tether meaning must be distinct from forward meaning",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -68,6 +81,7 @@ pub struct TetherRegistry {
 
 impl TetherRegistry {
     pub fn insert(&mut self, tether: Tether) -> Result<()> {
+        tether.validate()?;
         if self.tethers.contains_key(&tether.id) {
             return Err(LunaError::new(format!(
                 "tether {} already exists",
