@@ -1,8 +1,8 @@
 use luna_genesis::{GenesisCertificate, GenesisRegistry};
 use luna_ledger::{EventPayload, EventSource, InMemoryLedger, RawEvent, RawEventDraft};
-use luna_node::{MemoryNode, NodeKind, NodeRegistry};
+use luna_node::{MemoryNode, NodeKind};
 use luna_replay::{ReplayEvent, TopologyReplay};
-use luna_tether::{Tether, TetherKind, TetherRegistry};
+use luna_tether::{Tether, TetherKind};
 
 fn sample_event() -> RawEvent {
     RawEvent::from_draft(RawEventDraft::new(
@@ -114,6 +114,8 @@ fn test_replay_reconstructs_identical_state() {
     let evidence_node =
         MemoryNode::from_event("node-2", NodeKind::Evidence, "raw event", &evidence);
     let certificate = GenesisCertificate::for_node("genesis-1", &node, &event).unwrap();
+    let evidence_certificate =
+        GenesisCertificate::for_node("genesis-2", &evidence_node, &evidence).unwrap();
     let tether = Tether::new(
         "tether-1",
         &node,
@@ -129,6 +131,7 @@ fn test_replay_reconstructs_identical_state() {
         ReplayEvent::NodeCreated(node),
         ReplayEvent::NodeCreated(evidence_node),
         ReplayEvent::GenesisCertificateCreated(certificate),
+        ReplayEvent::GenesisCertificateCreated(evidence_certificate),
         ReplayEvent::TetherCreated(tether),
     ];
 
