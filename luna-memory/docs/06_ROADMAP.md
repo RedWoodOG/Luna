@@ -63,7 +63,7 @@ Implemented:
 
 ## Milestone 2: Gauge Baselines
 
-Status: NEXT
+Status: COMPLETE
 
 Goal:
 
@@ -78,11 +78,24 @@ Required proof:
 Initial gauges:
 
 - Events per second into the ledger.
+- Mutation events per second.
 - Average tether fan-out per node.
 - Replay duration per thousand events.
-- Hash collision rate.
+- Inspector rejection rate.
+
+Implemented:
+
+- `luna-gauges` read-only `Gauge` trait.
+- Rolling baseline window with mean and standard deviation.
+- Drift detector returning `Stable` or `Drift(magnitude, direction)`.
+- Separate append-only `GaugeReadingLog`.
+- Gauge runtime tick loop with configurable interval and safe disabled state.
+- CLI calibration command that writes reviewable threshold suggestions from
+  historical reading data.
 
 ## Milestone 3: Dense Orb Formation
+
+Status: NEXT
 
 Goal:
 

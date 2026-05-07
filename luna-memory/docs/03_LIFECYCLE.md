@@ -1,4 +1,4 @@
-# Milestone 0-1 Lifecycle
+# Milestone 0-2 Lifecycle
 
 Milestone 0 lifecycle rules are small enough to test exhaustively. Later memory
 features must add their own lifecycle rules before implementation.
@@ -111,3 +111,28 @@ Rules:
 - No monitor role rewrites raw events, provenance, or genesis certificates.
 
 The full role boundaries live in `07_MONITOR_ROLES.md`.
+
+## 9. Gauge Tick Loop
+
+Milestone 2 adds read-only gauge observation.
+
+Tick path:
+
+```text
+registered gauges
+-> read current values
+-> compare with existing rolling baselines
+-> classify stable or drift
+-> append gauge reading log
+-> update rolling baselines
+```
+
+Rules:
+
+- Default tick interval is one second.
+- Tick interval is configurable.
+- The gauge reading log is separate from the source-of-truth topology ledger.
+- Gauges have no write authority over topology.
+- Runtime correctness cannot depend on gauges being enabled.
+- Calibration reads historical gauge data and writes suggested threshold config
+  for human review; it does not tune thresholds automatically at runtime.

@@ -1,4 +1,4 @@
-# Milestone 0-1 Data Model
+# Milestone 0-2 Data Model
 
 Milestone 0 keeps the model intentionally narrow. It proves that one raw event
 can create one node, one genesis certificate, one directional tether, and one
@@ -7,6 +7,9 @@ replayable topology state without losing provenance.
 Milestone 1 adds topology mutation events and an inspected commit path. Derived
 state is no longer written by direct registry mutation; it is applied from
 append-only ledger events.
+
+Milestone 2 adds advisory gauge readings. Gauge readings are not topology truth
+and live in a separate append-only log.
 
 ## Raw Event
 
@@ -175,3 +178,37 @@ proposed mutation
 ```
 
 Direct registry mutation is not a public write path.
+
+## Gauge Reading
+
+Gauge readings are advisory observations, not memory evidence.
+
+Required fields:
+
+- `gauge_name`: stable gauge identifier.
+- `value`: current numerical reading.
+- `timestamp`: reading time.
+- `baseline_at_read`: rolling baseline statistics available before the current
+  reading updates the baseline.
+- `drift_status`: `Stable` or `Drift { magnitude, direction }`.
+
+Invariants:
+
+- Gauge logs are append-only.
+- Gauge readings never mutate topology.
+- Gauge readings never enter the source-of-truth topology ledger.
+- The system must work correctly with zero registered gauges.
+
+## Rolling Baseline
+
+Required fields:
+
+- `window_size`: number of readings retained.
+- `readings`: last N numerical readings.
+
+Derived values:
+
+- `mean`
+- `standard deviation`
+
+Baselines are pure data structures with no I/O.

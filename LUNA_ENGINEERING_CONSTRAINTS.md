@@ -107,7 +107,25 @@ No monitor rewrites truth. Inspectors reject. Gauges report. Sentinels flag,
 recommend, score, or block unsafe transitions. Auditors raise alarms and
 quarantine divergent derived state for human review.
 
-## 9. No Abstract Intelligence Claims
+## 9. No Gauge Authority Over Truth
+
+Gauges are read-only numerical observers.
+
+Required:
+
+- Gauge output is advisory.
+- Gauge readings live in a separate append-only log from topology truth.
+- Luna must function correctly when every gauge is disabled.
+- Threshold calibration produces reviewable configuration suggestions only.
+
+Forbidden:
+
+- Gauges mutating topology.
+- Gauges writing to the source-of-truth ledger.
+- Gauges rejecting commits.
+- Gauges changing thresholds automatically at runtime.
+
+## 10. No Abstract Intelligence Claims
 
 Luna is not conscious, self-aware, alive, emotional, or sentient.
 
@@ -124,7 +142,7 @@ Use grounded terms:
 
 Avoid consciousness metaphors in code and architecture docs.
 
-## 10. No Opaque Scoring
+## 11. No Opaque Scoring
 
 Every score must define:
 
@@ -136,7 +154,7 @@ Every score must define:
 
 Scores based on "AI intuition" are not architecture.
 
-## 11. No Irreversible Splits Or Merges
+## 12. No Irreversible Splits Or Merges
 
 All topology evolution must preserve:
 
@@ -147,14 +165,14 @@ All topology evolution must preserve:
 
 Untraceable topology evolution eventually becomes unverifiable state.
 
-## 12. No Giant Generalized Orbs
+## 13. No Giant Generalized Orbs
 
 Large undifferentiated orbs create retrieval mud.
 
 If density increases while retrieval precision drops, the orb is unstable and
 splinter pressure must increase.
 
-## 13. No Evaluation By "Feels Smarter"
+## 14. No Evaluation By "Feels Smarter"
 
 Every architecture change must be evaluated against:
 
@@ -172,7 +190,7 @@ Metrics:
 - Compression fidelity.
 - User correction rate.
 
-## 14. No Runtime Mutation Of Genesis Certificates
+## 15. No Runtime Mutation Of Genesis Certificates
 
 Genesis certificates are immutable.
 
@@ -185,7 +203,7 @@ Never modify:
 
 Everything else may evolve by replayable mutation. Genesis may not.
 
-## 15. No Cross-Orb Leakage Without Tethers
+## 16. No Cross-Orb Leakage Without Tethers
 
 Information cannot propagate without a recorded path.
 
@@ -196,7 +214,7 @@ Every cross-orb activation requires at least one of:
 - Lineage path.
 - Workflow path.
 
-## 16. No Human-Brain Assumptions
+## 17. No Human-Brain Assumptions
 
 Luna is inspired by cognition patterns. It is not neuroscience, consciousness
 simulation, or biological emulation.

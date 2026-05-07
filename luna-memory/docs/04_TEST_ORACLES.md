@@ -1,4 +1,4 @@
-# Milestone 0-1 Test Oracles
+# Milestone 0-2 Test Oracles
 
 These tests define the first hard verification package. They are intentionally
 mechanical: a feature either preserves provenance and replays, or it fails.
@@ -147,6 +147,45 @@ Direct registry insertion and direct tether construction are compile-fail API
 contracts. Safe direct ledger mutation append and safe fabricated inspection
 pass minting are also compile-fail contracts. The public write path is the commit
 pipeline.
+
+## Milestone 2 Oracles
+
+### `test_gauge_trait_produces_stable_readings_on_stable_input`
+
+Instantiate the five concrete gauges on stable input. Repeated reads must return
+the same values and gauges must expose stable names and units.
+
+### `test_rolling_baseline_updates_across_window`
+
+Push more readings than the configured window size. The baseline must retain
+only the last N readings and compute mean and standard deviation from that
+window.
+
+### `test_drift_detector_fires_beyond_threshold`
+
+Given a current reading and baseline statistics, drift detection must return
+`Stable` inside the configured threshold and `Drift(magnitude, direction)` when
+the reading exceeds it.
+
+### `test_gauge_reading_log_is_append_only`
+
+Appending readings increases the log length and no mutable reading accessor is
+available to tests.
+
+### `test_runtime_functions_with_all_gauges_disabled`
+
+A gauge runtime with zero registered gauges must tick successfully, append no
+readings, and leave topology correctness unaffected.
+
+### `test_runtime_ticks_update_baselines_and_append_readings`
+
+Runtime ticks call gauges, compare against previous baseline, append readings,
+and update the rolling baseline.
+
+### `test_calibration_suggests_threshold_from_historical_variance`
+
+Historical gauge readings produce reviewable threshold suggestions. Calibration
+does not mutate runtime thresholds.
 
 ## Future Oracle Template
 
