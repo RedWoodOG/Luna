@@ -36,9 +36,13 @@ impl ReplayedTopology {
                 message: err.to_string(),
             })
         })?;
-        self.ledger
-            .append_mutation(mutation.clone())
-            .expect("append-only in-memory mutation append cannot fail");
+        // SAFETY: the mutation passed the inspector chain above and was applied
+        // successfully to a staged topology before entering the ledger.
+        unsafe {
+            self.ledger
+                .append_mutation_unchecked(mutation.clone())
+                .expect("append-only in-memory mutation append cannot fail");
+        }
         self.nodes = staged.nodes;
         self.genesis_certificates = staged.genesis_certificates;
         self.tethers = staged.tethers;

@@ -207,7 +207,14 @@ impl InMemoryLedger {
         Ok(())
     }
 
-    pub fn append_mutation(&mut self, mutation: TopologyMutation) -> Result<()> {
+    /// Append a topology mutation after the caller has run the inspector chain.
+    ///
+    /// # Safety
+    ///
+    /// This bypasses inspection and registry application. Callers must prove the
+    /// mutation already passed inspectors and will be applied to the live
+    /// topology by the same commit operation.
+    pub unsafe fn append_mutation_unchecked(&mut self, mutation: TopologyMutation) -> Result<()> {
         self.events.push(LedgerEvent::TopologyMutation(mutation));
         Ok(())
     }

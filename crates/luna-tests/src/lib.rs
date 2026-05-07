@@ -49,3 +49,21 @@
 //! let mut registry = GenesisRegistry::default();
 //! registry.apply_attached(&event).unwrap();
 //! ```
+//!
+//! Safe callers cannot append topology mutations directly to the ledger.
+//!
+//! ```compile_fail
+//! use luna_ledger::{
+//!     InMemoryLedger, NodeCreated, NodeKind, TopologyMutation,
+//! };
+//!
+//! let mut ledger = InMemoryLedger::default();
+//! let mutation = TopologyMutation::NodeCreated(NodeCreated::new(
+//!     "node-1",
+//!     NodeKind::Event,
+//!     "project journal",
+//!     "event-1",
+//!     "hash",
+//! ));
+//! ledger.append_mutation_unchecked(mutation).unwrap();
+//! ```
