@@ -1,15 +1,21 @@
 [workspace]
 resolver = "2"
 members = [
+  # Pre-existing Luna product-track crates. They are not Milestone 0 topology
+  # stubs; they remain workspace members because the repo CI covers them with
+  # unit tests and runtime scenarios.
   "crates/luna-core",
   "crates/luna-events",
   "crates/luna-extract",
+  # Luna Memory Topology Engine Milestone 0 crates. The M0 build target is
+  # `cargo +stable test -p luna-tests`.
   "crates/luna-ledger",
   "crates/luna-node",
   "crates/luna-tether",
   "crates/luna-genesis",
   "crates/luna-replay",
   "crates/luna-tests",
+  # Remaining pre-existing product-track crates.
   "crates/luna-tcf",
   "crates/luna-recall",
   "crates/luna-runtime",

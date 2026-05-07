@@ -22,9 +22,28 @@ pub struct ReplayedTopology {
     pub tethers: TetherRegistry,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ReplayLedger {
+    events: Vec<ReplayEvent>,
+}
+
+impl ReplayLedger {
+    pub fn append(&mut self, event: ReplayEvent) {
+        self.events.push(event);
+    }
+
+    pub fn events(&self) -> &[ReplayEvent] {
+        &self.events
+    }
+}
+
 pub struct TopologyReplay;
 
 impl TopologyReplay {
+    pub fn replay_ledger(ledger: &ReplayLedger) -> Result<ReplayedTopology> {
+        Self::replay(ledger.events())
+    }
+
     pub fn replay(events: &[ReplayEvent]) -> Result<ReplayedTopology> {
         let mut topology = ReplayedTopology::default();
 

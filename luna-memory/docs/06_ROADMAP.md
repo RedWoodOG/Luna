@@ -23,6 +23,17 @@ Implemented crates:
 - `luna-replay`: deterministic reconstruction.
 - `luna-tests`: fixtures and validation.
 
+Build target:
+
+- `cargo +stable test -p luna-tests`
+
+The repository also contains pre-existing product-track Luna crates for runtime,
+extraction, recall, metrics, benchmarks, storage, CLI behavior, and current core
+types. Those crates are not Milestone 0 topology stubs. They remain in the root
+workspace because they are landed project code with their own tests and runtime
+scenario gates. The Milestone 0 graduation package is limited to the crates
+listed above.
+
 ## Milestone 1: Provenance-Preserving Topology Events
 
 Goal:

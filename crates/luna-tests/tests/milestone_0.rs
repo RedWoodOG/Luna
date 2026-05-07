@@ -1,7 +1,8 @@
+use chrono::Duration;
 use luna_genesis::{GenesisCertificate, GenesisRegistry};
 use luna_ledger::{EventPayload, EventSource, InMemoryLedger, RawEvent, RawEventDraft};
 use luna_node::{MemoryNode, NodeKind};
-use luna_replay::{ReplayEvent, ReplayedTopology, TopologyReplay};
+use luna_replay::{ReplayEvent, ReplayLedger, ReplayedTopology, TopologyReplay};
 use luna_tether::{Tether, TetherKind};
 
 fn sample_event() -> RawEvent {
@@ -18,6 +19,45 @@ fn second_event() -> RawEvent {
         EventSource::System,
         EventPayload::Text("The node is supported by its raw event.".to_string()),
     ))
+}
+
+fn live_milestone_topology() -> (ReplayedTopology, ReplayLedger) {
+    let event = sample_event();
+    let node = MemoryNode::from_event("node-1", NodeKind::Event, "project journal", &event);
+    let evidence_node = MemoryNode::from_event("node-2", NodeKind::Evidence, "raw event", &event);
+    let certificate = GenesisCertificate::for_node("genesis-1", &node, &event).unwrap();
+    let evidence_certificate =
+        GenesisCertificate::for_node("genesis-2", &evidence_node, &event).unwrap();
+    let tether = Tether::new(
+        "tether-1",
+        &node,
+        &evidence_node,
+        Some(TetherKind::SupportedBy),
+        TetherKind::EvidenceFor,
+        &event,
+    )
+    .unwrap();
+    let mut live = ReplayedTopology::default();
+    let mut replay_ledger = ReplayLedger::default();
+
+    live.ledger.append(event.clone()).unwrap();
+    replay_ledger.append(ReplayEvent::RawEventRecorded(event));
+    live.nodes.insert(node.clone()).unwrap();
+    replay_ledger.append(ReplayEvent::NodeCreated(node));
+    live.nodes.insert(evidence_node.clone()).unwrap();
+    replay_ledger.append(ReplayEvent::NodeCreated(evidence_node));
+    live.genesis_certificates
+        .insert(certificate.clone())
+        .unwrap();
+    replay_ledger.append(ReplayEvent::GenesisCertificateCreated(certificate));
+    live.genesis_certificates
+        .insert(evidence_certificate.clone())
+        .unwrap();
+    replay_ledger.append(ReplayEvent::GenesisCertificateCreated(evidence_certificate));
+    live.tethers.insert(tether.clone()).unwrap();
+    replay_ledger.append(ReplayEvent::TetherCreated(tether));
+
+    (live, replay_ledger)
 }
 
 #[test]
@@ -39,6 +79,16 @@ fn test_event_hash_is_stable() {
     let second = sample_event();
 
     assert_eq!(first.hash, second.hash);
+}
+
+#[test]
+fn test_event_hash_excludes_recorded_at() {
+    let first = sample_event();
+    let mut second = first.clone();
+    second.recorded_at = first.recorded_at + Duration::seconds(1);
+
+    assert_eq!(first.hash, second.hash);
+    second.verify_hash().unwrap();
 }
 
 #[test]
@@ -134,50 +184,25 @@ fn test_tether_rejects_same_reverse_meaning() {
 
 #[test]
 fn test_replay_reconstructs_identical_state() {
-    let event = sample_event();
-    let node = MemoryNode::from_event("node-1", NodeKind::Event, "project journal", &event);
-    let evidence_node = MemoryNode::from_event("node-2", NodeKind::Evidence, "raw event", &event);
-    let certificate = GenesisCertificate::for_node("genesis-1", &node, &event).unwrap();
-    let evidence_certificate =
-        GenesisCertificate::for_node("genesis-2", &evidence_node, &event).unwrap();
-    let tether = Tether::new(
-        "tether-1",
-        &node,
-        &evidence_node,
-        Some(TetherKind::SupportedBy),
-        TetherKind::EvidenceFor,
-        &event,
-    )
-    .unwrap();
-    let mut expected = ReplayedTopology::default();
-    expected.ledger.append(event.clone()).unwrap();
-    expected.nodes.insert(node.clone()).unwrap();
-    expected.nodes.insert(evidence_node.clone()).unwrap();
-    expected
-        .genesis_certificates
-        .insert(certificate.clone())
-        .unwrap();
-    expected
-        .genesis_certificates
-        .insert(evidence_certificate.clone())
-        .unwrap();
-    expected.tethers.insert(tether.clone()).unwrap();
-    let events = vec![
-        ReplayEvent::RawEventRecorded(event),
-        ReplayEvent::NodeCreated(node),
-        ReplayEvent::NodeCreated(evidence_node),
-        ReplayEvent::GenesisCertificateCreated(certificate),
-        ReplayEvent::GenesisCertificateCreated(evidence_certificate),
-        ReplayEvent::TetherCreated(tether),
-    ];
+    let (live, replay_ledger) = live_milestone_topology();
 
-    let replayed = TopologyReplay::replay(&events).unwrap();
+    let replayed = TopologyReplay::replay_ledger(&replay_ledger).unwrap();
 
-    assert_eq!(replayed, expected);
+    assert_eq!(replayed, live);
     assert_eq!(replayed.ledger.events().len(), 1);
     assert_eq!(replayed.nodes.nodes().len(), 2);
     assert_eq!(replayed.genesis_certificates.certificates().len(), 2);
     assert_eq!(replayed.tethers.tethers().len(), 1);
+}
+
+#[test]
+fn test_replay_is_deterministic_for_same_ledger() {
+    let (_, replay_ledger) = live_milestone_topology();
+
+    let first = TopologyReplay::replay_ledger(&replay_ledger).unwrap();
+    let second = TopologyReplay::replay_ledger(&replay_ledger).unwrap();
+
+    assert_eq!(first, second);
 }
 
 #[test]

@@ -13,6 +13,17 @@ different payload. The ledger must reject the conflicting duplicate.
 Hash the same raw event content more than once. The resulting hash must be
 identical.
 
+## `test_event_hash_excludes_recorded_at`
+
+Change only the `recorded_at` timestamp. The event hash must remain identical,
+and hash verification must still pass because the hash covers content, not
+arrival time.
+
+## `test_event_hash_changes_when_content_changes`
+
+Change event content while keeping the event id fixed. The resulting hash must
+change.
+
 ## `test_node_requires_source_event`
 
 Attempt to create a node without source event provenance. Construction must
@@ -35,8 +46,14 @@ Create `A -> B = supported_by` and verify the reverse meaning is
 
 ## `test_replay_reconstructs_identical_state`
 
-Record the Milestone 0 event sequence and replay it. The replayed topology must
-equal the topology produced during initial application.
+Build the Milestone 0 topology through the live registry path while recording
+the same topology events into the replay ledger. Replay from that ledger. The
+replayed topology must equal the live topology.
+
+## `test_replay_is_deterministic_for_same_ledger`
+
+Replay the same ledger twice. Both replayed states must be identical. This test
+proves determinism; the live-vs-replay test proves hidden mutation detection.
 
 ## `test_missing_provenance_fails`
 

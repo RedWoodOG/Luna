@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
+pub const RAW_EVENT_HASH_VERSION: &str = "luna.raw_event.v1";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EventSource {
@@ -98,10 +100,37 @@ impl InMemoryLedger {
 }
 
 fn stable_event_hash(id: &str, source: &EventSource, payload: &EventPayload) -> Result<String> {
-    let canonical = serde_json::to_vec(&(id, source, payload))
-        .map_err(|err| LunaError::new(err.to_string()))?;
     let mut hasher = Sha256::new();
-    hasher.update(canonical);
+    hasher.update(canonical_raw_event_bytes(id, source, payload));
     let digest = hasher.finalize();
     Ok(format!("{digest:x}"))
+}
+
+fn canonical_raw_event_bytes(id: &str, source: &EventSource, payload: &EventPayload) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    push_canonical_field(&mut bytes, RAW_EVENT_HASH_VERSION.as_bytes());
+    push_canonical_field(&mut bytes, id.as_bytes());
+    push_canonical_field(&mut bytes, event_source_tag(source).as_bytes());
+    match payload {
+        EventPayload::Text(text) => {
+            push_canonical_field(&mut bytes, b"text");
+            push_canonical_field(&mut bytes, text.as_bytes());
+        }
+    }
+    bytes
+}
+
+fn event_source_tag(source: &EventSource) -> &'static str {
+    match source {
+        EventSource::User => "user",
+        EventSource::Assistant => "assistant",
+        EventSource::System => "system",
+    }
+}
+
+fn push_canonical_field(bytes: &mut Vec<u8>, field: &[u8]) {
+    bytes.extend_from_slice(field.len().to_string().as_bytes());
+    bytes.push(b':');
+    bytes.extend_from_slice(field);
+    bytes.push(b'\n');
 }

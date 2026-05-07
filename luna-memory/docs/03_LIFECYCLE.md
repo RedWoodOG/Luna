@@ -46,11 +46,14 @@ Rules:
 
 ## 5. Replay Ledger
 
-Replay reads ledger events in order and reconstructs topology state.
+Replay reads the ordered topology replay ledger and reconstructs topology state.
+The raw-event ledger remains part of the reconstructed state; the replay ledger
+records which raw events, nodes, certificates, and tethers were applied.
 
 Rules:
 
 - Replay is deterministic for the same event sequence.
+- Replay output must match the live topology built through the registry path.
 - Replay verifies every provenance link.
 - Replay fails closed on missing provenance.
 - Replay output is compared against the live state as the proof oracle.

@@ -18,6 +18,19 @@ Invariant:
 
 - Once stored, a raw event must not be mutated.
 
+Hash contract:
+
+- Raw event hash version is `luna.raw_event.v1`.
+- The hash is SHA-256 over a hand-rolled canonical byte sequence:
+  `version`, `id`, `source`, payload type, and payload value.
+- Each canonical field is encoded as `<byte_length>:<raw_bytes>\n`.
+- `recorded_at` is deliberately excluded. The hash identifies event content,
+  not arrival time.
+- Source tags are lowercase ASCII (`user`, `assistant`, `system`).
+- Text payloads use payload type `text` and UTF-8 text bytes.
+- A future hash format change must introduce a new hash version and migration
+  plan instead of silently changing existing hashes.
+
 ## Memory Node
 
 Required fields:
@@ -73,6 +86,7 @@ Invariants:
 
 Required fields:
 
+- `replay_ledger`: ordered topology events consumed by replay.
 - `events`: raw events keyed by id.
 - `nodes`: nodes keyed by id.
 - `genesis_certificates`: certificates keyed by id.
