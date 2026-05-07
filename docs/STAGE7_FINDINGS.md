@@ -76,6 +76,66 @@ The orb work is still good architecture. It is just **not the next thing**.
 
 Independent of extraction: `forgotten_risk` exists as an episode field with a recall gate, but no runtime path drives it from elapsed time. `EpisodeDecayed` is only emitted manually. A 24h-gap fixture and a 0-second-gap fixture behave identically today. Even if extraction improves, the second half of Stage 7 cannot be measured without a time-decay process.
 
+## Update — LLM extraction run (`glm-4.6:cloud`, 2026-05)
+
+After the heuristic-extractor probes failed, the priority shifted to scaffolding the LLM-backed extraction path (see `docs/STAGE7_LLM_SETUP.md`). A user ran `scenarios/exploratory/stage7_dense_week.json` against `glm-4.6:cloud` via Ollama. The result is the architectural answer.
+
+### What ran end-to-end
+
+```text
+13/13 turns processed                              no crashes, no parse failures
+~21 assertions extracted across the run           real, on natural prose
+4/6 must_contain checks pass                      Mira, Daniel, Beacon, session
+0/7 must_not_contain violations                   no false positives
+working memory bounded 3-5 nodes throughout       budget held
+```
+
+This is the first measurement of Luna's existing memory architecture handling natural-prose multi-turn input. **It works.** The pipeline — extraction → events → episodes → replay → recall → working set — is functional across 13 turns of natural conversation about a real week.
+
+### What failed and why
+
+The two failing checks are extraction-vocabulary issues, not memory issues.
+
+**`identity:name=Joe`** — Turn 1 extracted 5 assertions covering Joe's role, his two leads, the project, and the deadline. Joe himself appears in the run's signals (`identity_relevance.evidence: "I'm Joe. Running a small platform team."`) but was not promoted to an assertion. The prompt's "bare name alone is low-value" guidance is correct in most cases but overcorrects for self-introduction. Confirmation: turn 11 (a question, "When is Daniel back?") did produce `person:name=Daniel` — bare-name-with-no-context still triggers extraction; bare-name-with-rich-context gets dominated by the richer fact.
+
+**`17th`** — Turn 6 ("Daniel asked for next Monday off, actually he is out for a week. Back on the 17th") captured the date in signals (`temporal_relevance.evidence: "next Monday, a week, 17th"`) but produced only one assertion (`work:past_event=Daniel asked for next Monday off`). The date itself wasn't routed because the prompt's `domain:kind` allowlist has no slot for "X is back on Y date" / "person:availability" / "schedule:return". GLM correctly observed there was no place for the fact and dropped it.
+
+Both failures fall on the extraction side of the pipeline, before memory ever sees the input. Memory cannot recall what extraction never produced.
+
+### What this confirms
+
+```text
+✓ heuristic extractor    fails on natural prose                       (already known)
+✓ LLM extraction         produces real assertions on natural prose    (new)
+✓ memory architecture    handles 13-turn flow, bounded budget         (new)
+✓ recall pipeline        working                                      (new)
+✓ orb-network rebuild    confirmed v2, not a v1.0 prerequisite        (key call)
+```
+
+The orb-rebuild is correct architecture but not v1.0-blocking. Existing memory works given working extraction.
+
+### What this opens
+
+The v1.0 critical path is now extraction-side, not memory-side. Three options for closing the two failures:
+
+1. **Iterate the prompt template.** Promote self-introduction names ("I am X" / "I'm X" / "this is X") to high-value `identity:name` assertions even when richer context exists. Add an allowlisted `domain:kind` for time-anchored personal facts (e.g. `person:availability`, `schedule:return_date`). This invalidates `prompt_v3_hash` and forces re-extraction across all cached cases — real prompt engineering. Probably the right v1.0 move because it expands what the system can capture.
+2. **Loosen the fixture's checks.** Replace `identity:name=Joe` with substring `Joe`; drop `17th`. Honest about today's behavior but does not advance capability. This is the same anti-pattern as the original heuristic fixture (calibrating tests to extractor output).
+3. **Both.** Tighten the fixture to what passes today AND iterate the prompt to expand what passes tomorrow.
+
+Default to (1) for the v1.0 path; (2) only as a "minimum viable runtime gate for what already works."
+
+### Promotion path for `stage7_dense_week.json`
+
+When option (1) lands and the fixture passes 6/6 (or whatever the calibrated check set is), graduate from `scenarios/exploratory/` to `scenarios/runtime/` with an explicit note that it requires LLM-backed extraction (not the default heuristic CI path). CI strategy for LLM-backed scenarios is downstream of having one passing fixture.
+
+### What this section does not claim
+
+- Does not claim GLM-4.6 is the canonical extractor. Other models would produce different vocabularies. The result here is a single point on a curve.
+- Does not claim Stage 7 is fully passed. The 24h-gap portion (the "→ 24h →" segment of the README's acceptance test) requires a time-decay process that does not exist yet (priority 3 in the post-result list).
+- Does not validate any v2 architecture. The orb-network is unbuilt; the schemas in `memory_schema_v1/` remain forward design.
+
+What it claims: **memory architecture survives a 10-turn natural-prose case once extraction works.** That is the call the rebuild order rests on.
+
 ## What to do next
 
 In strict priority order. Each gates the next.

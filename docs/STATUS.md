@@ -96,17 +96,26 @@ Orthogonal to the milestone roadmap. Both should be active concurrently.
 
 ## What needs to happen next
 
-The first probe of Stage 7 is in: see [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md). Both probe fixtures (`scenarios/exploratory/stage7_dense_week.json` and `..._patterned.json`) **fail**, producing ≤1 assertion across 13 turns. The bottleneck is **extraction**, not memory. The orb-rebuild work — even when finished — operates on top of an extraction layer that today produces nothing on natural prose.
+**Architectural answer is in.** A 13-turn run of `scenarios/exploratory/stage7_dense_week.json` against `glm-4.6:cloud` extracted ~21 assertions on natural prose, processed all 13 turns cleanly, kept working memory bounded throughout, and passed 4 of 6 substring checks with zero false positives. The two failing checks (`identity:name=Joe` and `17th`) are **extraction-vocabulary gaps in the prompt template, not memory-architecture failures.** Memory works given working extraction.
 
-Revised priority order (each gates the next):
+See [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md) (Update section) for the full result with log evidence.
 
-1. **Establish working extraction on natural prose.** **Scaffolded** — see [`STAGE7_LLM_SETUP.md`](STAGE7_LLM_SETUP.md). The `command` extractor backend has been there from the start; the entry-point doc was missing. Three backends documented end-to-end: local `llama.cpp` server, Anthropic API (`scripts/run_anthropic_extract.py`), and Ollama (`scripts/run_ollama_extract.py`, supporting both local and `:cloud` models). Any of the three runs the existing Stage 7 probe fixtures with no code change. **Awaits a local execution run** (this environment has no LLM endpoint configured).
-2. **Re-run the Stage 7 probe fixtures with a working extractor.** When (1) is exercised locally, run `scenarios/exploratory/stage7_dense_week.json` against the chosen backend. Record the result. If it passes: graduate to `scenarios/runtime/`. If it fails: the failure mode determines the next priority (see the failure-mode table in `STAGE7_LLM_SETUP.md`).
-3. **Add a time-decay process.** `EpisodeDecayed` driven from elapsed event-time so `forgotten_risk` actually moves. Required before the 24h portion of Stage 7 is measurable.
-4. **Build the Stage 7 fixture with a 24h gap and run it.** Needs (1)+(3) and a small harness extension for simulated time.
-5. **Resume the orb-network rebuild only after (4) closes.** The orb work is v2 architecture; it is not the v1.0 critical path.
+**The orb-network rebuild is v2.** It is correct architecture but not a v1.0 prerequisite. The v1.0 critical path is now extraction-side.
 
-Defer: full audit of `luna-extract` and `luna-bench` (now reframed — `luna-extract` in particular is on the critical path, but the audit can wait until (1) is in flight); R-005 retrofit; regression tests for hot paths beyond `process_turn` and `rebuild_episodes`.
+Revised priority order:
+
+1. ~~**Establish working extraction on natural prose.**~~ **DONE** — three backends scaffolded, GLM-cloud run executed end-to-end. See [`STAGE7_LLM_SETUP.md`](STAGE7_LLM_SETUP.md).
+2. ~~**Run the Stage 7 probe fixture against working extractor.**~~ **DONE** — see findings update. Result: 4/6 checks pass, both failures are prompt-vocabulary.
+3. **Close the two prompt-vocabulary gaps the run surfaced.** Iterate the prompt template (`crates/luna-extract/prompts/extract_v3.md`) to:
+   - Promote self-introduction names ("I am X" / "I'm X") to high-value `identity:name` assertions even when richer context exists.
+   - Add an allowlisted `domain:kind` slot for time-anchored personal facts (e.g. `person:availability`, `schedule:return_date`). Currently dates appear only in signals, never as recallable claims.
+   Touching the prompt invalidates `prompt_v3_hash` and forces re-extraction across all caches — real prompt engineering.
+4. **Re-run the Stage 7 fixture; graduate to `scenarios/runtime/` if all 6 checks pass.** Add a CI strategy for LLM-backed scenarios at this point (separate workflow from the heuristic gate).
+5. **Add a time-decay process.** `EpisodeDecayed` driven from elapsed event-time so `forgotten_risk` actually moves. Required before the 24h portion of Stage 7 is measurable.
+6. **Build the Stage 7 fixture with a 24h gap and run it.** Needs (3)+(5) and a small harness extension for simulated time.
+7. **Resume the orb-network rebuild only after (6) closes.** v2 architecture, not v1.0.
+
+Defer: full audit of `luna-extract` (the prompt iteration in (3) will surface what we need to know about that crate); `luna-bench` audit; R-005 retrofit; regression tests for hot paths beyond `process_turn` and `rebuild_episodes`.
 
 ## How to read the repo, in order
 
