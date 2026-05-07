@@ -1,0 +1,12 @@
+[package]
+name = "luna-inspector"
+version.workspace = true
+edition.workspace = true
+description = "Synchronous invariant inspectors for Luna topology mutations."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+luna-ledger = { path = "../luna-ledger" }

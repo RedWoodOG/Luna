@@ -12,6 +12,7 @@ path = "src/lib.rs"
 [dev-dependencies]
 chrono.workspace = true
 luna-genesis = { path = "../luna-genesis" }
+luna-inspector = { path = "../luna-inspector" }
 luna-ledger = { path = "../luna-ledger" }
 luna-node = { path = "../luna-node" }
 luna-replay = { path = "../luna-replay" }
