@@ -88,10 +88,7 @@ impl NodeRegistry {
     }
 }
 
-fn require_some_non_empty(
-    field: &str,
-    value: Option<&str>,
-) -> Result<String> {
+fn require_some_non_empty(field: &str, value: Option<&str>) -> Result<String> {
     match value {
         Some(value) => require_non_empty(field, value.to_string()),
         None => Err(LunaError::new(format!("{field} is required"))),

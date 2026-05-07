@@ -26,11 +26,7 @@ pub struct RawEventDraft {
 }
 
 impl RawEventDraft {
-    pub fn new(
-        id: impl Into<String>,
-        source: EventSource,
-        payload: EventPayload,
-    ) -> Self {
+    pub fn new(id: impl Into<String>, source: EventSource, payload: EventPayload) -> Self {
         Self {
             id: id.into(),
             source,
@@ -101,11 +97,7 @@ impl InMemoryLedger {
     }
 }
 
-fn stable_event_hash(
-    id: &str,
-    source: &EventSource,
-    payload: &EventPayload,
-) -> Result<String> {
+fn stable_event_hash(id: &str, source: &EventSource, payload: &EventPayload) -> Result<String> {
     let canonical = serde_json::to_vec(&(id, source, payload))
         .map_err(|err| LunaError::new(err.to_string()))?;
     let mut hasher = Sha256::new();

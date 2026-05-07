@@ -38,19 +38,11 @@ impl TopologyReplay {
                     topology.nodes.insert(node.clone())?;
                 }
                 ReplayEvent::GenesisCertificateCreated(certificate) => {
-                    verify_certificate_provenance(
-                        certificate,
-                        &topology.ledger,
-                        &topology.nodes,
-                    )?;
+                    verify_certificate_provenance(certificate, &topology.ledger, &topology.nodes)?;
                     topology.genesis_certificates.insert(certificate.clone())?;
                 }
                 ReplayEvent::TetherCreated(tether) => {
-                    verify_tether_provenance(
-                        tether,
-                        &topology.ledger,
-                        &topology.nodes,
-                    )?;
+                    verify_tether_provenance(tether, &topology.ledger, &topology.nodes)?;
                     topology.tethers.insert(tether.clone())?;
                 }
             }

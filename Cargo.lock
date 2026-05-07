@@ -441,10 +441,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "luna-genesis"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "luna-core",
+ "luna-ledger",
+ "luna-node",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "luna-ledger"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "luna-core",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "luna-metrics"
 version = "0.1.0"
 dependencies = [
  "luna-core",
+ "serde",
+]
+
+[[package]]
+name = "luna-node"
+version = "0.1.0"
+dependencies = [
+ "luna-core",
+ "luna-ledger",
  "serde",
 ]
 
@@ -457,6 +490,18 @@ dependencies = [
  "luna-extract",
  "luna-tcf",
  "uuid",
+]
+
+[[package]]
+name = "luna-replay"
+version = "0.1.0"
+dependencies = [
+ "luna-core",
+ "luna-genesis",
+ "luna-ledger",
+ "luna-node",
+ "luna-tether",
+ "serde",
 ]
 
 [[package]]
@@ -489,6 +534,27 @@ name = "luna-tcf"
 version = "0.1.0"
 dependencies = [
  "luna-core",
+ "serde",
+]
+
+[[package]]
+name = "luna-tests"
+version = "0.1.0"
+dependencies = [
+ "luna-genesis",
+ "luna-ledger",
+ "luna-node",
+ "luna-replay",
+ "luna-tether",
+]
+
+[[package]]
+name = "luna-tether"
+version = "0.1.0"
+dependencies = [
+ "luna-core",
+ "luna-ledger",
+ "luna-node",
  "serde",
 ]
 

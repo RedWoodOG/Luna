@@ -17,11 +17,7 @@ pub struct GenesisCertificate {
 }
 
 impl GenesisCertificate {
-    pub fn for_node(
-        id: impl Into<String>,
-        node: &MemoryNode,
-        event: &RawEvent,
-    ) -> Result<Self> {
+    pub fn for_node(id: impl Into<String>, node: &MemoryNode, event: &RawEvent) -> Result<Self> {
         if node.source_event_id != event.id {
             return Err(LunaError::new(format!(
                 "node {} source event {} does not match event {}",
@@ -82,10 +78,7 @@ impl GenesisRegistry {
                 certificate.id
             )));
         }
-        if self
-            .certificate_by_node
-            .contains_key(&certificate.node_id)
-        {
+        if self.certificate_by_node.contains_key(&certificate.node_id) {
             return Err(LunaError::new(format!(
                 "node {} already has a genesis certificate",
                 certificate.node_id
