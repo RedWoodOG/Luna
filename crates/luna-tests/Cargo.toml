@@ -18,4 +18,5 @@ luna-inspector = { path = "../luna-inspector" }
 luna-ledger = { path = "../luna-ledger" }
 luna-node = { path = "../luna-node" }
 luna-replay = { path = "../luna-replay" }
+luna-sentinels = { path = "../luna-sentinels" }
 luna-tether = { path = "../luna-tether" }

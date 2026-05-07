@@ -97,3 +97,12 @@
 //! let mut topology = ReplayedTopology::default();
 //! topology.nodes = NodeRegistry::default();
 //! ```
+//!
+//! Sentinels receive a read-only topology view.
+//!
+//! ```compile_fail
+//! use luna_sentinels::{TopologyView, ViewNode};
+//!
+//! let mut view = TopologyView::new(vec![], vec![], vec![], vec![], vec![]);
+//! view.nodes = vec![ViewNode::new("node-1", "event-1", "hash")];
+//! ```
