@@ -539,6 +539,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "luna-sentinels"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+]
+
+[[package]]
 name = "luna-store"
 version = "0.1.0"
 dependencies = [
@@ -568,6 +576,7 @@ dependencies = [
  "luna-ledger",
  "luna-node",
  "luna-replay",
+ "luna-sentinels",
  "luna-tether",
  "serde_json",
 ]

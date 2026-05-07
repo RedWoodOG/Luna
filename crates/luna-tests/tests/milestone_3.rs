@@ -1,9 +1,8 @@
 use chrono::{Duration, Utc};
 use luna_sentinels::{
-    ContradictionSentinel, DefectClass, ProvenanceIntegritySentinel, Sentinel,
-    SentinelEvaluation, SentinelReportLog, SentinelRuntime, SentinelSchedule,
-    SplinterPressureSentinel, TopologyView, ViewAssertion, ViewGenesisCertificate, ViewNode,
-    ViewOrb, ViewRawEvent, ViewTether,
+    ContradictionSentinel, DefectClass, ProvenanceIntegritySentinel, Sentinel, SentinelEvaluation,
+    SentinelReportLog, SentinelRuntime, SentinelSchedule, SplinterPressureSentinel, TopologyView,
+    ViewAssertion, ViewGenesisCertificate, ViewNode, ViewOrb, ViewRawEvent, ViewTether,
 };
 
 fn good_view() -> TopologyView {
@@ -70,7 +69,10 @@ fn test_contradiction_sentinel_fires_on_known_bad_input() {
             recommendation,
         } => {
             assert_eq!(score, 2.0);
-            assert_eq!(evidence, vec!["tether-1".to_string(), "tether-2".to_string()]);
+            assert_eq!(
+                evidence,
+                vec!["tether-1".to_string(), "tether-2".to_string()]
+            );
             assert!(recommendation.contains("contradiction"));
         }
         SentinelEvaluation::Quiet => panic!("expected contradiction flag"),
@@ -115,8 +117,14 @@ fn test_provenance_integrity_sentinel_fires_on_hash_mismatch() {
             evidence,
             recommendation,
         } => {
-            assert_eq!(score, 1.0);
-            assert_eq!(evidence, vec!["node:node-1->event:event-1".to_string()]);
+            assert_eq!(score, 2.0);
+            assert_eq!(
+                evidence,
+                vec![
+                    "node:node-1->event:event-1".to_string(),
+                    "certificate:genesis-1->node:node-1".to_string()
+                ]
+            );
             assert!(recommendation.contains("provenance"));
         }
         SentinelEvaluation::Quiet => panic!("expected provenance flag"),
@@ -143,7 +151,10 @@ fn test_splinter_pressure_sentinel_fires_on_density_precision_divergence() {
             recommendation,
         } => {
             assert!((score - 0.8).abs() < 0.000_001);
-            assert_eq!(evidence, vec!["orb:orb-1 density_delta=0.400 precision_delta=-0.400"]);
+            assert_eq!(
+                evidence,
+                vec!["orb:orb-1 density_delta=0.400 precision_delta=-0.400"]
+            );
             assert!(recommendation.contains("splinter"));
         }
         SentinelEvaluation::Quiet => panic!("expected splinter pressure flag"),
@@ -203,8 +214,15 @@ fn test_runtime_respects_event_and_time_schedules() {
 
     assert!(runtime.run_due(&view, 1, start).is_empty());
     assert_eq!(runtime.run_due(&view, 2, start).len(), 1);
-    assert!(runtime.run_due(&view, 3, start + Duration::seconds(3)).is_empty());
-    assert_eq!(runtime.run_due(&view, 3, start + Duration::seconds(6)).len(), 1);
+    assert!(runtime
+        .run_due(&view, 3, start + Duration::seconds(3))
+        .is_empty());
+    assert_eq!(
+        runtime
+            .run_due(&view, 3, start + Duration::seconds(6))
+            .len(),
+        1
+    );
 }
 
 #[test]
