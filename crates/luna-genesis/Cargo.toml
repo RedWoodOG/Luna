@@ -1,0 +1,17 @@
+[package]
+name = "luna-genesis"
+version.workspace = true
+edition.workspace = true
+description = "Immutable genesis certificates for Luna topology nodes."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+chrono.workspace = true
+luna-core = { path = "../luna-core" }
+luna-ledger = { path = "../luna-ledger" }
+luna-node = { path = "../luna-node" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "luna-replay"
+version.workspace = true
+edition.workspace = true
+description = "Deterministic topology replay for Luna memory."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+luna-genesis = { path = "../luna-genesis" }
+luna-ledger = { path = "../luna-ledger" }
+luna-node = { path = "../luna-node" }
+luna-tether = { path = "../luna-tether" }
+serde.workspace = true
