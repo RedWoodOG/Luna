@@ -460,7 +460,6 @@ dependencies = [
  "chrono",
  "luna-core",
  "serde",
- "serde_json",
  "sha2",
 ]
 
@@ -541,6 +540,7 @@ dependencies = [
 name = "luna-tests"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "luna-genesis",
  "luna-ledger",
  "luna-node",
