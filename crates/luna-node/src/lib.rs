@@ -1,26 +1,20 @@
 use luna_core::{LunaError, Result};
-use luna_ledger::RawEvent;
+use luna_ledger::NodeCreated;
+pub use luna_ledger::NodeKind;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NodeKind {
-    Event,
-    Evidence,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoryNode {
-    pub id: String,
-    pub kind: NodeKind,
-    pub label: String,
-    pub source_event_id: String,
-    pub source_event_hash: String,
+    id: String,
+    kind: NodeKind,
+    label: String,
+    source_event_id: String,
+    source_event_hash: String,
 }
 
 impl MemoryNode {
-    pub fn new(
+    fn new(
         id: impl Into<String>,
         kind: NodeKind,
         label: impl Into<String>,
@@ -41,20 +35,34 @@ impl MemoryNode {
         })
     }
 
-    pub fn from_event(
-        id: impl Into<String>,
-        kind: NodeKind,
-        label: impl Into<String>,
-        event: &RawEvent,
-    ) -> Self {
+    pub fn from_created(event: &NodeCreated) -> Result<Self> {
         Self::new(
-            id,
-            kind,
-            label,
-            Some(event.id.as_str()),
-            Some(event.hash.as_str()),
+            event.node_id.as_str(),
+            event.kind,
+            event.label.as_str(),
+            Some(event.source_event_id.as_str()),
+            Some(event.source_event_hash.as_str()),
         )
-        .expect("raw event supplies non-empty node provenance")
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn kind(&self) -> NodeKind {
+        self.kind
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn source_event_id(&self) -> &str {
+        &self.source_event_id
+    }
+
+    pub fn source_event_hash(&self) -> &str {
+        &self.source_event_hash
     }
 }
 
@@ -64,7 +72,8 @@ pub struct NodeRegistry {
 }
 
 impl NodeRegistry {
-    pub fn insert(&mut self, node: MemoryNode) -> Result<()> {
+    pub fn apply_created(&mut self, event: &NodeCreated) -> Result<()> {
+        let node = MemoryNode::from_created(event)?;
         if self.nodes.contains_key(&node.id) {
             return Err(LunaError::new(format!("node {} already exists", node.id)));
         }

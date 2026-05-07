@@ -454,6 +454,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "luna-inspector"
+version = "0.1.0"
+dependencies = [
+ "luna-core",
+ "luna-genesis",
+ "luna-ledger",
+ "luna-node",
+ "luna-tether",
+ "serde",
+]
+
+[[package]]
 name = "luna-ledger"
 version = "0.1.0"
 dependencies = [
@@ -497,6 +509,7 @@ version = "0.1.0"
 dependencies = [
  "luna-core",
  "luna-genesis",
+ "luna-inspector",
  "luna-ledger",
  "luna-node",
  "luna-tether",
@@ -542,6 +555,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "luna-genesis",
+ "luna-inspector",
  "luna-ledger",
  "luna-node",
  "luna-replay",

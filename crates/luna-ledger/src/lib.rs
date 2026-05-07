@@ -20,6 +20,20 @@ pub enum EventPayload {
     Text(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeKind {
+    Event,
+    Evidence,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TetherKind {
+    SupportedBy,
+    EvidenceFor,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawEventDraft {
     pub id: String,
@@ -72,30 +86,142 @@ impl RawEvent {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NodeCreated {
+    pub node_id: String,
+    pub kind: NodeKind,
+    pub label: String,
+    pub source_event_id: String,
+    pub source_event_hash: String,
+}
+
+impl NodeCreated {
+    pub fn new(
+        node_id: impl Into<String>,
+        kind: NodeKind,
+        label: impl Into<String>,
+        source_event_id: impl Into<String>,
+        source_event_hash: impl Into<String>,
+    ) -> Self {
+        Self {
+            node_id: node_id.into(),
+            kind,
+            label: label.into(),
+            source_event_id: source_event_id.into(),
+            source_event_hash: source_event_hash.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GenesisAttached {
+    pub certificate_id: String,
+    pub node_id: String,
+    pub source_event_id: String,
+    pub source_event_hash: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl GenesisAttached {
+    pub fn new(
+        certificate_id: impl Into<String>,
+        node_id: impl Into<String>,
+        source_event_id: impl Into<String>,
+        source_event_hash: impl Into<String>,
+    ) -> Self {
+        Self {
+            certificate_id: certificate_id.into(),
+            node_id: node_id.into(),
+            source_event_id: source_event_id.into(),
+            source_event_hash: source_event_hash.into(),
+            created_at: Utc::now(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TetherCreated {
+    pub tether_id: String,
+    pub source_node_id: String,
+    pub target_node_id: String,
+    pub kind: Option<TetherKind>,
+    pub reverse_kind: TetherKind,
+    pub source_event_id: String,
+    pub source_event_hash: String,
+}
+
+impl TetherCreated {
+    pub fn new(
+        tether_id: impl Into<String>,
+        source_node_id: impl Into<String>,
+        target_node_id: impl Into<String>,
+        kind: Option<TetherKind>,
+        reverse_kind: TetherKind,
+        source_event_id: impl Into<String>,
+        source_event_hash: impl Into<String>,
+    ) -> Self {
+        Self {
+            tether_id: tether_id.into(),
+            source_node_id: source_node_id.into(),
+            target_node_id: target_node_id.into(),
+            kind,
+            reverse_kind,
+            source_event_id: source_event_id.into(),
+            source_event_hash: source_event_hash.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum TopologyMutation {
+    NodeCreated(NodeCreated),
+    GenesisAttached(GenesisAttached),
+    TetherCreated(TetherCreated),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum LedgerEvent {
+    RawEventRecorded(RawEvent),
+    TopologyMutation(TopologyMutation),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct InMemoryLedger {
-    events: BTreeMap<String, RawEvent>,
+    events: Vec<LedgerEvent>,
+    raw_events: BTreeMap<String, RawEvent>,
 }
 
 impl InMemoryLedger {
     pub fn append(&mut self, event: RawEvent) -> Result<()> {
         event.verify_hash()?;
-        if self.events.contains_key(&event.id) {
+        if self.raw_events.contains_key(&event.id) {
             return Err(LunaError::new(format!(
                 "raw event {} already exists in append-only ledger",
                 event.id
             )));
         }
-        self.events.insert(event.id.clone(), event);
+        self.raw_events.insert(event.id.clone(), event.clone());
+        self.events.push(LedgerEvent::RawEventRecorded(event));
+        Ok(())
+    }
+
+    pub fn append_mutation(&mut self, mutation: TopologyMutation) -> Result<()> {
+        self.events.push(LedgerEvent::TopologyMutation(mutation));
         Ok(())
     }
 
     pub fn get(&self, id: &str) -> Option<&RawEvent> {
-        self.events.get(id)
+        self.raw_events.get(id)
     }
 
-    pub fn events(&self) -> &BTreeMap<String, RawEvent> {
+    pub fn events(&self) -> &[LedgerEvent] {
         &self.events
+    }
+
+    pub fn raw_events(&self) -> &BTreeMap<String, RawEvent> {
+        &self.raw_events
     }
 }
 

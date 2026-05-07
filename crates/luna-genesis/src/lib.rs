@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use luna_core::{LunaError, Result};
-use luna_ledger::RawEvent;
+use luna_ledger::{GenesisAttached, RawEvent};
 use luna_node::MemoryNode;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -8,35 +8,43 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenesisCertificate {
-    pub id: String,
-    pub node_id: String,
-    pub source_event_id: String,
-    pub source_event_hash: String,
-    pub created_at: DateTime<Utc>,
-    pub certificate_hash: String,
+    id: String,
+    node_id: String,
+    source_event_id: String,
+    source_event_hash: String,
+    created_at: DateTime<Utc>,
+    certificate_hash: String,
 }
 
 impl GenesisCertificate {
-    pub fn for_node(id: impl Into<String>, node: &MemoryNode, event: &RawEvent) -> Result<Self> {
-        if node.source_event_id != event.id {
+    pub fn from_attached(
+        attached: &GenesisAttached,
+        node: &MemoryNode,
+        event: &RawEvent,
+    ) -> Result<Self> {
+        if node.source_event_id() != event.id {
             return Err(LunaError::new(format!(
                 "node {} source event {} does not match event {}",
-                node.id, node.source_event_id, event.id
+                node.id(),
+                node.source_event_id(),
+                event.id
             )));
         }
-        if node.source_event_hash != event.hash {
+        if node.source_event_hash() != event.hash {
             return Err(LunaError::new(format!(
                 "node {} source hash does not match event {}",
-                node.id, event.id
+                node.id(),
+                event.id
             )));
         }
 
-        let id = require_non_empty("genesis certificate id", id.into())?;
-        let created_at = Utc::now();
-        let certificate_hash = certificate_hash(&id, &node.id, &event.id, &event.hash, created_at)?;
+        let id = require_non_empty("genesis certificate id", attached.certificate_id.clone())?;
+        let created_at = attached.created_at;
+        let certificate_hash =
+            certificate_hash(&id, node.id(), &event.id, &event.hash, created_at)?;
         Ok(Self {
             id,
-            node_id: node.id.clone(),
+            node_id: node.id().to_string(),
             source_event_id: event.id.clone(),
             source_event_hash: event.hash.clone(),
             created_at,
@@ -61,6 +69,22 @@ impl GenesisCertificate {
             )))
         }
     }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn node_id(&self) -> &str {
+        &self.node_id
+    }
+
+    pub fn source_event_id(&self) -> &str {
+        &self.source_event_id
+    }
+
+    pub fn source_event_hash(&self) -> &str {
+        &self.source_event_hash
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -70,7 +94,13 @@ pub struct GenesisRegistry {
 }
 
 impl GenesisRegistry {
-    pub fn insert(&mut self, certificate: GenesisCertificate) -> Result<()> {
+    pub fn apply_attached(
+        &mut self,
+        attached: &GenesisAttached,
+        node: &MemoryNode,
+        event: &RawEvent,
+    ) -> Result<()> {
+        let certificate = GenesisCertificate::from_attached(attached, node, event)?;
         certificate.verify_hash()?;
         if self.certificates.contains_key(&certificate.id) {
             return Err(LunaError::new(format!(

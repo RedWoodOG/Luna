@@ -1,45 +1,36 @@
 use luna_core::{LunaError, Result};
-use luna_ledger::RawEvent;
-use luna_node::MemoryNode;
+use luna_ledger::TetherCreated;
+pub use luna_ledger::TetherKind;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TetherKind {
-    SupportedBy,
-    EvidenceFor,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tether {
-    pub id: String,
-    pub source_node_id: String,
-    pub target_node_id: String,
-    pub kind: TetherKind,
-    pub reverse_kind: TetherKind,
-    pub source_event_id: String,
-    pub source_event_hash: String,
+    id: String,
+    source_node_id: String,
+    target_node_id: String,
+    kind: TetherKind,
+    reverse_kind: TetherKind,
+    source_event_id: String,
+    source_event_hash: String,
 }
 
 impl Tether {
-    pub fn new(
-        id: impl Into<String>,
-        source: &MemoryNode,
-        target: &MemoryNode,
-        kind: Option<TetherKind>,
-        reverse_kind: TetherKind,
-        event: &RawEvent,
-    ) -> Result<Self> {
-        let kind = kind.ok_or_else(|| LunaError::new("tether direction is required"))?;
+    pub fn from_created(event: &TetherCreated) -> Result<Self> {
+        let kind = event
+            .kind
+            .ok_or_else(|| LunaError::new("tether direction is required"))?;
         let tether = Self {
-            id: require_non_empty("tether id", id.into())?,
-            source_node_id: source.id.clone(),
-            target_node_id: target.id.clone(),
+            id: require_non_empty("tether id", event.tether_id.clone())?,
+            source_node_id: require_non_empty("source node id", event.source_node_id.clone())?,
+            target_node_id: require_non_empty("target node id", event.target_node_id.clone())?,
             kind,
-            reverse_kind,
-            source_event_id: event.id.clone(),
-            source_event_hash: event.hash.clone(),
+            reverse_kind: event.reverse_kind,
+            source_event_id: require_non_empty("source event id", event.source_event_id.clone())?,
+            source_event_hash: require_non_empty(
+                "source event hash",
+                event.source_event_hash.clone(),
+            )?,
         };
         tether.validate()?;
         Ok(tether)
@@ -72,6 +63,34 @@ impl Tether {
         }
         Ok(())
     }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn source_node_id(&self) -> &str {
+        &self.source_node_id
+    }
+
+    pub fn target_node_id(&self) -> &str {
+        &self.target_node_id
+    }
+
+    pub fn kind(&self) -> TetherKind {
+        self.kind
+    }
+
+    pub fn reverse_kind(&self) -> TetherKind {
+        self.reverse_kind
+    }
+
+    pub fn source_event_id(&self) -> &str {
+        &self.source_event_id
+    }
+
+    pub fn source_event_hash(&self) -> &str {
+        &self.source_event_hash
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -80,7 +99,8 @@ pub struct TetherRegistry {
 }
 
 impl TetherRegistry {
-    pub fn insert(&mut self, tether: Tether) -> Result<()> {
+    pub fn apply_created(&mut self, event: &TetherCreated) -> Result<()> {
+        let tether = Tether::from_created(event)?;
         tether.validate()?;
         if self.tethers.contains_key(&tether.id) {
             return Err(LunaError::new(format!(
