@@ -68,3 +68,20 @@ Examples:
 - Tether without direction: reject.
 - Duplicate genesis certificate for same node: reject.
 - Source event hash mismatch: reject.
+
+## 7. Monitor Roles
+
+Monitoring has separate lifecycle roles. The roles are not interchangeable.
+
+Rules:
+
+- Inspectors run synchronously before mutation commit and reject malformed
+  transitions.
+- Gauges sample numerical metrics continuously and report drift from thresholds
+  or rolling baselines.
+- Sentinels run asynchronously over topology content and flag emergent defects.
+- Auditors periodically replay ledger windows and compare replayed state against
+  live state.
+- No monitor role rewrites raw events, provenance, or genesis certificates.
+
+The full role boundaries live in `07_MONITOR_ROLES.md`.

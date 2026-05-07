@@ -23,7 +23,8 @@ The ledger is the source replay reads from.
 ## Node
 
 A typed memory unit derived from one source event. Milestone 0 nodes carry id,
-kind, label, source event id, source event hash, and genesis certificate id.
+kind, label, source event id, and source event hash. The topology registry must
+contain exactly one genesis certificate for each promoted node.
 
 ## Genesis Certificate
 
@@ -64,6 +65,24 @@ report. In Milestone 0, recognition sparks are documented but not implemented.
 A future monitoring structure that flags defects such as contradiction pressure,
 provenance loss, retrieval precision drop, or unsafe topology transitions.
 Sentinels do not rewrite source truth.
+
+## Inspector
+
+A synchronous invariant checker that runs before a mutation commits. Inspectors
+are binary: pass the mutation or reject it with an inspectable reason. They do
+not repair malformed transitions.
+
+## Gauge
+
+A continuous numerical observer for flow rates and structural metrics. Gauges
+report drift from thresholds or rolling baselines; they do not decide whether a
+defect exists.
+
+## Auditor
+
+A periodic deep-replay verifier. Auditors replay a ledger window in isolation,
+compare it against live state, and raise alarms or quarantine divergent derived
+state for human review.
 
 ## Splinter
 

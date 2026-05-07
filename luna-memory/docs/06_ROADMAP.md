@@ -39,12 +39,36 @@ listed above.
 Goal:
 
 - Represent topology mutations as ledger events instead of direct state edits.
+- Introduce inspector gates for the Milestone 0 invariants before mutation
+  commit.
 
 Required proof:
 
 - Every node, tether, and certificate is rebuilt only from event history.
+- Inspector rejection is recorded with mutation type, invariant, and reason.
+- Orphan nodes, duplicate genesis certificates, unresolved tether endpoints, and
+  undefined tether direction fail before commit.
 
-## Milestone 2: Dense Orb Formation
+## Milestone 2: Gauge Baselines
+
+Goal:
+
+- Add cheap continuous observers for topology flow and structural drift.
+
+Required proof:
+
+- Gauge metrics define formula, sampling interval, threshold or rolling baseline,
+  and emitted observation event.
+- Gauges report drift without rejecting writes or rewriting topology.
+
+Initial gauges:
+
+- Events per second into the ledger.
+- Average tether fan-out per node.
+- Replay duration per thousand events.
+- Hash collision rate.
+
+## Milestone 3: Dense Orb Formation
 
 Goal:
 
@@ -55,7 +79,7 @@ Required proof:
 - Orb membership can be serialized, logged, replayed, and rejected when cohesion
   rules fail.
 
-## Milestone 3: Compression Without Lineage Loss
+## Milestone 4: Compression Without Lineage Loss
 
 Goal:
 
@@ -66,7 +90,7 @@ Required proof:
 
 - Compression fidelity and provenance survival are measured separately.
 
-## Milestone 4: Recognition Sparks
+## Milestone 5: Recognition Sparks
 
 Goal:
 
@@ -76,7 +100,7 @@ Required proof:
 
 - Activation reports source, confidence, signals, lineage, and conflicts.
 
-## Milestone 5: Sentinel Orbs
+## Milestone 6: Sentinel Orbs
 
 Goal:
 
@@ -86,8 +110,23 @@ Goal:
 Required proof:
 
 - Sentinels flag, recommend, score, or block; they do not rewrite truth.
+- Sentinels consume inspector/gauge/auditor evidence but do not collapse into
+  those roles.
 
-## Milestone 6: Splinter and Merge Mechanics
+## Milestone 7: Auditor Deep Replay
+
+Goal:
+
+- Periodically replay ledger windows in isolation and compare against live state.
+
+Required proof:
+
+- Auditor reports ledger window, replay version, live snapshot hash, replayed
+  state hash, and diff.
+- Divergent derived state is quarantined for human review instead of silently
+  repaired.
+
+## Milestone 8: Splinter and Merge Mechanics
 
 Goal:
 
@@ -97,7 +136,7 @@ Required proof:
 
 - Splits and merges preserve ancestry, cause, reversible replay, and metrics.
 
-## Milestone 7: Baseline Evaluation
+## Milestone 9: Baseline Evaluation
 
 Goal:
 

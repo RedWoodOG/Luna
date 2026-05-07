@@ -69,6 +69,19 @@ Expected behavior:
 - Replay returns an error.
 - No partial topology is promoted as valid.
 
+## Missing Provenance At Write Time
+
+Failure:
+
+- A mutation would create an orphan node, duplicate genesis certificate,
+  unresolved tether endpoint, or compression without lineage.
+
+Expected behavior:
+
+- Inspector rejects the mutation before commit.
+- Rejection reason is inspectable.
+- The rejected transition has a replay trace.
+
 ## Hidden Mutation
 
 Failure:
@@ -79,6 +92,34 @@ Expected behavior:
 
 - Replay output differs from live state.
 - Replay identity test fails.
+- Auditor raises an alarm and quarantines divergent derived state for human
+  review.
+
+## Numerical Drift Without Immediate Defect
+
+Failure:
+
+- Flow or structure shifts from baseline: event rate changes, tether fan-out
+  rises, replay duration grows, hash collision rate changes, or orb density
+  distribution moves.
+
+Expected behavior:
+
+- Gauge reports the threshold crossing or baseline shift.
+- Gauge does not reject writes or rewrite topology.
+- Sentinel or human review decides whether the drift indicates a defect.
+
+## Monitor Role Collapse
+
+Failure:
+
+- A single monitor abstraction tries to reject writes, score content defects,
+  report metrics, and prove replay equivalence.
+
+Expected behavior:
+
+- Architecture review rejects the abstraction.
+- The behavior is split into inspector, gauge, sentinel, or auditor jurisdiction.
 
 ## Theory Drift
 
