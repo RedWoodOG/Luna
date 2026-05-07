@@ -188,6 +188,19 @@ Expected behavior:
   failure mode, test oracle, replay proof.
 - Sentinels do not self-correct truth or delete prior reports.
 
+## Sentinel Schedule Drift
+
+Failure:
+
+- A sentinel runs at the wrong cadence, on-demand sentinels run during scheduled
+  polling, or batched event counts skip required evaluations.
+
+Expected behavior:
+
+- Schedule tests cover every-events, every-seconds, and on-demand paths.
+- Reports identify the schedule that produced them.
+- Duplicate sentinel names are ignored so scheduler state does not collide.
+
 ## Theory Drift
 
 Failure:

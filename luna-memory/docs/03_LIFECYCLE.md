@@ -158,8 +158,11 @@ Rules:
 - Sentinels declare name, defect class, score semantics, evidence type, and
   schedule.
 - Schedules may be on demand, every N events, or every N seconds.
+- On-demand sentinels run only through the explicit on-demand path, not during
+  scheduled polling.
 - Sentinel report logs are separate from the source-of-truth topology ledger and
   gauge reading log.
+- Sentinel report persistence uses append-only JSONL.
 - Sentinels do not delete evidence, redefine provenance, or auto-confirm
   contradictions.
 - Runtime correctness cannot depend on sentinels being enabled.

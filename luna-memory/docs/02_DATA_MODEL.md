@@ -262,7 +262,7 @@ Required fields:
 
 Invariants:
 
-- Sentinel report logs are append-only.
+- Sentinel report logs are append-only JSONL streams.
 - Sentinel reports never mutate topology.
 - Sentinel reports never redefine provenance or confirm contradictions.
 - The system must work correctly with zero enabled sentinels.

@@ -118,6 +118,8 @@ Implemented:
 - Contradiction sentinel.
 - Provenance integrity sentinel.
 - Splinter pressure sentinel over placeholder orb histories.
+- JSONL report persistence and schedule tests for batched event counts,
+  duplicate sentinel names, and on-demand isolation.
 
 ## Milestone 4: Dense Orb Formation
 

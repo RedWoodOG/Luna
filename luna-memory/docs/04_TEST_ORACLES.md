@@ -223,19 +223,43 @@ topology input.
 Provenance sentinel reports node/certificate/tether provenance chains that do
 not resolve to ledger raw event hashes or node provenance.
 
+### `test_provenance_integrity_sentinel_fires_on_bad_tether_chain`
+
+Provenance sentinel reports tethers with missing endpoints or mismatched source
+event hashes.
+
 ### `test_splinter_pressure_sentinel_fires_on_density_precision_divergence`
 
 Splinter pressure sentinel flags placeholder orb history when density rises
 while retrieval precision drops beyond threshold.
 
+### `test_splinter_pressure_aggregates_across_orbs`
+
+Splinter pressure accumulates positive pressure across multiple orbs before
+comparing against the threshold.
+
+### `test_multi_valued_predicates_are_not_contradictions`
+
+Contradiction sentinel does not flag explicitly multi-valued predicates as
+contradictions.
+
 ### `test_sentinel_reports_are_reproducible_from_same_view`
 
 The same sentinel, topology view, and timestamp produce identical reports.
+
+### `test_flagged_sentinel_reports_are_reproducible_from_same_view`
+
+Flagged reports with evidence remain reproducible for the same view and
+timestamp.
 
 ### `test_sentinel_report_log_is_append_only`
 
 Appending reports preserves order and no mutable report accessor is available to
 tests.
+
+### `test_sentinel_report_jsonl_round_trips`
+
+Sentinel report persistence appends JSONL records and loads them back in order.
 
 ### `test_runtime_functions_with_all_sentinels_disabled`
 
@@ -245,6 +269,20 @@ Sentinel runtime with all sentinels disabled runs safely and appends no reports.
 
 Sentinel runtime observes `EveryEvents` and `EverySeconds` schedules without
 blocking writes.
+
+### `test_runtime_event_schedule_handles_batched_event_counts`
+
+Event schedules run when enough events elapsed even if polling skips exact
+multiples.
+
+### `test_runtime_rejects_duplicate_sentinel_names`
+
+Duplicate sentinel names do not produce duplicate scheduler entries.
+
+### `test_runtime_on_demand_is_separate_from_scheduled_polling`
+
+On-demand sentinels do not run during scheduled polling and run only through the
+explicit on-demand path.
 
 ### `test_sentinel_contract_metadata_is_declared`
 
