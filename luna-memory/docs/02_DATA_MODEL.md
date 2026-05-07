@@ -1,8 +1,12 @@
-# Milestone 0 Data Model
+# Milestone 0-1 Data Model
 
 Milestone 0 keeps the model intentionally narrow. It proves that one raw event
 can create one node, one genesis certificate, one directional tether, and one
 replayable topology state without losing provenance.
+
+Milestone 1 adds topology mutation events and an inspected commit path. Derived
+state is no longer written by direct registry mutation; it is applied from
+append-only ledger events.
 
 ## Raw Event
 
@@ -47,6 +51,65 @@ Invariant:
 - A node must have exactly one genesis certificate in the topology registry
   before replay can promote the reconstructed state.
 
+## Topology Mutation Events
+
+Topology mutations share the same ordered append-only ledger as raw events. A
+ledger record is either `RawEventRecorded` or `TopologyMutation`.
+
+### `NodeCreated`
+
+Required fields:
+
+- `node_id`: node identifier.
+- `kind`: typed node category.
+- `label`: human-readable label.
+- `source_event_id`: raw event that produced the node.
+- `source_event_hash`: hash of that raw event.
+
+Inspector invariants:
+
+- Source event exists.
+- Source event hash matches.
+- Node id is not already present.
+
+### `GenesisAttached`
+
+Required fields:
+
+- `certificate_id`: certificate identifier.
+- `node_id`: node receiving genesis.
+- `source_event_id`: raw event used for genesis.
+- `source_event_hash`: hash of that raw event.
+- `created_at`: immutable certificate creation timestamp.
+
+Inspector invariants:
+
+- Source event exists.
+- Source event hash matches.
+- Node exists.
+- Node does not already have a genesis certificate.
+
+### `TetherCreated`
+
+Required fields:
+
+- `tether_id`: tether identifier.
+- `source_node_id`: traversal source.
+- `target_node_id`: traversal target.
+- `kind`: forward tether meaning.
+- `reverse_kind`: expected reverse meaning.
+- `source_event_id`: raw event that justified the tether.
+- `source_event_hash`: hash of that raw event.
+
+Inspector invariants:
+
+- Source event exists.
+- Source event hash matches.
+- Direction is explicit.
+- Reverse meaning is distinct.
+- Source and target endpoints exist.
+- Tether id is not already present.
+
 ## Genesis Certificate
 
 Required fields:
@@ -86,7 +149,7 @@ Invariants:
 
 Required fields:
 
-- `replay_ledger`: ordered topology events consumed by replay.
+- `ledger`: ordered raw and topology mutation events consumed by replay.
 - `events`: raw events keyed by id.
 - `nodes`: nodes keyed by id.
 - `genesis_certificates`: certificates keyed by id.
@@ -99,3 +162,16 @@ Replay must reject:
 - A node with missing genesis certificate.
 - A certificate whose node or event is missing.
 - A tether whose source node, target node, or source event is missing.
+
+## Commit Pipeline
+
+All topology writes use one path:
+
+```text
+proposed mutation
+-> inspector chain
+-> append ledger event
+-> apply registry mutation
+```
+
+Direct registry mutation is not a public write path.

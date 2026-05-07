@@ -33,8 +33,9 @@ Failure:
 
 Expected behavior:
 
-- Constructor rejects it.
-- Replay rejects orphaned node creation events.
+- Inspector rejects `NodeCreated` before commit with `SourceEventMissing` or
+  `SourceEventHashMismatch`.
+- Replay rejects orphaned node creation events from malformed ledgers.
 
 ## Duplicate Genesis Certificate
 
@@ -44,7 +45,7 @@ Failure:
 
 Expected behavior:
 
-- Topology builder rejects the second certificate.
+- Inspector rejects the second certificate with `DuplicateGenesis`.
 - Replay fails closed on duplicate genesis.
 
 ## Undefined Tether Direction
@@ -55,7 +56,7 @@ Failure:
 
 Expected behavior:
 
-- Constructor rejects it.
+- Inspector rejects it with `DirectionMissing`.
 - Tests verify reverse direction has distinct meaning.
 
 ## Missing Provenance During Replay
@@ -81,6 +82,32 @@ Expected behavior:
 - Inspector rejects the mutation before commit.
 - Rejection reason is inspectable.
 - The rejected transition has a replay trace.
+
+Milestone 1 rejection reasons:
+
+- `SourceEventMissing`
+- `SourceEventHashMismatch`
+- `DirectionMissing`
+- `DuplicateGenesis`
+- `EndpointMissing`
+- `NodeMissing`
+- `DuplicateNode`
+- `DuplicateTether`
+- `ReverseMeaningNotDistinct`
+
+## Direct Registry Mutation
+
+Failure:
+
+- Code bypasses inspectors and writes directly into node, genesis, or tether
+  registries.
+
+Expected behavior:
+
+- Direct registry insertion is not a public API.
+- Compile-fail contracts protect the removed bypass.
+- Valid writes use `proposed mutation -> inspectors -> ledger append -> registry
+  apply`.
 
 ## Hidden Mutation
 

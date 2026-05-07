@@ -36,6 +36,8 @@ listed above.
 
 ## Milestone 1: Provenance-Preserving Topology Events
 
+Status: COMPLETE
+
 Goal:
 
 - Represent topology mutations as ledger events instead of direct state edits.
@@ -49,7 +51,19 @@ Required proof:
 - Orphan nodes, duplicate genesis certificates, unresolved tether endpoints, and
   undefined tether direction fail before commit.
 
+Implemented:
+
+- `NodeCreated`, `GenesisAttached`, and `TetherCreated` topology mutations.
+- Ordered ledger records for raw events and topology mutations.
+- `luna-inspector` typed rejection reasons.
+- Single commit path: proposed mutation -> inspector chain -> ledger append ->
+  registry apply.
+- Replay from the same raw + mutation ledger.
+- Compile-fail contracts for direct registry mutation bypasses.
+
 ## Milestone 2: Gauge Baselines
+
+Status: NEXT
 
 Goal:
 

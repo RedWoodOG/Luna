@@ -1,4 +1,4 @@
-# Milestone 0 Test Oracles
+# Milestone 0-1 Test Oracles
 
 These tests define the first hard verification package. They are intentionally
 mechanical: a feature either preserves provenance and replays, or it fails.
@@ -59,6 +59,44 @@ proves determinism; the live-vs-replay test proves hidden mutation detection.
 
 Replay a node creation that references a missing source event. Replay must
 return an error instead of creating orphaned derived state.
+
+## Milestone 1 Oracles
+
+### `test_mutations_flow_through_append_only_ledger`
+
+Commit one raw event and the M0 topology mutations. The ordered ledger must
+contain one `RawEventRecorded` event followed by `TopologyMutation` variants for
+node creation, genesis attachment, and tether creation.
+
+### `test_commit_pipeline_preserves_live_replay_equality`
+
+Build topology through the commit path, replay from the same ledger, and assert
+live state equals replayed state.
+
+### `test_missing_source_event_rejects_with_specific_error`
+
+Attempt to commit `NodeCreated` with a missing source event. Inspector rejection
+must be `SourceEventMissing`.
+
+### `test_tether_missing_direction_rejects_with_specific_error`
+
+Attempt to commit `TetherCreated` without a forward direction. Inspector
+rejection must be `DirectionMissing`.
+
+### `test_duplicate_genesis_rejects_with_specific_error`
+
+Attempt to attach a second genesis certificate to the same node. Inspector
+rejection must be `DuplicateGenesis`.
+
+### `test_unresolved_tether_endpoint_rejects_with_specific_error`
+
+Attempt to create a tether whose endpoint is absent from the topology. Inspector
+rejection must be `EndpointMissing`.
+
+### Compile-fail direct mutation contracts
+
+Direct registry insertion and direct tether construction are compile-fail API
+contracts. The public write path is the commit pipeline.
 
 ## Future Oracle Template
 

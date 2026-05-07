@@ -1,4 +1,4 @@
-# Milestone 0 Lifecycle
+# Milestone 0-1 Lifecycle
 
 Milestone 0 lifecycle rules are small enough to test exhaustively. Later memory
 features must add their own lifecycle rules before implementation.
@@ -69,7 +69,29 @@ Examples:
 - Duplicate genesis certificate for same node: reject.
 - Source event hash mismatch: reject.
 
-## 7. Monitor Roles
+## 7. Commit Topology Mutation
+
+Milestone 1 turns topology writes into inspected mutation events.
+
+Commit path:
+
+```text
+proposed topology mutation
+-> inspector chain
+-> append-only ledger event
+-> registry apply
+```
+
+Rules:
+
+- `NodeCreated`, `GenesisAttached`, and `TetherCreated` are ledger events.
+- Inspectors run before a mutation is appended.
+- Rejected mutations return a typed rejection reason and do not enter the ledger.
+- Registry application consumes mutation events; direct registry mutation is not
+  the public write path.
+- Replay reads the same raw and mutation ledger events in order.
+
+## 8. Monitor Roles
 
 Monitoring has separate lifecycle roles. The roles are not interchangeable.
 
