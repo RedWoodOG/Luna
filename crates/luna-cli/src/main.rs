@@ -4,7 +4,7 @@ use luna_extract::{
     CommandBackend, CountingBackend, FileExtractionCache, FixtureBackend, FusedExtractor,
     LlmBackend, LlmExtractor, LunaExtractor,
 };
-use luna_gauges::{calibrate_thresholds, GaugeReading};
+use luna_gauges::{calibrate_thresholds, GaugeReadingLog};
 use luna_metrics::{BenchmarkReport, BenchmarkSubreport};
 use luna_runtime::{
     default_runtime_log_path, render_conversation_reply, render_runtime_markdown, RuntimeExtractor,
@@ -58,7 +58,7 @@ enum Command {
 enum GaugesCommand {
     /// Suggest gauge thresholds from historical gauge reading JSON.
     Calibrate {
-        /// JSON file containing an array of GaugeReading records.
+        /// JSONL file containing one GaugeReading record per line.
         input: PathBuf,
         /// Output JSON file for threshold suggestions.
         #[arg(long)]
@@ -432,8 +432,7 @@ fn main() -> anyhow::Result<ExitCode> {
                 out,
                 multiplier,
             } => {
-                let bytes = fs::read(&input)?;
-                let readings: Vec<GaugeReading> = serde_json::from_slice(&bytes)?;
+                let readings = GaugeReadingLog::load_jsonl(&input)?;
                 let suggestions = calibrate_thresholds(&readings, multiplier);
                 if let Some(parent) = out.parent() {
                     fs::create_dir_all(parent)?;

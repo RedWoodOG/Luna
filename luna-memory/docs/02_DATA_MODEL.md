@@ -194,7 +194,7 @@ Required fields:
 
 Invariants:
 
-- Gauge logs are append-only.
+- Gauge logs are append-only JSONL streams, one `GaugeReading` per line.
 - Gauge readings never mutate topology.
 - Gauge readings never enter the source-of-truth topology ledger.
 - The system must work correctly with zero registered gauges.
@@ -212,3 +212,18 @@ Derived values:
 - `standard deviation`
 
 Baselines are pure data structures with no I/O.
+
+## Threshold Suggestion
+
+Calibration output is reviewable configuration data, not runtime authority.
+
+Required fields:
+
+- `gauge_name`
+- `sample_count`
+- `mean`
+- `std_dev`
+- `suggested_threshold_std_devs`
+
+The suggested threshold is in the same unit as `DriftConfig`: standard-deviation
+multiples, not raw metric units.

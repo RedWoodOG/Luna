@@ -153,7 +153,12 @@ pipeline.
 ### `test_gauge_trait_produces_stable_readings_on_stable_input`
 
 Instantiate the five concrete gauges on stable input. Repeated reads must return
-the same values and gauges must expose stable names and units.
+the same values and gauges must expose stable names, units, and formulas.
+
+### `test_dynamic_gauge_reads_fresh_snapshot_each_tick`
+
+A gauge backed by a live snapshot source must reflect changed source values on
+later reads.
 
 ### `test_rolling_baseline_updates_across_window`
 
@@ -167,10 +172,19 @@ Given a current reading and baseline statistics, drift detection must return
 `Stable` inside the configured threshold and `Drift(magnitude, direction)` when
 the reading exceeds it.
 
+### `test_drift_detector_edge_cases_are_finite`
+
+No-baseline, zero-count, zero-standard-deviation, downward drift, and exact
+threshold cases must stay finite and deterministic.
+
 ### `test_gauge_reading_log_is_append_only`
 
 Appending readings increases the log length and no mutable reading accessor is
 available to tests.
+
+### `test_gauge_reading_jsonl_round_trips`
+
+Gauge reading persistence appends JSONL records and loads them back in order.
 
 ### `test_runtime_functions_with_all_gauges_disabled`
 
@@ -181,6 +195,11 @@ readings, and leave topology correctness unaffected.
 
 Runtime ticks call gauges, compare against previous baseline, append readings,
 and update the rolling baseline.
+
+### `test_runtime_rejects_duplicate_gauge_names`
+
+Duplicate gauge names do not produce multiple same-name readings in one tick or
+contaminate the rolling baseline.
 
 ### `test_calibration_suggests_threshold_from_historical_variance`
 

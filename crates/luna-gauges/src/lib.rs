@@ -1,6 +1,14 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, num::NonZeroUsize, time::Duration};
+use std::{
+    collections::BTreeMap,
+    fs::OpenOptions,
+    io::{BufRead, BufReader, Write},
+    num::NonZeroUsize,
+    path::Path,
+    sync::Arc,
+    time::Duration,
+};
 
 pub trait Gauge {
     fn read(&self) -> f64;
@@ -126,7 +134,7 @@ pub fn detect_drift(
         if delta == 0.0 {
             0.0
         } else {
-            f64::INFINITY
+            config.threshold_std_devs + 1.0
         }
     } else {
         (delta / baseline.std_dev).abs()
@@ -186,6 +194,48 @@ impl GaugeReadingLog {
     pub fn readings_mut_for_tests(&mut self) -> Option<&mut Vec<GaugeReading>> {
         None
     }
+
+    pub fn append_jsonl(path: &Path, reading: &GaugeReading) -> Result<(), GaugeError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|err| GaugeError::Io {
+                message: err.to_string(),
+            })?;
+        }
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .map_err(|err| GaugeError::Io {
+                message: err.to_string(),
+            })?;
+        let line = serde_json::to_string(reading).map_err(|err| GaugeError::Io {
+            message: err.to_string(),
+        })?;
+        writeln!(file, "{line}").map_err(|err| GaugeError::Io {
+            message: err.to_string(),
+        })?;
+        Ok(())
+    }
+
+    pub fn load_jsonl(path: &Path) -> Result<Vec<GaugeReading>, GaugeError> {
+        let file = std::fs::File::open(path).map_err(|err| GaugeError::Io {
+            message: err.to_string(),
+        })?;
+        let reader = BufReader::new(file);
+        let mut readings = Vec::new();
+        for line in reader.lines() {
+            let line = line.map_err(|err| GaugeError::Io {
+                message: err.to_string(),
+            })?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            readings.push(serde_json::from_str(&line).map_err(|err| GaugeError::Io {
+                message: err.to_string(),
+            })?);
+        }
+        Ok(readings)
+    }
 }
 
 pub struct GaugeRuntime {
@@ -211,6 +261,9 @@ impl GaugeRuntime {
     }
 
     pub fn register(&mut self, gauge: Box<dyn Gauge>) {
+        if self.baselines.contains_key(gauge.name()) {
+            return;
+        }
         self.baselines
             .entry(gauge.name().to_string())
             .or_insert_with(|| {
@@ -218,6 +271,16 @@ impl GaugeRuntime {
                     .expect("GaugeRuntime validates non-zero window size at construction")
             });
         self.gauges.push(gauge);
+    }
+
+    pub fn new_with_interval(
+        config: DriftConfig,
+        window_size: usize,
+        tick_interval: Duration,
+    ) -> Result<Self, GaugeError> {
+        let mut runtime = Self::new(config, window_size)?;
+        runtime.tick_interval = tick_interval;
+        Ok(runtime)
     }
 
     pub fn tick_at(&mut self, timestamp: DateTime<Utc>) -> Result<Vec<GaugeReading>, GaugeError> {
@@ -251,6 +314,24 @@ impl GaugeRuntime {
     pub fn tick_interval(&self) -> Duration {
         self.tick_interval
     }
+
+    pub fn run_ticks(
+        &mut self,
+        start: DateTime<Utc>,
+        count: usize,
+    ) -> Result<Vec<GaugeReading>, GaugeError> {
+        let mut readings = Vec::new();
+        for index in 0..count {
+            let timestamp = start
+                + chrono::Duration::from_std(self.tick_interval * index as u32).map_err(|err| {
+                    GaugeError::Io {
+                        message: err.to_string(),
+                    }
+                })?;
+            readings.extend(self.tick_at(timestamp)?);
+        }
+        Ok(readings)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -259,7 +340,7 @@ pub struct ThresholdSuggestion {
     pub sample_count: usize,
     pub mean: f64,
     pub std_dev: f64,
-    pub suggested_threshold: f64,
+    pub suggested_threshold_std_devs: f64,
 }
 
 pub fn calibrate_thresholds(
@@ -287,7 +368,7 @@ pub fn calibrate_thresholds(
                 sample_count: stats.count,
                 mean: stats.mean,
                 std_dev: stats.std_dev,
-                suggested_threshold: (stats.std_dev * multiplier.max(0.0)).max(f64::EPSILON),
+                suggested_threshold_std_devs: multiplier.max(0.0),
             })
         })
         .collect()
@@ -296,6 +377,7 @@ pub fn calibrate_thresholds(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GaugeError {
     InvalidWindowSize { window_size: usize },
+    Io { message: String },
 }
 
 impl std::fmt::Display for GaugeError {
@@ -307,6 +389,7 @@ impl std::fmt::Display for GaugeError {
                     "gauge baseline window size must be non-zero, got {window_size}"
                 )
             }
+            Self::Io { message } => write!(f, "{message}"),
         }
     }
 }
@@ -315,20 +398,26 @@ impl std::error::Error for GaugeError {}
 
 macro_rules! snapshot_gauge {
     ($name:ident, $gauge_name:literal, $unit:literal, $body:expr) => {
-        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+        #[derive(Clone)]
         pub struct $name {
-            snapshot: GaugeSnapshot,
+            source: Arc<dyn Fn() -> GaugeSnapshot + Send + Sync>,
         }
 
         impl $name {
             pub fn new(snapshot: GaugeSnapshot) -> Self {
-                Self { snapshot }
+                Self {
+                    source: Arc::new(move || snapshot.clone()),
+                }
+            }
+
+            pub fn from_source(source: Arc<dyn Fn() -> GaugeSnapshot + Send + Sync>) -> Self {
+                Self { source }
             }
         }
 
         impl Gauge for $name {
             fn read(&self) -> f64 {
-                let snapshot = &self.snapshot;
+                let snapshot = &(self.source)();
                 $body(snapshot)
             }
 
@@ -347,7 +436,12 @@ snapshot_gauge!(
     EventsPerSecondGauge,
     "events_per_second",
     "events/second",
-    |snapshot: &GaugeSnapshot| rate(snapshot.raw_event_count, snapshot.elapsed_seconds)
+    |snapshot: &GaugeSnapshot| {
+        rate(
+            snapshot.raw_event_count + snapshot.mutation_event_count,
+            snapshot.elapsed_seconds,
+        )
+    }
 );
 
 snapshot_gauge!(

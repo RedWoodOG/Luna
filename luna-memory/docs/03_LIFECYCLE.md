@@ -132,7 +132,8 @@ Rules:
 - Default tick interval is one second.
 - Tick interval is configurable.
 - The gauge reading log is separate from the source-of-truth topology ledger.
+- Gauge reading persistence uses append-only JSONL.
 - Gauges have no write authority over topology.
 - Runtime correctness cannot depend on gauges being enabled.
-- Calibration reads historical gauge data and writes suggested threshold config
-  for human review; it does not tune thresholds automatically at runtime.
+- Calibration reads historical gauge JSONL data and writes suggested threshold
+  config for human review; it does not tune thresholds automatically at runtime.

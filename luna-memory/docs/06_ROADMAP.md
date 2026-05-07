@@ -77,7 +77,7 @@ Required proof:
 
 Initial gauges:
 
-- Events per second into the ledger.
+- Events per second into the ledger, including raw and mutation events.
 - Mutation events per second.
 - Average tether fan-out per node.
 - Replay duration per thousand events.
@@ -91,7 +91,7 @@ Implemented:
 - Separate append-only `GaugeReadingLog`.
 - Gauge runtime tick loop with configurable interval and safe disabled state.
 - CLI calibration command that writes reviewable threshold suggestions from
-  historical reading data.
+  historical JSONL reading data.
 
 ## Milestone 3: Dense Orb Formation
 

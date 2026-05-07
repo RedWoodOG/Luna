@@ -63,7 +63,7 @@ surface drift from baseline so sentinels or humans can ask why.
 
 Examples:
 
-- Events per second into the ledger.
+- Events per second into the ledger, including raw and mutation events.
 - Average tether fan-out per node.
 - Replay duration per thousand events.
 - Hash collision rate.
