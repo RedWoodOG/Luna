@@ -15,6 +15,7 @@ members = [
   "crates/luna-genesis",
   "crates/luna-inspector",
   "crates/luna-replay",
+  "crates/luna-gauges",
   "crates/luna-tests",
   # Remaining pre-existing product-track crates.
   "crates/luna-tcf",
