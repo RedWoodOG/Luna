@@ -1,8 +1,8 @@
 use luna_genesis::{GenesisCertificate, GenesisRegistry};
 use luna_ledger::{EventPayload, EventSource, InMemoryLedger, RawEvent, RawEventDraft};
 use luna_node::{MemoryNode, NodeKind};
-use luna_replay::{ReplayEvent, TopologyReplay};
-use luna_tether::{Tether, TetherKind};
+use luna_replay::{ReplayEvent, ReplayedTopology, TopologyReplay};
+use luna_tether::{Tether, TetherKind, TetherRegistry};
 
 fn sample_event() -> RawEvent {
     RawEvent::from_draft(RawEventDraft::new(
@@ -14,7 +14,7 @@ fn sample_event() -> RawEvent {
 
 fn second_event() -> RawEvent {
     RawEvent::from_draft(RawEventDraft::new(
-        "event-2",
+        "event-1",
         EventSource::System,
         EventPayload::Text("The node is supported by its raw event.".to_string()),
     ))
@@ -24,12 +24,13 @@ fn second_event() -> RawEvent {
 fn test_event_is_immutable() {
     let mut ledger = InMemoryLedger::default();
     let event = sample_event();
-    let mut changed = event.clone();
-    changed.payload = EventPayload::Text("mutated content".to_string());
+    let changed = second_event();
 
     ledger.append(event).unwrap();
 
-    assert!(ledger.append(changed).is_err());
+    let error = ledger.append(changed).unwrap_err();
+
+    assert!(error.to_string().contains("already exists"));
 }
 
 #[test]
@@ -41,6 +42,14 @@ fn test_event_hash_is_stable() {
 }
 
 #[test]
+fn test_event_hash_changes_when_content_changes() {
+    let first = sample_event();
+    let second = second_event();
+
+    assert_ne!(first.hash, second.hash);
+}
+
+#[test]
 fn test_node_requires_source_event() {
     let node = MemoryNode::new(
         "node-1",
@@ -48,7 +57,6 @@ fn test_node_requires_source_event() {
         "project journal",
         None,
         Some("hash"),
-        Some("genesis-1"),
     );
 
     assert!(node.is_err());
@@ -107,15 +115,31 @@ fn test_reverse_tether_has_distinct_meaning() {
 }
 
 #[test]
+fn test_tether_rejects_same_reverse_meaning() {
+    let event = sample_event();
+    let source = MemoryNode::from_event("node-1", NodeKind::Event, "project journal", &event);
+    let target = MemoryNode::from_event("node-2", NodeKind::Evidence, "raw event", &event);
+
+    let tether = Tether::new(
+        "tether-1",
+        &source,
+        &target,
+        Some(TetherKind::SupportedBy),
+        TetherKind::SupportedBy,
+        &event,
+    );
+
+    assert!(tether.is_err());
+}
+
+#[test]
 fn test_replay_reconstructs_identical_state() {
     let event = sample_event();
-    let evidence = second_event();
     let node = MemoryNode::from_event("node-1", NodeKind::Event, "project journal", &event);
-    let evidence_node =
-        MemoryNode::from_event("node-2", NodeKind::Evidence, "raw event", &evidence);
+    let evidence_node = MemoryNode::from_event("node-2", NodeKind::Evidence, "raw event", &event);
     let certificate = GenesisCertificate::for_node("genesis-1", &node, &event).unwrap();
     let evidence_certificate =
-        GenesisCertificate::for_node("genesis-2", &evidence_node, &evidence).unwrap();
+        GenesisCertificate::for_node("genesis-2", &evidence_node, &event).unwrap();
     let tether = Tether::new(
         "tether-1",
         &node,
@@ -125,9 +149,21 @@ fn test_replay_reconstructs_identical_state() {
         &event,
     )
     .unwrap();
+    let mut expected = ReplayedTopology::default();
+    expected.ledger.append(event.clone()).unwrap();
+    expected.nodes.insert(node.clone()).unwrap();
+    expected.nodes.insert(evidence_node.clone()).unwrap();
+    expected
+        .genesis_certificates
+        .insert(certificate.clone())
+        .unwrap();
+    expected
+        .genesis_certificates
+        .insert(evidence_certificate.clone())
+        .unwrap();
+    expected.tethers.insert(tether.clone()).unwrap();
     let events = vec![
         ReplayEvent::RawEventRecorded(event),
-        ReplayEvent::RawEventRecorded(evidence),
         ReplayEvent::NodeCreated(node),
         ReplayEvent::NodeCreated(evidence_node),
         ReplayEvent::GenesisCertificateCreated(certificate),
@@ -135,10 +171,13 @@ fn test_replay_reconstructs_identical_state() {
         ReplayEvent::TetherCreated(tether),
     ];
 
-    let first = TopologyReplay::replay(&events).unwrap();
-    let second = TopologyReplay::replay(&events).unwrap();
+    let replayed = TopologyReplay::replay(&events).unwrap();
 
-    assert_eq!(first, second);
+    assert_eq!(replayed, expected);
+    assert_eq!(replayed.ledger.events().len(), 1);
+    assert_eq!(replayed.nodes.nodes().len(), 2);
+    assert_eq!(replayed.genesis_certificates.certificates().len(), 2);
+    assert_eq!(replayed.tethers.tethers().len(), 1);
 }
 
 #[test]
@@ -147,5 +186,39 @@ fn test_missing_provenance_fails() {
     let node = MemoryNode::from_event("node-1", NodeKind::Event, "project journal", &event);
     let events = vec![ReplayEvent::NodeCreated(node)];
 
-    assert!(TopologyReplay::replay(&events).is_err());
+    let error = TopologyReplay::replay(&events).unwrap_err();
+
+    assert!(error.to_string().contains("missing source event"));
+}
+
+#[test]
+fn test_replay_rejects_forged_tether_with_undefined_reverse_meaning() {
+    let event = sample_event();
+    let node = MemoryNode::from_event("node-1", NodeKind::Event, "project journal", &event);
+    let evidence_node = MemoryNode::from_event("node-2", NodeKind::Evidence, "raw event", &event);
+    let certificate = GenesisCertificate::for_node("genesis-1", &node, &event).unwrap();
+    let evidence_certificate =
+        GenesisCertificate::for_node("genesis-2", &evidence_node, &event).unwrap();
+    let mut forged = Tether::new(
+        "tether-1",
+        &node,
+        &evidence_node,
+        Some(TetherKind::SupportedBy),
+        TetherKind::EvidenceFor,
+        &event,
+    )
+    .unwrap();
+    forged.reverse_kind = TetherKind::SupportedBy;
+    let events = vec![
+        ReplayEvent::RawEventRecorded(event),
+        ReplayEvent::NodeCreated(node),
+        ReplayEvent::NodeCreated(evidence_node),
+        ReplayEvent::GenesisCertificateCreated(certificate),
+        ReplayEvent::GenesisCertificateCreated(evidence_certificate),
+        ReplayEvent::TetherCreated(forged),
+    ];
+
+    let error = TopologyReplay::replay(&events).unwrap_err();
+
+    assert!(error.to_string().contains("reverse tether meaning"));
 }
