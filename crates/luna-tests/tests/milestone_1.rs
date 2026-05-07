@@ -86,7 +86,7 @@ fn topology_counts(topology: &ReplayedTopology) -> ReplayedTopology {
 #[test]
 fn test_mutations_flow_through_append_only_ledger() {
     let topology = m1_live_topology();
-    let events = topology.ledger.events();
+    let events = topology.ledger().events();
 
     assert_eq!(events.len(), 6);
     assert!(matches!(events[0], LedgerEvent::RawEventRecorded(_)));
@@ -108,7 +108,7 @@ fn test_mutations_flow_through_append_only_ledger() {
 fn test_commit_pipeline_preserves_live_replay_equality() {
     let live = m1_live_topology();
 
-    let replayed = TopologyReplay::replay_ledger(&live.ledger).unwrap();
+    let replayed = TopologyReplay::replay_ledger(live.ledger()).unwrap();
 
     assert_eq!(replayed, live);
 }
@@ -444,7 +444,7 @@ fn test_each_successful_commit_prefix_replays() {
 
     topology.record_raw_event(event.clone()).unwrap();
     assert_eq!(
-        TopologyReplay::replay_ledger(&topology.ledger).unwrap(),
+        TopologyReplay::replay_ledger(topology.ledger()).unwrap(),
         topology
     );
 
@@ -457,7 +457,7 @@ fn test_each_successful_commit_prefix_replays() {
     ] {
         topology.commit(mutation).unwrap();
         assert_eq!(
-            TopologyReplay::replay_ledger(&topology.ledger).unwrap(),
+            TopologyReplay::replay_ledger(topology.ledger()).unwrap(),
             topology
         );
     }

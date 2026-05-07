@@ -87,3 +87,13 @@
 //! };
 //! let _pass = inspect_mutation(&mutation, &context).unwrap();
 //! ```
+//!
+//! Safe callers cannot replace live topology registries directly.
+//!
+//! ```compile_fail
+//! use luna_node::NodeRegistry;
+//! use luna_replay::ReplayedTopology;
+//!
+//! let mut topology = ReplayedTopology::default();
+//! topology.nodes = NodeRegistry::default();
+//! ```

@@ -69,7 +69,7 @@ fn live_milestone_topology() -> (ReplayedTopology, ReplayLedger) {
     live.commit(evidence_certificate).unwrap();
     live.commit(tether).unwrap();
 
-    let replay_ledger = live.ledger.clone();
+    let replay_ledger = live.ledger().clone();
     (live, replay_ledger)
 }
 
@@ -292,11 +292,11 @@ fn test_replay_reconstructs_identical_state() {
     let replayed = TopologyReplay::replay_ledger(&replay_ledger).unwrap();
 
     assert_eq!(replayed, live);
-    assert_eq!(replayed.ledger.raw_events().len(), 1);
-    assert_eq!(replayed.ledger.events().len(), 6);
-    assert_eq!(replayed.nodes.nodes().len(), 2);
-    assert_eq!(replayed.genesis_certificates.certificates().len(), 2);
-    assert_eq!(replayed.tethers.tethers().len(), 1);
+    assert_eq!(replayed.ledger().raw_events().len(), 1);
+    assert_eq!(replayed.ledger().events().len(), 6);
+    assert_eq!(replayed.nodes().nodes().len(), 2);
+    assert_eq!(replayed.genesis_certificates().certificates().len(), 2);
+    assert_eq!(replayed.tethers().tethers().len(), 1);
 }
 
 #[test]

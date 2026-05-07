@@ -13,13 +13,29 @@ pub type ReplayLedger = InMemoryLedger;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ReplayedTopology {
-    pub ledger: InMemoryLedger,
-    pub nodes: NodeRegistry,
-    pub genesis_certificates: GenesisRegistry,
-    pub tethers: TetherRegistry,
+    ledger: InMemoryLedger,
+    nodes: NodeRegistry,
+    genesis_certificates: GenesisRegistry,
+    tethers: TetherRegistry,
 }
 
 impl ReplayedTopology {
+    pub fn ledger(&self) -> &InMemoryLedger {
+        &self.ledger
+    }
+
+    pub fn nodes(&self) -> &NodeRegistry {
+        &self.nodes
+    }
+
+    pub fn genesis_certificates(&self) -> &GenesisRegistry {
+        &self.genesis_certificates
+    }
+
+    pub fn tethers(&self) -> &TetherRegistry {
+        &self.tethers
+    }
+
     pub fn record_raw_event(&mut self, event: RawEvent) -> Result<()> {
         self.ledger.append(event)
     }
