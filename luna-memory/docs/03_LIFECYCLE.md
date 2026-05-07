@@ -92,6 +92,8 @@ Rules:
 - Replay reads the same raw and mutation ledger events in order.
 - Any successful commit prefix must replay, even if later related mutations have
   not happened yet.
+- Low-level unchecked append and fabricated inspection contexts are unsafe
+  internals, not safe public write paths.
 
 ## 8. Monitor Roles
 

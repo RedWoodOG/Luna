@@ -89,6 +89,12 @@ does not match the raw event. Inspector rejection must be
 Attempt to commit a second node with the same id. Inspector rejection must be
 `DuplicateNode`.
 
+### `test_apply_rejected_preserves_topology_snapshot`
+
+Attempt a mutation that passes contextual inspection but fails registry
+application, such as an empty node label. Commit must return `ApplyRejected` and
+the full live topology snapshot must remain unchanged.
+
 ### `test_tether_missing_direction_rejects_with_specific_error`
 
 Attempt to commit `TetherCreated` without a forward direction. Inspector
@@ -138,7 +144,9 @@ mutation events.
 ### Compile-fail direct mutation contracts
 
 Direct registry insertion and direct tether construction are compile-fail API
-contracts. The public write path is the commit pipeline.
+contracts. Safe direct ledger mutation append and safe fabricated inspection
+pass minting are also compile-fail contracts. The public write path is the commit
+pipeline.
 
 ## Future Oracle Template
 

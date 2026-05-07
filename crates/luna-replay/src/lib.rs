@@ -29,7 +29,9 @@ impl ReplayedTopology {
         mutation: TopologyMutation,
     ) -> std::result::Result<(), MutationRejected> {
         let context = self.inspection_context(&mutation);
-        let pass = inspect_mutation(&mutation, &context)?;
+        // SAFETY: the context is derived from this topology's live ledger and
+        // registries immediately before staging the same mutation.
+        let pass = unsafe { inspect_mutation(&mutation, &context)? };
         let mut staged = self.clone();
         staged.apply_mutation(&mutation, &pass).map_err(|err| {
             MutationRejected::new(InspectorRejectReason::ApplyRejected {

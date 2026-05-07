@@ -79,13 +79,8 @@ fn m1_live_topology() -> ReplayedTopology {
     topology
 }
 
-fn topology_counts(topology: &ReplayedTopology) -> (usize, usize, usize, usize) {
-    (
-        topology.ledger.events().len(),
-        topology.nodes.nodes().len(),
-        topology.genesis_certificates.certificates().len(),
-        topology.tethers.tethers().len(),
-    )
+fn topology_counts(topology: &ReplayedTopology) -> ReplayedTopology {
+    topology.clone()
 }
 
 #[test]
@@ -185,6 +180,32 @@ fn test_duplicate_node_rejects_with_specific_error() {
             node_id: "node-1".to_string(),
         },
     );
+    assert_eq!(topology_counts(&topology), before);
+}
+
+#[test]
+fn test_apply_rejected_preserves_topology_snapshot() {
+    let event = sample_event();
+    let mut topology = ReplayedTopology::default();
+    topology.record_raw_event(event.clone()).unwrap();
+    let before = topology_counts(&topology);
+
+    let error = topology
+        .commit(TopologyMutation::NodeCreated(NodeCreated::new(
+            "node-1",
+            NodeKind::Event,
+            "   ",
+            &event.id,
+            &event.hash,
+        )))
+        .unwrap_err();
+
+    match error.reason() {
+        InspectorRejectReason::ApplyRejected { message } => {
+            assert!(message.contains("node label cannot be empty"));
+        }
+        other => panic!("expected ApplyRejected, got {other:?}"),
+    }
     assert_eq!(topology_counts(&topology), before);
 }
 

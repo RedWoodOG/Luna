@@ -67,3 +67,23 @@
 //! ));
 //! ledger.append_mutation_unchecked(mutation).unwrap();
 //! ```
+//!
+//! Safe callers cannot mint inspection passes from fabricated contexts.
+//!
+//! ```compile_fail
+//! use luna_inspector::{inspect_mutation, InspectionContext};
+//! use luna_ledger::{NodeCreated, NodeKind, TopologyMutation};
+//!
+//! let mutation = TopologyMutation::NodeCreated(NodeCreated::new(
+//!     "node-1",
+//!     NodeKind::Event,
+//!     "project journal",
+//!     "event-1",
+//!     "hash",
+//! ));
+//! let context = InspectionContext {
+//!     source_event_hash: Some("hash".to_string()),
+//!     ..InspectionContext::default()
+//! };
+//! let _pass = inspect_mutation(&mutation, &context).unwrap();
+//! ```

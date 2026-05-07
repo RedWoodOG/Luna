@@ -58,7 +58,15 @@ pub struct InspectionContext {
     pub tether_exists: bool,
 }
 
-pub fn inspect_mutation(
+/// Inspect a proposed mutation against a caller-supplied topology context.
+///
+/// # Safety
+///
+/// The caller must provide an honest [`InspectionContext`] derived from the
+/// live topology state that will receive the returned [`InspectionPass`].
+/// Fabricated contexts can mint invalid passes, so safe callers must use the
+/// topology commit pipeline instead of calling this directly.
+pub unsafe fn inspect_mutation(
     mutation: &TopologyMutation,
     context: &InspectionContext,
 ) -> Result<InspectionPass, MutationRejected> {
