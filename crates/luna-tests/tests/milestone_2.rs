@@ -119,7 +119,10 @@ fn test_runtime_ticks_update_baselines_and_append_readings() {
     assert_eq!(first.len(), 1);
     assert_eq!(second.len(), 1);
     assert_eq!(runtime.log().readings().len(), 2);
-    assert_eq!(runtime.baseline("events_per_second").unwrap().readings(), &[2.0, 2.0]);
+    assert_eq!(
+        runtime.baseline("events_per_second").unwrap().readings(),
+        &[2.0, 2.0]
+    );
 }
 
 #[test]

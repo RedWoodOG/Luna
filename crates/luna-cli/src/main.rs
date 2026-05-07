@@ -4,6 +4,7 @@ use luna_extract::{
     CommandBackend, CountingBackend, FileExtractionCache, FixtureBackend, FusedExtractor,
     LlmBackend, LlmExtractor, LunaExtractor,
 };
+use luna_gauges::{calibrate_thresholds, GaugeReading};
 use luna_metrics::{BenchmarkReport, BenchmarkSubreport};
 use luna_runtime::{
     default_runtime_log_path, render_conversation_reply, render_runtime_markdown, RuntimeExtractor,
@@ -40,12 +41,31 @@ enum Command {
         #[command(subcommand)]
         command: RuntimeCommand,
     },
+    Gauges {
+        #[command(subcommand)]
+        command: GaugesCommand,
+    },
     Report {
         run_dir: PathBuf,
         #[arg(long, value_enum, default_value = "markdown")]
         format: ReportFormat,
         #[arg(long, default_value = "tcf")]
         engine: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GaugesCommand {
+    /// Suggest gauge thresholds from historical gauge reading JSON.
+    Calibrate {
+        /// JSON file containing an array of GaugeReading records.
+        input: PathBuf,
+        /// Output JSON file for threshold suggestions.
+        #[arg(long)]
+        out: PathBuf,
+        /// Multiplier applied to observed standard deviation.
+        #[arg(long, default_value = "3.0")]
+        multiplier: f64,
     },
 }
 
@@ -404,6 +424,22 @@ fn main() -> anyhow::Result<ExitCode> {
                         run_runtime_scenario(&scenario, &log, extractor, keep_log)?;
                     }
                 }
+            }
+        },
+        Command::Gauges { command } => match command {
+            GaugesCommand::Calibrate {
+                input,
+                out,
+                multiplier,
+            } => {
+                let bytes = fs::read(&input)?;
+                let readings: Vec<GaugeReading> = serde_json::from_slice(&bytes)?;
+                let suggestions = calibrate_thresholds(&readings, multiplier);
+                if let Some(parent) = out.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(&out, serde_json::to_string_pretty(&suggestions)?)?;
+                println!("Wrote gauge threshold suggestions {}", out.display());
             }
         },
         Command::Report {

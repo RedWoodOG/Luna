@@ -14,6 +14,7 @@ clap.workspace = true
 luna-bench = { path = "../luna-bench" }
 luna-core = { path = "../luna-core" }
 luna-extract = { path = "../luna-extract" }
+luna-gauges = { path = "../luna-gauges" }
 luna-metrics = { path = "../luna-metrics" }
 luna-runtime = { path = "../luna-runtime" }
 serde.workspace = true
