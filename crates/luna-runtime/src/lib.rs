@@ -1,10 +1,12 @@
+pub mod decay;
+
 use chrono::Utc;
 use luna_core::{
     AssertionConfidenceTier, AssertionExtracted, CognitiveObservation, ConversationTurn, Episode,
-    EpisodeCreated, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource, LunaEvent,
-    MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance, MemoryRelationKind,
-    RecallMode, RecallSet, Result, Role, RootOrb, StructuredAssertion, TurnObserved, WorkingMemory,
-    WorkingMemoryBudget,
+    EpisodeCreated, EpisodeDecayed, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource,
+    LunaEvent, MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance,
+    MemoryRelationKind, RecallMode, RecallSet, Result, Role, RootOrb, StructuredAssertion,
+    TurnObserved, WorkingMemory, WorkingMemoryBudget,
 };
 use luna_events::JsonlEventLog;
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
@@ -15,6 +17,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
+
+pub use decay::DecayConfig;
 
 pub trait RuntimeExtractor {
     fn extract_runtime(&self, turn: &ConversationTurn) -> Result<CognitiveObservation>;
@@ -37,6 +41,7 @@ pub struct RuntimeSession<E, R = TcfRecallEngine> {
     log: JsonlEventLog,
     extractor: E,
     recall: R,
+    decay_config: DecayConfig,
 }
 
 impl<E> RuntimeSession<E, TcfRecallEngine> {
@@ -45,6 +50,7 @@ impl<E> RuntimeSession<E, TcfRecallEngine> {
             log: JsonlEventLog::new(log_path),
             extractor,
             recall: TcfRecallEngine,
+            decay_config: DecayConfig::default(),
         }
     }
 }
@@ -59,7 +65,16 @@ where
             log: JsonlEventLog::new(log_path),
             extractor,
             recall,
+            decay_config: DecayConfig::default(),
         }
+    }
+
+    /// Override the default decay configuration. Used by scenarios that
+    /// need a tighter or looser half-life than the 7-day default, and
+    /// by unit tests that want to exercise decay over short time spans.
+    pub fn with_decay_config(mut self, config: DecayConfig) -> Self {
+        self.decay_config = config;
+        self
     }
 
     pub fn process_user_turn(&self, content: impl Into<String>) -> Result<RuntimeTurnResult> {
@@ -73,7 +88,20 @@ where
 
     pub fn process_turn(&self, turn: ConversationTurn) -> Result<RuntimeTurnResult> {
         let previous_events = self.log.load()?;
-        let previous_episodes = luna_store::rebuild_episodes(&previous_events)?;
+        let mut previous_episodes = luna_store::rebuild_episodes(&previous_events)?;
+
+        // Time-decay pre-pass. `now` is event-time (the turn's own
+        // timestamp), never wall-clock — decay must replay
+        // deterministically. Decisions that exceed the emit threshold
+        // become EpisodeDecayed events at the head of new_events; the
+        // in-memory episodes are mutated to match so the recall pass
+        // scores against the post-decay state without a second log
+        // rebuild.
+        let now = turn.timestamp.unwrap_or_else(Utc::now);
+        let decay_decisions =
+            decay::compute_decay_events(&previous_episodes, now, &self.decay_config);
+        decay::apply_decay_in_place(&mut previous_episodes, &decay_decisions);
+
         let known_before = MemoryState::from_episodes(&previous_episodes);
         let mut observation = self.extractor.extract_runtime(&turn)?;
         apply_runtime_fine_capture(&turn, &mut observation);
@@ -84,6 +112,24 @@ where
         let turn_id = observation.turn_id;
 
         let mut new_events = Vec::new();
+
+        // Decay events go FIRST so replay applies them before the
+        // turn's recall and assertion events. They are dated to the
+        // turn's event-time so byte-for-byte replay holds.
+        for decision in &decay_decisions {
+            let mut env = EventEnvelope::new(
+                LunaEvent::EpisodeDecayed(EpisodeDecayed {
+                    forgotten_risk: decision.new_risk,
+                }),
+                EventSource::System,
+                1.0,
+            )
+            .with_episode_id(decision.episode_id)
+            .with_turn_id(turn_id);
+            env.timestamp = now;
+            new_events.push(env);
+        }
+
         new_events.push(
             EventEnvelope::new(
                 LunaEvent::TurnObserved(TurnObserved { turn: turn.clone() }),
@@ -2280,5 +2326,116 @@ mod tests {
             .any(|node| node.label == "only child"));
 
         let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    /// Integration proof for priority-5 wiring: when a turn arrives at
+    /// an event-time well past an existing episode's last reinforcement,
+    /// the runtime emits an `EpisodeDecayed` event into the log. The
+    /// log's persisted state is the source of truth — this test asserts
+    /// that decay landed on disk, not just in memory.
+    ///
+    /// Bypasses extraction by seeding the log directly with an
+    /// `EpisodeCreated` event at t=0; then runs a turn at t=10 days,
+    /// far past the 7-day default half-life. The heuristic extractor
+    /// produces no new assertions for the trivial turn content, so the
+    /// only newly-emitted event tied to the prior episode_id is the
+    /// decay event.
+    #[test]
+    fn process_turn_emits_episode_decayed_when_event_time_advances() {
+        use chrono::TimeZone;
+        use luna_core::{
+            AssertionConfidenceTier, CognitiveObservation, EpisodeCreated, EventEnvelope,
+            EventSource, LunaEvent, Role, Signal, SignalReliability, StructuredAssertion,
+        };
+
+        let log_path = temp_log();
+        let log = JsonlEventLog::new(&log_path);
+
+        // t=0: seed an EpisodeCreated event with a fixed event-time.
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let episode_id = Uuid::new_v4();
+        let assertion = StructuredAssertion {
+            domain: "identity".into(),
+            kind: "profession".into(),
+            value: "mechanical engineer".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Confirmed,
+        };
+        let observation = CognitiveObservation {
+            turn_id: Uuid::new_v4(),
+            semantic: None,
+            intent: None,
+            attention: None,
+            goal_pressure: None,
+            emotional_valence: None,
+            emotional_arousal: None,
+            identity_relevance: None,
+            trust_relevance: None,
+            social_frame: None,
+            temporal_relevance: None,
+            uncertainty: Signal::new(0.3, 0.7, SignalReliability::Heuristic),
+            cue_terms: Vec::new(),
+            query_intents: Vec::new(),
+            assertions: vec![assertion.clone()],
+        };
+        let mut seed = EventEnvelope::new(
+            LunaEvent::EpisodeCreated(EpisodeCreated {
+                assertion,
+                observation,
+            }),
+            EventSource::ClassifierExtractor,
+            0.85,
+        )
+        .with_episode_id(episode_id);
+        seed.timestamp = t0;
+        log.append(&seed).unwrap();
+
+        // t=+10 days: drive a turn whose event-time is well past the
+        // 7-day default half-life. Heuristic extractor adds no new
+        // assertions for this content, so any new episode-tagged event
+        // we find must be the decay event.
+        let session = RuntimeSession::new(&log_path, FusedExtractor::new());
+        let later = t0 + chrono::Duration::days(10);
+        session
+            .process_turn(ConversationTurn {
+                role: Role::User,
+                content: "ten days have passed.".to_string(),
+                timestamp: Some(later),
+            })
+            .unwrap();
+
+        // Verify a decay event landed on disk for our seed episode.
+        let events = log.load().unwrap();
+        let decay_events: Vec<_> = events
+            .iter()
+            .filter(|env| {
+                env.episode_id == Some(episode_id)
+                    && matches!(&env.payload, LunaEvent::EpisodeDecayed(_))
+            })
+            .collect();
+        assert!(
+            !decay_events.is_empty(),
+            "expected at least one EpisodeDecayed event tied to the seed episode after 10 days"
+        );
+
+        // Decay event timestamp should equal the turn's event-time, not
+        // wall-clock time. Doctrine: replay determinism (R-002).
+        for env in &decay_events {
+            assert_eq!(
+                env.timestamp, later,
+                "decay event must use turn event-time, not Utc::now()"
+            );
+            if let LunaEvent::EpisodeDecayed(payload) = &env.payload {
+                // 10 days at 7-day half-life: 1 - exp(-10*ln2/7) ≈ 0.629.
+                assert!(
+                    payload.forgotten_risk > 0.5 && payload.forgotten_risk < 0.75,
+                    "expected forgotten_risk ~0.63 at 10 days / 7-day half-life, got {}",
+                    payload.forgotten_risk
+                );
+            }
+        }
+
+        let _ = fs::remove_dir_all(log_path.parent().unwrap());
     }
 }

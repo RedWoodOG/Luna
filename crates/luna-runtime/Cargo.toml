@@ -14,5 +14,6 @@ luna-events = { path = "../luna-events" }
 luna-extract = { path = "../luna-extract" }
 luna-recall = { path = "../luna-recall" }
 luna-store = { path = "../luna-store" }
+luna-tcf = { path = "../luna-tcf" }
 serde.workspace = true
 uuid.workspace = true

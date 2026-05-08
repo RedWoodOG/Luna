@@ -1,5 +1,6 @@
+use chrono::{TimeZone, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
-use luna_core::EngineKind;
+use luna_core::{ConversationTurn, EngineKind, Role};
 use luna_extract::{
     CommandBackend, CountingBackend, FileExtractionCache, FixtureBackend, FusedExtractor,
     LlmBackend, LlmExtractor, LunaExtractor,
@@ -489,6 +490,14 @@ struct RuntimeScenarioFile {
     #[serde(default)]
     name: Option<String>,
     turns: Vec<String>,
+    /// Optional parallel array of per-turn event-time offsets in seconds
+    /// from a fixed deterministic base (Unix epoch). When present, must
+    /// have the same length as `turns`. Used by scenarios that need to
+    /// exercise time-decay or other elapsed-time behavior without
+    /// real-clock waiting. When absent, each turn's event-time is
+    /// captured at processing time (existing behavior).
+    #[serde(default)]
+    turn_offsets_seconds: Option<Vec<i64>>,
     #[serde(default)]
     checks: RuntimeScenarioChecks,
 }
@@ -521,8 +530,41 @@ fn run_runtime_scenario<E: RuntimeExtractor>(
     println!("Turns: {}", scenario.turns.len());
     println!("Event log: {}\n", log.display());
 
-    for (index, turn) in scenario.turns.iter().enumerate() {
-        let result = session.process_user_turn(turn.clone())?;
+    // Validate turn_offsets_seconds length up-front rather than discovering
+    // a mismatch mid-replay.
+    if let Some(offsets) = &scenario.turn_offsets_seconds {
+        if offsets.len() != scenario.turns.len() {
+            anyhow::bail!(
+                "turn_offsets_seconds length ({}) does not match turns length ({})",
+                offsets.len(),
+                scenario.turns.len()
+            );
+        }
+    }
+
+    for (index, turn_content) in scenario.turns.iter().enumerate() {
+        let result = if let Some(offsets) = &scenario.turn_offsets_seconds {
+            // Deterministic event-time path: offset is seconds from Unix epoch.
+            // Used for scenarios that exercise elapsed-time behavior (decay,
+            // staleness) without real-clock waiting.
+            let event_time = Utc
+                .timestamp_opt(offsets[index], 0)
+                .single()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "turn_offsets_seconds[{index}] = {} is not a valid timestamp",
+                        offsets[index]
+                    )
+                })?;
+            session.process_turn(ConversationTurn {
+                role: Role::User,
+                content: turn_content.clone(),
+                timestamp: Some(event_time),
+            })?
+        } else {
+            // Default: live-clock event-time, existing behavior.
+            session.process_user_turn(turn_content.clone())?
+        };
         println!(
             "{}. {} assertion(s), {} working node(s)",
             index + 1,

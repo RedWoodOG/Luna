@@ -14,6 +14,7 @@ If a scenario can pass under the heuristic extractor, it belongs in `scenarios/r
 | Fixture | Status | Backend verified | Notes |
 |---|---|---|---|
 | `stage7_dense_week.json` | PASSING (13/13) | `glm-4.6:cloud` via Ollama | The dense-recall portion of Stage 7. 10-turn natural-prose conversation about a real week + 3 question turns. See `docs/STAGE7_FINDINGS.md` for the full result. |
+| `stage7_dense_week_with_24h_gap.json` | UNVERIFIED (awaits LLM run) | — | Same content as `stage7_dense_week.json` plus `turn_offsets_seconds` to lay the 10 conversation turns over 5 work-days with a 40-hour gap before the 3 question turns. Exercises time-decay (`luna-runtime/decay`): day-1 episodes hit ~0.45 forgotten_risk by the question turns under the 7-day default half-life. Smoke-tested under heuristic extraction (harness parses + processes correctly); awaits an LLM run to verify the must_contain checks survive decay. |
 
 ## Running locally
 
