@@ -8,7 +8,7 @@ Risks identified during the audit (`docs/memory_current_state.md`). Each risk ha
 |----|----------|-------|----------|--------|--------|
 | R-001 | substrate **HIGH** / current-behavior MEDIUM | Confidence penalty without logged event | `luna-store:108` | **closed** `16e1736` | pr-1.0a |
 | R-002 | medium | `Utc::now()` in replay creates time drift | `luna-store:109` | **closed** `16e1736` | pr-1.0a |
-| R-003 | medium | Assertion fine-capture outside event log | `luna-runtime:676-712` | open | pr-1.0 or pr-1.1 |
+| R-003 | medium | Assertion fine-capture outside event log | `luna-runtime:722-728` | **closed** `pr-1.1a` | pr-1.1a |
 | R-004 | medium | Hardcoded assertion-intent mapping | `luna-tcf:201-223` | open | pr-1.4 |
 | R-005 | medium | MemoryMap node/edge merge is silent | `luna-runtime:571-580` | open | pr-1.2 |
 | R-006 | low | Question proposal rules scattered inline | `luna-runtime:1632-1677` | open | post-pr-1.0 |
@@ -80,6 +80,37 @@ Approach (1) is cleaner long-term. Approach (2) is a smaller diff. Either way, t
 Slightly more storage, but the audit chain becomes fully reconstructable. Alternative: keep the single event but expand its payload to include both `raw` and `normalized` fields plus a list of applied normalization rules.
 
 **Target.** `pr-1.0` or `pr-1.1` (alongside the orb halo schema, since halos will reference these events directly).
+
+**Closure note (`pr-1.1a/raw-observation-capture`).** Smaller alternative
+chosen: a single new event variant
+`LunaEvent::RawObservationCaptured { observation }` is logged
+**before** `apply_runtime_fine_capture` mutates the observation. Replay
+treats this event as informational — `luna-store::rebuild_episodes`
+includes it in its no-op arm alongside `TurnObserved` and
+`AssertionExtracted`. The post-normalization assertions still flow
+through `AssertionExtracted` / `EpisodeCreated` / `EpisodeReinforced`,
+which remain the source of truth for episode state. Audit chain is now
+reconstructable: `RawObservationCaptured` carries the pre-normalization
+observation, and the corresponding `AssertionExtracted` events carry
+the post-normalization form. Diffing the two answers "extractor changed"
+vs "normalization changed."
+
+The richer two-event option (`AssertionNormalized` with explicit
+per-rule deltas) was deferred — `apply_runtime_fine_capture` would have
+to be refactored to be reflective, which is a much larger surface than
+R-003 warrants. If a future audit needs per-rule deltas, the raw +
+post-norm pair is enough to recompute them externally.
+
+Locked by three tests in `luna-runtime`:
+- `process_turn_emits_one_raw_observation_captured_event_per_turn` —
+  every turn produces exactly one such event, observation matches the
+  extractor's output (modulo `turn_id` re-derivation).
+- `raw_observation_captured_uses_turn_event_time` — R-002 pattern
+  honored (event timestamp is the turn's event-time, not `Utc::now()`).
+- `rebuild_episodes_ignores_raw_observation_captured_events` —
+  doctrine invariant: rebuild output is byte-identical with or without
+  the audit event in the log. If this ever fails, replay has started
+  silently deriving state from the audit record, defeating its purpose.
 
 ---
 

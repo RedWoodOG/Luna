@@ -5,8 +5,8 @@ use luna_core::{
     AssertionConfidenceTier, AssertionExtracted, CognitiveObservation, ConversationTurn, Episode,
     EpisodeCreated, EpisodeDecayed, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource,
     LunaEvent, MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance,
-    MemoryRelationKind, RecallMode, RecallSet, Result, Role, RootOrb, StructuredAssertion,
-    TurnObserved, WorkingMemory, WorkingMemoryBudget,
+    MemoryRelationKind, RawObservationCaptured, RecallMode, RecallSet, Result, Role, RootOrb,
+    StructuredAssertion, TurnObserved, WorkingMemory, WorkingMemoryBudget,
 };
 use luna_events::JsonlEventLog;
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
@@ -104,6 +104,19 @@ where
 
         let known_before = MemoryState::from_episodes(&previous_episodes);
         let mut observation = self.extractor.extract_runtime(&turn)?;
+        // R-003 closure: log the unmodified extractor output BEFORE
+        // `apply_runtime_fine_capture` mutates it. Replay treats this
+        // event as informational (luna-store no-op arm); the audit
+        // chain can now reconstruct what the extractor actually emitted
+        // before normalization rules were applied.
+        let raw_observation_event = EventEnvelope::new(
+            LunaEvent::RawObservationCaptured(RawObservationCaptured {
+                observation: observation.clone(),
+            }),
+            EventSource::ClassifierExtractor,
+            observation.uncertainty.confidence(),
+        )
+        .with_turn_id(observation.turn_id);
         apply_runtime_fine_capture(&turn, &mut observation);
         let recall_mode = select_recall_mode(&observation);
         let recalled = self
@@ -138,6 +151,14 @@ where
             )
             .with_turn_id(turn_id),
         );
+
+        // R-003 closure: push the pre-normalization audit record after
+        // TurnObserved (so the log reads turn → raw extract → post-norm
+        // state changes). Uses the turn's event-time to preserve the
+        // byte-for-byte replay invariant from pr-1.0a.
+        let mut raw_observation_event = raw_observation_event;
+        raw_observation_event.timestamp = now;
+        new_events.push(raw_observation_event);
 
         for hit in &recalled.hits {
             new_events.push(
@@ -2437,5 +2458,198 @@ mod tests {
         }
 
         let _ = fs::remove_dir_all(log_path.parent().unwrap());
+    }
+
+    // ---------- pr-1.1a: R-003 closure (raw extractor capture) ----------
+
+    /// Stub extractor that returns a fixed observation. Lets the R-003
+    /// tests assert exactly what the "raw" form was, independently of
+    /// FusedExtractor's evolving heuristics.
+    struct StubExtractor {
+        observation: CognitiveObservation,
+    }
+
+    impl RuntimeExtractor for StubExtractor {
+        fn extract_runtime(&self, _turn: &ConversationTurn) -> Result<CognitiveObservation> {
+            let mut obs = self.observation.clone();
+            obs.turn_id = Uuid::new_v4();
+            Ok(obs)
+        }
+    }
+
+    fn observation_with_assertion(assertion: StructuredAssertion) -> CognitiveObservation {
+        use luna_core::{Signal, SignalReliability};
+        CognitiveObservation {
+            turn_id: Uuid::new_v4(),
+            semantic: None,
+            intent: None,
+            attention: None,
+            goal_pressure: None,
+            emotional_valence: None,
+            emotional_arousal: None,
+            identity_relevance: None,
+            trust_relevance: None,
+            social_frame: None,
+            temporal_relevance: None,
+            uncertainty: Signal::new(0.3, 0.7, SignalReliability::Heuristic),
+            cue_terms: Vec::new(),
+            query_intents: Vec::new(),
+            assertions: vec![assertion],
+        }
+    }
+
+    /// R-003 baseline: every processed turn emits exactly one
+    /// `RawObservationCaptured` event, and its observation equals what
+    /// the extractor produced (modulo turn_id, which `process_turn`
+    /// re-derives).
+    #[test]
+    fn process_turn_emits_one_raw_observation_captured_event_per_turn() {
+        let log_path = temp_log();
+        let log = JsonlEventLog::new(&log_path);
+        let stub_assertion = StructuredAssertion {
+            domain: "identity".into(),
+            kind: "profession".into(),
+            value: "carpenter".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Confirmed,
+        };
+        let session = RuntimeSession::new(
+            &log_path,
+            StubExtractor {
+                observation: observation_with_assertion(stub_assertion.clone()),
+            },
+        );
+
+        session
+            .process_user_turn("anything — extractor is stubbed")
+            .unwrap();
+
+        let events = log.load().unwrap();
+        let raw_events: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(&e.payload, LunaEvent::RawObservationCaptured(_)))
+            .collect();
+        assert_eq!(
+            raw_events.len(),
+            1,
+            "expected exactly one RawObservationCaptured event per turn"
+        );
+        if let LunaEvent::RawObservationCaptured(payload) = &raw_events[0].payload {
+            assert_eq!(payload.observation.assertions, vec![stub_assertion]);
+        }
+
+        let _ = fs::remove_dir_all(log_path.parent().unwrap());
+    }
+
+    /// R-003 + R-002 interaction: the raw-capture event timestamp must
+    /// be the turn's event-time, not `Utc::now()`. Replay determinism
+    /// extends to audit events.
+    #[test]
+    fn raw_observation_captured_uses_turn_event_time() {
+        use chrono::TimeZone;
+
+        let log_path = temp_log();
+        let log = JsonlEventLog::new(&log_path);
+        let stub_assertion = StructuredAssertion {
+            domain: "identity".into(),
+            kind: "name".into(),
+            value: "Aria".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Inferred,
+        };
+        let session = RuntimeSession::new(
+            &log_path,
+            StubExtractor {
+                observation: observation_with_assertion(stub_assertion),
+            },
+        );
+
+        let when = Utc.with_ymd_and_hms(2026, 6, 1, 12, 0, 0).unwrap();
+        session
+            .process_turn(ConversationTurn {
+                role: Role::User,
+                content: "stubbed turn".into(),
+                timestamp: Some(when),
+            })
+            .unwrap();
+
+        let events = log.load().unwrap();
+        let raw = events
+            .iter()
+            .find(|e| matches!(&e.payload, LunaEvent::RawObservationCaptured(_)))
+            .expect("RawObservationCaptured must exist");
+        assert_eq!(
+            raw.timestamp, when,
+            "raw-capture event must use turn event-time, not Utc::now()"
+        );
+
+        let _ = fs::remove_dir_all(log_path.parent().unwrap());
+    }
+
+    /// R-003 doctrine invariant: the raw-capture event is informational
+    /// only — `luna-store::rebuild_episodes` must produce identical
+    /// `Episode` output whether the event is in the log or not. If this
+    /// ever fails, replay has started silently deriving state from the
+    /// audit record, which would defeat the audit purpose.
+    #[test]
+    fn rebuild_episodes_ignores_raw_observation_captured_events() {
+        use chrono::TimeZone;
+        use luna_core::{
+            EpisodeCreated, EventEnvelope, EventSource, RawObservationCaptured, Signal,
+            SignalReliability,
+        };
+
+        let t0 = Utc.with_ymd_and_hms(2026, 7, 1, 0, 0, 0).unwrap();
+        let assertion = StructuredAssertion {
+            domain: "identity".into(),
+            kind: "profession".into(),
+            value: "engineer".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Confirmed,
+        };
+        let observation = observation_with_assertion(assertion.clone());
+
+        let mut episode_event = EventEnvelope::new(
+            LunaEvent::EpisodeCreated(EpisodeCreated {
+                assertion: assertion.clone(),
+                observation: observation.clone(),
+            }),
+            EventSource::ClassifierExtractor,
+            0.9,
+        )
+        .with_episode_id(Uuid::new_v4());
+        episode_event.timestamp = t0;
+
+        let mut raw_event = EventEnvelope::new(
+            LunaEvent::RawObservationCaptured(RawObservationCaptured {
+                observation: CognitiveObservation {
+                    // Deliberately weird raw form — proves replay does not
+                    // reach into this payload.
+                    uncertainty: Signal::new(0.99, 0.01, SignalReliability::Heuristic),
+                    assertions: vec![StructuredAssertion {
+                        domain: "person".into(),
+                        kind: "profession".into(),
+                        value: "engineer".into(),
+                        source_count: 1,
+                        reinforcement_count: 0,
+                        confidence_tier: AssertionConfidenceTier::Unconfirmed,
+                    }],
+                    ..observation.clone()
+                },
+            }),
+            EventSource::ClassifierExtractor,
+            0.5,
+        );
+        raw_event.timestamp = t0;
+
+        let without_raw = luna_store::rebuild_episodes(&[episode_event.clone()]).unwrap();
+        let with_raw = luna_store::rebuild_episodes(&[raw_event, episode_event]).unwrap();
+        assert_eq!(
+            without_raw, with_raw,
+            "rebuild_episodes must be byte-identical with or without RawObservationCaptured events"
+        );
     }
 }

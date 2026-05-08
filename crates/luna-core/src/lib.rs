@@ -174,6 +174,14 @@ pub enum LunaEvent {
     AssertionCorrected(AssertionCorrected),
     ContradictionDetected(ContradictionDetected),
     EpisodeDecayed(EpisodeDecayed),
+    /// Audit event (R-003 closure): the unmodified extractor output for
+    /// a turn, captured **before** runtime fine-capture normalization
+    /// (person→identity migration, role→name rename, dedup, pruning).
+    /// Replay treats this as informational — it does not affect episode
+    /// state. The post-normalization assertions still produce
+    /// `AssertionExtracted` / `EpisodeCreated` / `EpisodeReinforced`
+    /// events, which remain the source of truth for state.
+    RawObservationCaptured(RawObservationCaptured),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -318,6 +326,15 @@ fn legacy_contradiction_delta() -> f32 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EpisodeDecayed {
     pub forgotten_risk: f32,
+}
+
+/// Pre-normalization extractor output for a turn (R-003 closure).
+/// Carries the same `CognitiveObservation` the extractor produced
+/// before `apply_runtime_fine_capture` mutated it. Used for audit only;
+/// replay ignores this variant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawObservationCaptured {
+    pub observation: CognitiveObservation,
 }
 
 pub type StoredEvent = EventEnvelope<LunaEvent>;

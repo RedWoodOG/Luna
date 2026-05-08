@@ -151,7 +151,15 @@ pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
                     );
                 }
             }
-            LunaEvent::TurnObserved(_) | LunaEvent::AssertionExtracted(_) => {}
+            // Informational-only events: replay does not derive episode
+            // state from them. `RawObservationCaptured` (R-003 closure) is
+            // an audit record of pre-normalization extractor output; the
+            // post-normalization assertions still produce
+            // `AssertionExtracted` / `EpisodeCreated` / `EpisodeReinforced`
+            // events, which remain the source of truth.
+            LunaEvent::TurnObserved(_)
+            | LunaEvent::AssertionExtracted(_)
+            | LunaEvent::RawObservationCaptured(_) => {}
         }
     }
 
