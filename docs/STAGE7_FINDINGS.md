@@ -177,6 +177,14 @@ The two allowlists (markdown prompt + Rust validator const) must be updated toge
 
 Out of scope for this finding — but flagging for whoever picks up extraction-vocabulary work next.
 
+### Graduation
+
+After the PASS, `scenarios/exploratory/stage7_dense_week.json` was moved to `scenarios/runtime-llm/stage7_dense_week.json`. A new manually-triggered CI workflow at `.github/workflows/llm-scenarios.yml` runs it (and any future LLM-gated scenarios) against the Anthropic API. The existing heuristic CI gate (`doctrine.yml`) is untouched.
+
+The graduation reflects a real status change: this fixture is no longer an exploratory probe with unknown outcome — it's a regression-tracking gate for "memory survives a 10-turn natural-prose conversation under LLM-backed extraction." Future changes that break that contract will be caught by re-running the LLM workflow.
+
+The CI workflow is **manual-trigger only** by design. Each run costs API credits, and there is not yet evidence that gating every push on LLM-backed scenarios is worth the cost. Operators trigger it before tagging releases or after extraction-relevant changes. If the cost-to-value ratio shifts later, change the trigger to push/PR; the workflow logic is unchanged.
+
 ## What to do next
 
 In strict priority order. Each gates the next.

@@ -20,10 +20,12 @@ Code paths exercised by tests, scenarios, or CI.
 | RootOrb v0.1 substrate | running, single instance | `crates/luna-core::RootOrb` |
 | Working-memory budget enforcement | running, defaults 5 nodes / 10 edges | `crates/luna-runtime::activate_working_memory` |
 | Type gate: `RecallReason` non-empty | enforced at compile time | `crates/luna-core::RecallReason` |
-| One runtime scenario | passing 18 memory checks | `scenarios/runtime/joe_chris_francois.json` |
+| One runtime scenario (heuristic) | passing 18 memory checks | `scenarios/runtime/joe_chris_francois.json` |
+| One LLM-gated scenario (graduated) | passing 13/13 against `glm-4.6:cloud` | `scenarios/runtime-llm/stage7_dense_week.json` |
 | CI: workspace tests | enforced on push + PR | `.github/workflows/doctrine.yml` gate 1 |
 | CI: doctrine lint | enforced on push + PR | `.github/workflows/doctrine.yml` gate 2 |
-| CI: scenario gates | enforced on push + PR | `.github/workflows/doctrine.yml` gate 3 |
+| CI: scenario gates (heuristic) | enforced on push + PR | `.github/workflows/doctrine.yml` gate 3 |
+| CI: LLM scenario gate (manual) | `workflow_dispatch` only | `.github/workflows/llm-scenarios.yml` |
 | Replay determinism gate | byte-for-byte stability test | `crates/luna-store/src/lib.rs::tests` |
 
 Test count: 126 across the workspace at last run.
@@ -107,7 +109,7 @@ Revised priority order:
 1. ~~**Establish working extraction on natural prose.**~~ **DONE** — three backends scaffolded, GLM-cloud run executed.
 2. ~~**Architectural answer.**~~ **DONE** — memory works given extraction.
 3. ~~**Close prompt-vocabulary gaps the run surfaced.**~~ **DONE** — `identity:name` and `person:availability` added to both the markdown prompt and the Rust validator. Stage 7 dense-recall now passes 13/13.
-4. **Fixture graduation + CI strategy for LLM-backed scenarios.** The Stage 7 dense-recall fixture is now graduation-eligible from `scenarios/exploratory/` to `scenarios/runtime/`, but the existing CI gate uses the heuristic extractor — graduating naively would break CI. Decision needed: either a parallel CI workflow for LLM-backed scenarios (with cache + model pinning), or a per-scenario `requires_extractor` field consumed by both the harness and CI. Smallest viable next move.
+4. ~~**Fixture graduation + CI strategy for LLM-backed scenarios.**~~ **DONE** — `stage7_dense_week.json` moved from `scenarios/exploratory/` to `scenarios/runtime-llm/`. New manually-triggered CI workflow `.github/workflows/llm-scenarios.yml` runs it via the Anthropic API (configurable model). Heuristic CI gate (`doctrine.yml`) untouched.
 5. **Add a time-decay process.** `EpisodeDecayed` driven from elapsed event-time so `forgotten_risk` actually moves on its own. Required before the 24h portion of Stage 7 is measurable. Today, a 0-second gap and a 24-hour gap behave identically.
 6. **Build the Stage 7 fixture with a 24h gap and run it.** Needs (5) and a small harness extension for simulated time (per-turn `event_time` or cumulative `gap_seconds`).
 7. **Resume the orb-network rebuild only after (6) closes.** v2 architecture; the schemas in `memory_schema_v1/` remain forward design until then.

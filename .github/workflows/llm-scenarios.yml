@@ -1,0 +1,96 @@
+name: llm-scenarios
+
+# Manually-triggered workflow for scenarios that require LLM-backed
+# extraction (scenarios/runtime-llm/*.json). Separate from the always-on
+# `doctrine.yml` workflow because:
+#
+#   - Each run costs API credits or compute time.
+#   - The scenarios are network-dependent (or model-dependent for
+#     Ollama-cloud paths) and not deterministic across model versions.
+#   - We have not established that gating every push on LLM-backed
+#     scenarios is worth the cost relative to manual verification
+#     before tagging releases.
+#
+# Trigger: workflow_dispatch (UI, gh CLI, or API). No push or PR
+# triggers. Operators run this when they want the result.
+#
+# Backend: Anthropic Messages API by default. The wrapper at
+# scripts/run_anthropic_extract.py reads ANTHROPIC_API_KEY from the
+# environment; this workflow plumbs the secret through. To test other
+# backends locally see scenarios/runtime-llm/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Anthropic model to use'
+        required: true
+        default: 'claude-haiku-4-5'
+        type: choice
+        options:
+          - claude-haiku-4-5
+          - claude-sonnet-4-6
+          - claude-opus-4-7
+
+jobs:
+  llm-scenarios:
+    name: scenarios/runtime-llm against Anthropic API
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_MODEL: ${{ inputs.model }}
+      LUNA_LLM_MAX_TOKENS: '16384'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse to run without ANTHROPIC_API_KEY
+        if: env.ANTHROPIC_API_KEY == ''
+        run: |
+          echo "ANTHROPIC_API_KEY secret is not set on this repository." >&2
+          echo "Set it under Settings → Secrets and variables → Actions." >&2
+          exit 1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build luna-cli
+        run: cargo build -p luna-cli --release
+
+      - name: Run scenarios/runtime-llm/*.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fixtures=(scenarios/runtime-llm/*.json)
+          if [ ${#fixtures[@]} -eq 0 ]; then
+            echo "no LLM-backed scenarios found in scenarios/runtime-llm/" >&2
+            exit 0
+          fi
+          echo "running ${#fixtures[@]} scenario(s) against ${ANTHROPIC_MODEL}"
+          echo ""
+          for fixture in "${fixtures[@]}"; do
+            echo "=== $fixture ==="
+            ./target/release/luna runtime scenario "$fixture" \
+                --extractor command \
+                --command python3 \
+                --command-arg scripts/run_anthropic_extract.py \
+                --model-id "${ANTHROPIC_MODEL}" \
+                --timeout-secs 300
+            echo ""
+          done
+
+      - name: Upload extraction debug log if present
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-extraction-debug-log
+          path: |
+            luna-llm.log
+            .luna/runtime_cache/
+          if-no-files-found: ignore
+          retention-days: 7

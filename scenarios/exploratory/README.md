@@ -6,16 +6,13 @@ When a fixture here graduates (passes consistently with whatever extractor is ca
 
 ## What's here
 
-### `stage7_dense_week.json` and `stage7_dense_week_patterned.json`
+### `stage7_dense_week_patterned.json` (kept as a baseline)
 
-A pair of fixtures probing Stage 7 of the memory milestone roadmap (10-turn conversation about a real week → recall test). Same characters, same week, same questions. The two differ only in prose style:
+A historical probe fixture testing whether the heuristic extractor handles deliberately-templated prose (the same Stage 7 conversation rewritten in "I am X" / "X is Y" templates). It does not — the heuristic extractor produces only `identity:name=Joe` on turn 1 and 0 assertions elsewhere. Kept here as the documented baseline for what the heuristic path can and cannot do; useful if heuristic-pattern expansion is ever pursued.
 
-- `stage7_dense_week.json` — natural conversational prose (contractions, implicit subjects, varied sentence shape).
-- `stage7_dense_week_patterned.json` — the same content rewritten in the explicit templates the heuristic extractor recognises.
+### `stage7_dense_week.json` (graduated → `scenarios/runtime-llm/`)
 
-**Status as of `7c99ee9`:** both fail. See `docs/STAGE7_FINDINGS.md` for the full report. The short version: the heuristic extractor matches almost nothing outside a narrow template set; both fixtures produce ≤1 assertion across 13 turns. The bottleneck for Stage 7 today is extraction, not memory.
-
-These fixtures stay here, failing, as the documented baseline. Re-run them whenever the extraction path changes — heuristic-pattern expansion, LLM-backed extraction integration, or a different extractor entirely. The diff between today's failure and tomorrow's pass is the measurement.
+The natural-prose Stage 7 fixture has graduated. After the prompt + validator updates (`6305b66` and `64eb1b1`), it passes 13/13 against `glm-4.6:cloud`. It now lives at `scenarios/runtime-llm/stage7_dense_week.json` and is gated by the manually-triggered `.github/workflows/llm-scenarios.yml` workflow. See `docs/STAGE7_FINDINGS.md` for the full result.
 
 ## Running
 
