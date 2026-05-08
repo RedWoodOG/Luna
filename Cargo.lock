@@ -450,6 +450,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "luna-orbs"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "luna-core",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "luna-recall"
 version = "0.1.0"
 dependencies = [

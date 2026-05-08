@@ -1,0 +1,17 @@
+[package]
+name = "luna-orbs"
+version.workspace = true
+edition.workspace = true
+description = "Memory orb species — generalization of RootOrb. Types only in pr-1.0; halos/tethers/cores fill in over later phases."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+chrono.workspace = true
+luna-core = { path = "../luna-core" }
+serde.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
