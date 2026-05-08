@@ -136,6 +136,47 @@ When option (1) lands and the fixture passes 6/6 (or whatever the calibrated che
 
 What it claims: **memory architecture survives a 10-turn natural-prose case once extraction works.** That is the call the rebuild order rests on.
 
+## Final result — PASS (`glm-4.6:cloud`, with prompt + validator updates)
+
+After two precise prompt-vocabulary fixes (`6305b66` for the markdown allowlist, `64eb1b1` for the Rust validator's mirror const), the fixture passes cleanly:
+
+```text
+13/13 turns processed                                no crashes, no parse failures
+~26 assertions extracted across the run              real, on natural prose
+6/6 must_contain checks pass                         Joe, Mira, Daniel, Beacon, 17th, session
+7/7 must_not_contain checks pass                     no entity-confusion, no false positives
+PASS: 13 memory check(s)                             scenario gate green
+working memory bounded 3-5 nodes throughout          budget held
+```
+
+This is the **architectural answer banked durably**. The whole question — does Luna's existing memory architecture handle a natural-prose conversation about a real week? — has a yes. The orb-network rebuild is forward design (v2), not a v1.0 prerequisite.
+
+### What changed between fail and pass
+
+Two specific extraction-vocabulary additions in `prompt_v3`:
+
+| New (domain, kind) | Captures | Fixed in |
+|---|---|---|
+| `identity:name` | speaker self-introduction ("I'm Joe") | markdown `6305b66`, Rust `64eb1b1` |
+| `person:availability` | time-anchored absence/return ("Daniel back on the 17th") | markdown `6305b66`, Rust `64eb1b1` |
+
+The Rust validator (`PROMPT_V3_DOMAIN_KINDS` in `crates/luna-extract/src/llm_observation.rs`) is a strict mirror of the markdown allowlist — it exists so a model that hallucinates a domain doesn't poison the cache. Both must be updated together. They're now in sync.
+
+### What this still does NOT prove
+
+This run is the **dense-recall** portion of Stage 7. The README's full v1.0 acceptance is "10 turns of a real week → 24h+ → 3 questions." This run does the 10 turns and 3 questions back-to-back; the 24h gap is unmeasured because Luna currently has no automatic time-decay process. `forgotten_risk` is a field but no runtime path drives it from elapsed time. Adding that process is priority 5 in `STATUS.md`.
+
+When time-decay lands, the Stage 7 fixture should be re-run with explicit gap semantics. Until then, the dense-recall half is durable evidence; the 24h half is open work.
+
+### A latent issue worth flagging
+
+The two allowlists (markdown prompt + Rust validator const) must be updated together. There is no test that asserts they agree, and no cross-reference in either file pointing at the other. The next person to extend the vocabulary will hit the same trap that `64eb1b1` resolved here — emit the new pair from the LLM, get rejected by the runtime. Two reasonable fixes for a future PR:
+
+1. Add a unit test that parses the markdown table and asserts it matches `PROMPT_V3_DOMAIN_KINDS`. Cheap, catches drift on every CI run.
+2. Generate the Rust const from the markdown at build time. Fully eliminates drift, but is more invasive.
+
+Out of scope for this finding — but flagging for whoever picks up extraction-vocabulary work next.
+
 ## What to do next
 
 In strict priority order. Each gates the next.

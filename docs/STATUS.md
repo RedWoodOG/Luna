@@ -96,26 +96,25 @@ Orthogonal to the milestone roadmap. Both should be active concurrently.
 
 ## What needs to happen next
 
-**Architectural answer is in.** A 13-turn run of `scenarios/exploratory/stage7_dense_week.json` against `glm-4.6:cloud` extracted ~21 assertions on natural prose, processed all 13 turns cleanly, kept working memory bounded throughout, and passed 4 of 6 substring checks with zero false positives. The two failing checks (`identity:name=Joe` and `17th`) are **extraction-vocabulary gaps in the prompt template, not memory-architecture failures.** Memory works given working extraction.
+**Stage 7 dense-recall passes.** As of `64eb1b1`, the Stage 7 probe fixture (`scenarios/exploratory/stage7_dense_week.json`) passes 13/13 memory checks against `glm-4.6:cloud`. ~26 assertions extracted across natural-prose input, working memory bounded throughout, two distinct people not conflated, self-introduction and time-anchored personal facts both captured. The architectural answer is durably in: **memory works on natural prose given working extraction.**
 
-See [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md) (Update section) for the full result with log evidence.
+See [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md) (Final result section) for the full evidence.
 
-**The orb-network rebuild is v2.** It is correct architecture but not a v1.0 prerequisite. The v1.0 critical path is now extraction-side.
+**The orb-network rebuild is v2 architecture, not a v1.0 prerequisite.** The v1.0 critical path is now extraction-side and time-decay-side, not memory-architecture-side.
 
 Revised priority order:
 
-1. ~~**Establish working extraction on natural prose.**~~ **DONE** — three backends scaffolded, GLM-cloud run executed end-to-end. See [`STAGE7_LLM_SETUP.md`](STAGE7_LLM_SETUP.md).
-2. ~~**Run the Stage 7 probe fixture against working extractor.**~~ **DONE** — see findings update. Result: 4/6 checks pass, both failures are prompt-vocabulary.
-3. **Close the two prompt-vocabulary gaps the run surfaced.** Iterate the prompt template (`crates/luna-extract/prompts/extract_v3.md`) to:
-   - Promote self-introduction names ("I am X" / "I'm X") to high-value `identity:name` assertions even when richer context exists.
-   - Add an allowlisted `domain:kind` slot for time-anchored personal facts (e.g. `person:availability`, `schedule:return_date`). Currently dates appear only in signals, never as recallable claims.
-   Touching the prompt invalidates `prompt_v3_hash` and forces re-extraction across all caches — real prompt engineering.
-4. **Re-run the Stage 7 fixture; graduate to `scenarios/runtime/` if all 6 checks pass.** Add a CI strategy for LLM-backed scenarios at this point (separate workflow from the heuristic gate).
-5. **Add a time-decay process.** `EpisodeDecayed` driven from elapsed event-time so `forgotten_risk` actually moves. Required before the 24h portion of Stage 7 is measurable.
-6. **Build the Stage 7 fixture with a 24h gap and run it.** Needs (3)+(5) and a small harness extension for simulated time.
-7. **Resume the orb-network rebuild only after (6) closes.** v2 architecture, not v1.0.
+1. ~~**Establish working extraction on natural prose.**~~ **DONE** — three backends scaffolded, GLM-cloud run executed.
+2. ~~**Architectural answer.**~~ **DONE** — memory works given extraction.
+3. ~~**Close prompt-vocabulary gaps the run surfaced.**~~ **DONE** — `identity:name` and `person:availability` added to both the markdown prompt and the Rust validator. Stage 7 dense-recall now passes 13/13.
+4. **Fixture graduation + CI strategy for LLM-backed scenarios.** The Stage 7 dense-recall fixture is now graduation-eligible from `scenarios/exploratory/` to `scenarios/runtime/`, but the existing CI gate uses the heuristic extractor — graduating naively would break CI. Decision needed: either a parallel CI workflow for LLM-backed scenarios (with cache + model pinning), or a per-scenario `requires_extractor` field consumed by both the harness and CI. Smallest viable next move.
+5. **Add a time-decay process.** `EpisodeDecayed` driven from elapsed event-time so `forgotten_risk` actually moves on its own. Required before the 24h portion of Stage 7 is measurable. Today, a 0-second gap and a 24-hour gap behave identically.
+6. **Build the Stage 7 fixture with a 24h gap and run it.** Needs (5) and a small harness extension for simulated time (per-turn `event_time` or cumulative `gap_seconds`).
+7. **Resume the orb-network rebuild only after (6) closes.** v2 architecture; the schemas in `memory_schema_v1/` remain forward design until then.
 
-Defer: full audit of `luna-extract` (the prompt iteration in (3) will surface what we need to know about that crate); `luna-bench` audit; R-005 retrofit; regression tests for hot paths beyond `process_turn` and `rebuild_episodes`.
+Latent issue from this run, worth flagging in any extraction-vocabulary work: the markdown allowlist in `crates/luna-extract/prompts/extract_v3.md` and the Rust mirror const `PROMPT_V3_DOMAIN_KINDS` in `crates/luna-extract/src/llm_observation.rs` must be updated together but have no automated check that they agree. The next vocabulary extension will hit the same trap `64eb1b1` resolved. Add either a unit test that parses the markdown table and asserts it matches the Rust const, or generate the const from the markdown at build time.
+
+Defer: full audit of `luna-extract` and `luna-bench`; R-005 retrofit; regression tests for hot paths beyond `process_turn` and `rebuild_episodes`.
 
 ## How to read the repo, in order
 
