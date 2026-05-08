@@ -185,6 +185,48 @@ The graduation reflects a real status change: this fixture is no longer an explo
 
 The CI workflow is **manual-trigger only** by design. Each run costs API credits, and there is not yet evidence that gating every push on LLM-backed scenarios is worth the cost. Operators trigger it before tagging releases or after extraction-relevant changes. If the cost-to-value ratio shifts later, change the trigger to push/PR; the workflow logic is unchanged.
 
+## Final result — PASS, full README acceptance shape (`glm-4.6:cloud`, with time-decay)
+
+After priorities 5 and 6 landed (`8c1900c`: time-decay process + scenario harness `turn_offsets_seconds`), the second fixture `scenarios/runtime-llm/stage7_dense_week_with_24h_gap.json` was run against `glm-4.6:cloud`. The fixture is identical content to `stage7_dense_week.json` but lays the 13 turns over 5 work-days with a 40-hour gap before the question turns, exercising time-decay (`luna-runtime/decay`).
+
+```text
+13/13 turns processed                                no crashes, no parse failures
+~19 assertions extracted across natural prose        slightly fewer than the dense
+                                                     run (26) because explicit
+                                                     timestamps in the prompt may
+                                                     have shifted attention; result
+                                                     is the same: PASS.
+6/6 must_contain pass                                Joe, Mira, Daniel, Beacon, 17th, session
+7/7 must_not_contain pass                            no entity-confusion, no false positives
+PASS: 13 memory check(s)                             scenario gate green
+working memory bounded 3-5 nodes throughout          budget held
+40-hour gap before the question turns                event-time-driven; not wall-clock
+forgotten_risk on day-1 episodes ≈ 0.45              exponential, 7-day half-life
+recall gate attenuation                              capped at 25% per gate; survives
+```
+
+This is **the README's v1.0 acceptance test in its essential shape** — *10 turns of a real week → 24h+ → 3 questions, answered correctly* — passing on the existing memory architecture. Two distinct fixtures cover both halves of the contract:
+
+- `stage7_dense_week.json` — dense recall, no time gap. Tests the working-set / recall path under realistic prose.
+- `stage7_dense_week_with_24h_gap.json` — same content laid out over a real week with explicit time gaps. Tests that time-decay does not destroy recall.
+
+Both PASS. The complete evidentiary chain:
+
+```text
+LLM extraction → events → episodes → time-decay (event-time-driven)
+              → recall (decayed-aware) → working set → PASS
+```
+
+### What this confirms about the rebuild order
+
+The orb-network rebuild (v2 architecture, `memory_schema_v1/`) was deferred behind these two fixture passes. Both pass. That deferral is now a durable engineering decision rather than a hopeful one:
+
+- The existing memory architecture handles the v1.0 acceptance test under natural prose, time-decay, and a 24h+ gap.
+- The four memory-side primitives that *did* need to ship (event-log hardening, prompt-vocabulary expansion, runtime mirror, time-decay) are landed, tested, and reproducible.
+- The orb-network rebuild is correct architecture for v2 — but **v1.0 acceptance does not require it.**
+
+The rebuild now becomes optional capability work: valuable when the existing system's limits start to hurt (e.g., when ambiguity-as-branching becomes a real need, when consolidation deltas need to be auditable, when governance attestation has actual rules to enforce). Until then, `memory_schema_v1/` stays as forward design with no urgency to land.
+
 ## What to do next
 
 In strict priority order. Each gates the next.

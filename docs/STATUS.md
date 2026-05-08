@@ -98,11 +98,14 @@ Orthogonal to the milestone roadmap. Both should be active concurrently.
 
 ## What needs to happen next
 
-**Stage 7 dense-recall passes.** As of `64eb1b1`, the Stage 7 probe fixture (`scenarios/exploratory/stage7_dense_week.json`) passes 13/13 memory checks against `glm-4.6:cloud`. ~26 assertions extracted across natural-prose input, working memory bounded throughout, two distinct people not conflated, self-introduction and time-anchored personal facts both captured. The architectural answer is durably in: **memory works on natural prose given working extraction.**
+**Stage 7 passes both shapes.** As of `8c1900c`, both fixtures pass 13/13 against `glm-4.6:cloud`:
 
-See [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md) (Final result section) for the full evidence.
+- `scenarios/runtime-llm/stage7_dense_week.json` — dense recall (back-to-back turns)
+- `scenarios/runtime-llm/stage7_dense_week_with_24h_gap.json` — 5-day spread + 40-hour gap before the question turns, exercising time-decay
 
-**The orb-network rebuild is v2 architecture, not a v1.0 prerequisite.** The v1.0 critical path is now extraction-side and time-decay-side, not memory-architecture-side.
+The README's v1.0 acceptance test is *10-turn real-week → 24h+ → 3 questions, answered correctly with confidence/unknowns/ambiguity preserved*. The pair of fixtures above covers that shape: dense-recall and time-spread + decay. **Both PASS.** See [`STAGE7_FINDINGS.md`](STAGE7_FINDINGS.md) (Final result sections) for the full evidence.
+
+**The orb-network rebuild is v2 architecture, not a v1.0 prerequisite — confirmed by evidence, not by deferral.** All seven priorities are closed. The rebuild becomes optional capability work; the schemas in `memory_schema_v1/` remain forward design until a concrete need surfaces in operation.
 
 Revised priority order:
 
@@ -112,7 +115,15 @@ Revised priority order:
 4. ~~**Fixture graduation + CI strategy for LLM-backed scenarios.**~~ **DONE** — `stage7_dense_week.json` moved from `scenarios/exploratory/` to `scenarios/runtime-llm/`. New manually-triggered CI workflow `.github/workflows/llm-scenarios.yml` runs it via the Anthropic API (configurable model). Heuristic CI gate (`doctrine.yml`) untouched.
 5. ~~**Add a time-decay process.**~~ **DONE** — `crates/luna-runtime/src/decay.rs` (new) implements exponential decay (7-day default half-life). Wired into `process_turn` as a pre-pass that emits `EpisodeDecayed` events at the turn's own event-time. 12 unit tests + 1 integration test prove the wiring. Replay-deterministic: decay never reaches for `Utc::now()`. Default `DecayConfig` overridable per session via `RuntimeSession::with_decay_config(...)`.
 6. ~~**Build the Stage 7 fixture with a 24h gap and run it.**~~ **DONE** — harness extended with optional `turn_offsets_seconds: Vec<i64>` (parallel to `turns`, each entry is a Unix epoch second for that turn's event-time). Backward compatible; existing scenarios without offsets keep live-clock behavior. New fixture `scenarios/runtime-llm/stage7_dense_week_with_24h_gap.json` lays the 10 conversation turns over 5 work-days plus a 40-hour gap before the 3 question turns. Awaits a local LLM run to verify the fixture passes (the smoke-test under heuristic extraction confirms the harness extension works; LLM extraction is needed to actually produce assertions for memory to recall).
-7. **Resume the orb-network rebuild.** v2 architecture; the schemas in `memory_schema_v1/` remain forward design. Now unblocked — priorities 1–6 are closed. Whether to start it depends on whether v1.0 acceptance is reached on the existing architecture once the 24h-gap fixture passes against an LLM extractor.
+7. ~~**Resume the orb-network rebuild.**~~ **Decision deferred to capability-need.** Priorities 1–6 are closed and v1.0 acceptance shape passes both fixtures (dense + 24h-gap) on the existing memory architecture under realistic conditions. The orb rebuild is not a v1.0 prerequisite. It becomes the right work when the existing system's limits begin to hurt operationally — common triggers: ambiguity-as-branching becomes a real need; consolidation deltas need to be auditable rather than implicit; governance attestation has actual rules to enforce; recall would benefit from a memory-brief shape rather than per-claim activation. Until then, `memory_schema_v1/` stays as forward design.
+
+What's next is therefore not a single ordered priority but a choice between three honest options:
+
+- **Operate.** Run Luna at v1.0 acceptance shape, log real conversations, see what (if anything) breaks. Use that operational signal to decide whether the orb rebuild is needed.
+- **Tighten the v1.0 substrate.** Close the remaining open risks in `risk_register.md` (R-003, R-005 in particular — both fire on every turn), close the latent markdown↔Rust allowlist drift, expand hot-path regression tests. None of these block v1.0 but each makes the architecture more durable.
+- **Begin the orb rebuild.** Treat priority 7 as active work despite v1.0 not requiring it, because the broader Luna+Anthem+governance framework wants the orb-network shape. Land `pr-1.0/orb-schema` (luna-orbs crate, types only, generalizes RootOrb to a species), then phase by phase per the merged build order in the original plan.
+
+Pick deliberately rather than by default.
 
 Latent issue from this run, worth flagging in any extraction-vocabulary work: the markdown allowlist in `crates/luna-extract/prompts/extract_v3.md` and the Rust mirror const `PROMPT_V3_DOMAIN_KINDS` in `crates/luna-extract/src/llm_observation.rs` must be updated together but have no automated check that they agree. The next vocabulary extension will hit the same trap `64eb1b1` resolved. Add either a unit test that parses the markdown table and asserts it matches the Rust const, or generate the const from the markdown at build time.
 
