@@ -1,12 +1,12 @@
 //! Memory orb species — the generalization of [`luna_core::RootOrb`].
 //!
-//! This crate ships in `pr-1.0/orb-schema` as **types only**. No
-//! runtime path uses these types yet; nothing in `luna-runtime`
+//! Pr-1.0 shipped this crate as **types-only scaffolding**; pr-1.1
+//! fills in the [`OrbCore`] (the gist) and [`HaloRef`] (the receipts).
+//! No runtime path uses these types yet; nothing in `luna-runtime`
 //! changes; existing `RootOrb` seeding still happens the way it always
-//! has. The crate exists so later phases (halos in pr-1.1, tethers in
-//! pr-1.2, vector field in pr-1.3, hybrid recall in pr-1.4,
-//! consolidation engine in pr-1.6, governance in pr-1.9) have stable
-//! shapes to bind against.
+//! has. The crate exists so later phases (tethers in pr-1.2, vector
+//! field in pr-1.3, hybrid recall in pr-1.4, consolidation engine in
+//! pr-1.6, governance in pr-1.9) have stable shapes to bind against.
 //!
 //! ## What's here
 //!
@@ -19,9 +19,12 @@
 //! - [`OrbId`] — strict-on-construction newtype. Empty / whitespace ids
 //!   are rejected at construction time (mirrors the
 //!   [`luna_core::RecallReason`] discipline).
-//! - [`OrbCore`], [`HaloRef`] — skeleton types marked `#[non_exhaustive]`
-//!   so pr-1.1 can fill them in without a breaking schema bump at this
-//!   layer.
+//! - [`OrbCore`] — the dense, condensed representation. The "gist."
+//!   Carries the [`KeyFact`]s that survived consolidation, each with
+//!   the source event ids that produced it.
+//! - [`HaloRef`] — windowed reference back into the event log. The
+//!   "receipts." Bookend event ids + count + time range. Doesn't
+//!   duplicate the log; points at it.
 //! - [`OrbTether`] / [`TetherKind`] — typed graph edges between orbs,
 //!   minimal envelope. pr-1.2 fills in provenance / weighting.
 //! - [`MemoryOrb::from_root_orb`] — adapter from the existing singleton
@@ -45,6 +48,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Schema version this crate produces and accepts. Mirrors
 /// `memory_schema_v1` in the JSON Schema family at the repo root.
@@ -117,12 +121,14 @@ pub struct MemoryOrb {
     pub core_version: u32,
     /// Pinned to [`SCHEMA_VERSION`] today. Bumping requires a migration.
     pub schema_version: String,
-    /// Dense compressed claims. Skeleton in pr-1.0, detailed in pr-1.1.
+    /// Dense compressed claims (the "gist"). pr-1.1 shape; pr-1.6 will
+    /// populate it via consolidation.
     #[serde(default)]
     pub core: OrbCore,
-    /// Halo cursor. Skeleton in pr-1.0, detailed in pr-1.1.
-    #[serde(default)]
-    pub halo_ref: HaloRef,
+    /// Reference back into the event log (the "receipts"). `None` until
+    /// consolidation produces the first halo for this orb.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub halo_ref: Option<HaloRef>,
     /// Typed graph edges. Skeleton in pr-1.0, detailed in pr-1.2.
     #[serde(default)]
     pub tethers: Vec<OrbTether>,
@@ -157,7 +163,7 @@ impl MemoryOrb {
             core_version: 1,
             schema_version: SCHEMA_VERSION.to_string(),
             core: OrbCore::default(),
-            halo_ref: HaloRef::default(),
+            halo_ref: None,
             tethers: Vec::new(),
             ancestors: Vec::new(),
             privileged: false,
@@ -187,7 +193,7 @@ impl MemoryOrb {
             core_version,
             schema_version: SCHEMA_VERSION.to_string(),
             core: OrbCore::default(),
-            halo_ref: HaloRef::default(),
+            halo_ref: None,
             tethers: Vec::new(),
             ancestors: Vec::new(),
             privileged: true,
@@ -198,20 +204,188 @@ impl MemoryOrb {
     }
 }
 
-/// Dense, compressed claims of an orb. Skeleton in pr-1.0; pr-1.1 adds
-/// versioned claim sets, contradictions, open questions. Marked
-/// `#[non_exhaustive]` so pr-1.1 can extend without a SemVer-equivalent
-/// break at this layer.
+/// Dense, condensed representation of an orb — the "gist" that
+/// survives consolidation. Compact enough to carry in a recall hit
+/// without dragging the halo with it. Each [`KeyFact`] retains the
+/// source event ids that produced it so the orb stays *citable*.
+///
+/// `#[non_exhaustive]` so pr-1.6 (consolidation) can add fields like
+/// `open_questions` without a breaking schema bump at this layer.
+///
+/// Pr-1.1 reuses [`luna_core::Signal`] rather than introducing a
+/// parallel type — fewer shapes, no drift.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct OrbCore {}
+pub struct OrbCore {
+    /// Natural-language gist of the orb. Empty until pr-1.6's
+    /// consolidation engine populates it. Bounded length will be
+    /// enforced by consolidation, not here.
+    #[serde(default)]
+    pub summary: String,
+    /// Atomic facts that survived consolidation. Each carries the
+    /// source event ids that produced it. The constructor enforces
+    /// non-empty source ids — empty provenance is forbidden.
+    #[serde(default)]
+    pub key_facts: Vec<KeyFact>,
+    /// Confidence horizon for the orb as a whole. Maps from the
+    /// existing `luna_core::AssertionConfidenceTier` semantics
+    /// (memory_current_state.md:124).
+    #[serde(default)]
+    pub confidence_horizon: ConfidenceHorizon,
+    /// Directional cues — preferences, recurring patterns. Reuses
+    /// [`luna_core::Signal`].
+    #[serde(default)]
+    pub signals: Vec<luna_core::Signal>,
+}
 
-/// Reference to the orb's halo — a derived view of the event log
-/// scoped to the orb. Skeleton in pr-1.0; pr-1.1 fills in cursor /
-/// query / weight signals.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+/// An atomic, citable fact attached to an [`OrbCore`].
+///
+/// Strict on construction: the statement must be non-empty / non-whitespace
+/// (via [`KeyFactStatement`]), and `source_event_ids` must be non-empty
+/// — "no fact without a citation."
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KeyFact {
+    pub statement: KeyFactStatement,
+    /// Event ids in the log that justify this fact. Non-empty by
+    /// constructor.
+    pub source_event_ids: Vec<Uuid>,
+    /// Clamped to `[0.0, 1.0]` at construction (matches
+    /// `luna_core::Signal::new` and `EventEnvelope::new`).
+    pub confidence: f32,
+    /// Wall-clock time of the most recent event that touched this
+    /// fact. Audit field.
+    pub last_reinforced_at: DateTime<Utc>,
+}
+
+impl KeyFact {
+    pub fn new(
+        statement: KeyFactStatement,
+        source_event_ids: Vec<Uuid>,
+        confidence: f32,
+        last_reinforced_at: DateTime<Utc>,
+    ) -> Result<Self, OrbError> {
+        if source_event_ids.is_empty() {
+            return Err(OrbError::KeyFactWithoutSourceEvents);
+        }
+        Ok(Self {
+            statement,
+            source_event_ids,
+            confidence: confidence.clamp(0.0, 1.0),
+            last_reinforced_at,
+        })
+    }
+}
+
+/// Strict-on-construction newtype for the natural-language statement
+/// inside a [`KeyFact`]. Empty / whitespace statements are rejected
+/// (mirrors [`OrbId`] and `luna_core::RecallReason`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct KeyFactStatement(String);
+
+impl KeyFactStatement {
+    pub fn new(statement: impl Into<String>) -> Result<Self, OrbError> {
+        let s = statement.into();
+        if s.trim().is_empty() {
+            return Err(OrbError::EmptyKeyFactStatement);
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for KeyFactStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Confidence horizon for an orb as a whole. Maps from the per-assertion
+/// `luna_core::AssertionConfidenceTier` (`memory_current_state.md:124`)
+/// — re-derived at the orb level so a recall hit can reason about an
+/// orb's overall belief grade without traversing every key fact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfidenceHorizon {
+    /// No assertion has reached confirmed status. Default for a
+    /// freshly-created orb that has not yet been consolidated.
+    #[default]
+    Unconfirmed,
+    /// Inferred from context but not directly confirmed.
+    Inferred,
+    /// At least one assertion has been confirmed by direct user signal
+    /// or repeated co-activation.
+    Confirmed,
+}
+
+/// Windowed reference back into the event log. Bookend event ids +
+/// count + time range. The full enumeration of events lives in the
+/// log; this type **points at it**, it does not duplicate it.
+///
+/// Designed to compose with:
+/// - `pr-1.4/hybrid-recall` — `time_range` feeds time-decay weighting.
+/// - `pr-1.6/consolidate-engine` — produces a `HaloRef` from the
+///   window of events it consumed.
+/// - `pr-1.9/attestation` — verifies that re-replaying the events in
+///   `[first_event_id, last_event_id]` reproduces `event_count`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
-pub struct HaloRef {}
+pub struct HaloRef {
+    /// Bookend: oldest event in the halo window.
+    pub first_event_id: Uuid,
+    /// Bookend: newest event in the halo window.
+    pub last_event_id: Uuid,
+    /// Number of events in `[first_event_id, last_event_id]` that
+    /// belong to this orb. Verified at attestation time — drift
+    /// here means replay produced a different shape than was
+    /// originally consolidated.
+    pub event_count: u32,
+    /// Inclusive time window. Both endpoints are real event
+    /// timestamps, not `Utc::now()` (R-002 closure pattern).
+    pub time_range: HaloTimeRange,
+}
+
+impl HaloRef {
+    pub fn new(
+        first_event_id: Uuid,
+        last_event_id: Uuid,
+        event_count: u32,
+        time_range: HaloTimeRange,
+    ) -> Self {
+        Self {
+            first_event_id,
+            last_event_id,
+            event_count,
+            time_range,
+        }
+    }
+}
+
+/// Inclusive time window for a [`HaloRef`]. Constructor rejects
+/// `to < from`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct HaloTimeRange {
+    /// Inclusive start.
+    pub from: DateTime<Utc>,
+    /// Inclusive end. Must be `>= from`.
+    pub to: DateTime<Utc>,
+}
+
+impl HaloTimeRange {
+    pub fn new(from: DateTime<Utc>, to: DateTime<Utc>) -> Result<Self, OrbError> {
+        if to < from {
+            return Err(OrbError::InvertedTimeRange);
+        }
+        Ok(Self { from, to })
+    }
+}
 
 /// Typed graph edge between two orbs, derived from a logged bind
 /// event. Pr-1.0 ships the envelope; pr-1.2 detail-fills provenance
@@ -246,12 +420,24 @@ pub enum TetherKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OrbError {
     EmptyOrbId,
+    EmptyKeyFactStatement,
+    KeyFactWithoutSourceEvents,
+    InvertedTimeRange,
 }
 
 impl std::fmt::Display for OrbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OrbError::EmptyOrbId => f.write_str("orb_id must not be empty or whitespace"),
+            OrbError::EmptyKeyFactStatement => {
+                f.write_str("key_fact statement must not be empty or whitespace")
+            }
+            OrbError::KeyFactWithoutSourceEvents => {
+                f.write_str("key_fact must cite at least one source event id")
+            }
+            OrbError::InvertedTimeRange => {
+                f.write_str("halo time range `to` must be >= `from`")
+            }
         }
     }
 }
@@ -419,6 +605,143 @@ mod tests {
         assert!(orb.ancestors.is_empty());
         assert!(!orb.privileged);
         assert!(orb.policy_bindings.is_empty());
+        assert_eq!(orb.core, OrbCore::default());
+        assert!(
+            orb.halo_ref.is_none(),
+            "fresh orb must have no halo until consolidation produces one"
+        );
+    }
+
+    // ---------- pr-1.1/orb-halos: OrbCore + KeyFact ----------
+
+    #[test]
+    fn orb_core_default_is_empty_and_unconfirmed() {
+        let core = OrbCore::default();
+        assert!(core.summary.is_empty());
+        assert!(core.key_facts.is_empty());
+        assert!(core.signals.is_empty());
+        assert_eq!(core.confidence_horizon, ConfidenceHorizon::Unconfirmed);
+    }
+
+    #[test]
+    fn key_fact_statement_rejects_empty_and_whitespace() {
+        assert!(KeyFactStatement::new("").is_err());
+        assert!(KeyFactStatement::new("   ").is_err());
+        assert!(KeyFactStatement::new("\t\n").is_err());
+        assert!(KeyFactStatement::new("Joe prefers reviews on Fridays").is_ok());
+    }
+
+    #[test]
+    fn key_fact_rejects_empty_source_event_ids() {
+        let stmt = KeyFactStatement::new("Joe prefers Fridays").unwrap();
+        let err = KeyFact::new(stmt, vec![], 0.7, fixed_time()).unwrap_err();
+        assert_eq!(err, OrbError::KeyFactWithoutSourceEvents);
+    }
+
+    #[test]
+    fn key_fact_clamps_confidence_to_unit_interval() {
+        let stmt = KeyFactStatement::new("x").unwrap();
+        let high = KeyFact::new(stmt.clone(), vec![Uuid::new_v4()], 9.5, fixed_time()).unwrap();
+        assert_eq!(high.confidence, 1.0);
+        let low = KeyFact::new(stmt, vec![Uuid::new_v4()], -0.4, fixed_time()).unwrap();
+        assert_eq!(low.confidence, 0.0);
+    }
+
+    #[test]
+    fn confidence_horizon_serializes_snake_case() {
+        let cases = [
+            (ConfidenceHorizon::Unconfirmed, "\"unconfirmed\""),
+            (ConfidenceHorizon::Inferred, "\"inferred\""),
+            (ConfidenceHorizon::Confirmed, "\"confirmed\""),
+        ];
+        for (h, expected) in cases {
+            assert_eq!(serde_json::to_string(&h).unwrap(), expected);
+            let back: ConfidenceHorizon = serde_json::from_str(expected).unwrap();
+            assert_eq!(back, h);
+        }
+    }
+
+    // ---------- pr-1.1/orb-halos: HaloRef + HaloTimeRange ----------
+
+    #[test]
+    fn halo_time_range_rejects_to_before_from() {
+        let from = fixed_time();
+        let earlier = from - chrono::Duration::hours(1);
+        assert_eq!(
+            HaloTimeRange::new(from, earlier).unwrap_err(),
+            OrbError::InvertedTimeRange
+        );
+        // Equal endpoints are allowed (a single-event halo).
+        assert!(HaloTimeRange::new(from, from).is_ok());
+    }
+
+    #[test]
+    fn halo_ref_round_trips_through_json() {
+        let first = Uuid::new_v4();
+        let last = Uuid::new_v4();
+        let from = fixed_time();
+        let to = from + chrono::Duration::hours(6);
+        let halo = HaloRef::new(first, last, 17, HaloTimeRange::new(from, to).unwrap());
+        let json = serde_json::to_string(&halo).unwrap();
+        let back: HaloRef = serde_json::from_str(&json).unwrap();
+        assert_eq!(halo, back);
+    }
+
+    #[test]
+    fn memory_orb_with_populated_core_and_halo_round_trips() {
+        let id = OrbId::new("orb.relationship.joe").unwrap();
+        let now = fixed_time();
+        let mut orb = MemoryOrb::new(id, OrbKind::Relationship, now);
+
+        let event_a = Uuid::new_v4();
+        let event_b = Uuid::new_v4();
+        let stmt = KeyFactStatement::new("Joe prefers reviews on Fridays").unwrap();
+        let fact = KeyFact::new(stmt, vec![event_a, event_b], 0.85, now).unwrap();
+
+        orb.core = OrbCore {
+            summary: "Joe is a reviewer who prefers end-of-week sessions.".to_string(),
+            key_facts: vec![fact],
+            confidence_horizon: ConfidenceHorizon::Confirmed,
+            signals: vec![luna_core::Signal::new(
+                0.7,
+                0.9,
+                luna_core::SignalReliability::UserConfirmed,
+            )],
+        };
+        orb.halo_ref = Some(HaloRef::new(
+            event_a,
+            event_b,
+            2,
+            HaloTimeRange::new(now, now + chrono::Duration::hours(2)).unwrap(),
+        ));
+
+        let json = serde_json::to_string(&orb).unwrap();
+        let back: MemoryOrb = serde_json::from_str(&json).unwrap();
+        assert_eq!(orb, back);
+    }
+
+    #[test]
+    fn key_fact_round_trips_through_json_preserving_source_event_ids() {
+        let stmt = KeyFactStatement::new("Chris owns the dispatcher").unwrap();
+        let event_id = Uuid::new_v4();
+        let fact = KeyFact::new(stmt, vec![event_id], 0.6, fixed_time()).unwrap();
+        let json = serde_json::to_string(&fact).unwrap();
+        let back: KeyFact = serde_json::from_str(&json).unwrap();
+        assert_eq!(fact, back);
+        assert_eq!(back.source_event_ids, vec![event_id]);
+    }
+
+    #[test]
+    fn fresh_orb_has_no_halo_until_consolidation() {
+        // Doctrine: a brand-new orb has no halo. `Option::None` is the
+        // honest representation, not a sentinel HaloRef with zero count.
+        let orb = MemoryOrb::new(
+            OrbId::new("orb.project.beacon").unwrap(),
+            OrbKind::Project,
+            fixed_time(),
+        );
+        assert!(orb.halo_ref.is_none());
+        assert_eq!(orb.core, OrbCore::default());
     }
 
     #[test]
