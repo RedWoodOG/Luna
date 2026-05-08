@@ -58,6 +58,7 @@ the turn, not a category label.
 | identity     | creative_origin     | origin or source of the speaker's creative impulse        | `"started writing during long shifts"`              |
 | identity     | mission             | the speaker's stated mission, purpose, or cause           | `"build doors for people without language"`         |
 | identity     | project_identity    | identification with a specific project the speaker leads  | `"the engineer behind the provenance engine"`       |
+| identity     | name                | the speaker's own name in self-introduction               | `"Joe"` (from "I'm Joe" / "I am Joe")               |
 | work         | current_stressor    | a present-tense work or task pressure                     | `"client deadline"`                                 |
 | work         | past_event          | a specific past work or task event                        | `"vendor call last week"`                           |
 | work         | job_security        | concerns or statements about employment stability         | `"job was in jeopardy"`                             |
@@ -76,6 +77,7 @@ the turn, not a category label.
 | person       | trait               | another person's stable descriptive trait                 | `"Francois is short"`                               |
 | person       | interest            | another person's stated interest or fandom                | `"Chris is a basketball fan"`                       |
 | person       | goal                | another person's stated goal or ambition                  | `"Francois wants to take over the industry"`        |
+| person       | availability        | another person's stated absence, return date, or schedule | `"Daniel back on the 17th"`                         |
 | project      | provenance_engine   | the speaker's provenance/lineage engine project           | `"Aegis provenance engine"`                         |
 | project      | failed_project      | a specific project that did not succeed                   | `"being early to a problem"`                        |
 | project      | creative_work       | a creative artifact, story, or work produced              | `"AI writing tool"`                                 |
@@ -110,6 +112,16 @@ when the fact is about that person. A bare name alone is low-value, but
 If a dense turn names multiple people, extract each concrete person
 fact separately when it fits the allowlist. Do not collapse several
 people into one broad relationship claim.
+
+`identity:name` is a different rule. **Do NOT treat the speaker's own
+self-introduction as low-value.** When the speaker says "I'm Joe", "I
+am Joe", "Hi, I'm Joe", or similar, the speaker-name identity assertion
+IS valuable on its own — it anchors every subsequent fact in the
+conversation. Extract `identity:name` even when richer identity
+assertions (like `identity:role` or `identity:profession`) are also
+extracted from the same turn. The "bare name alone is low-value" rule
+above applies to other people's names in `person:name`, not to the
+speaker's self-introduction in `identity:name`.
 
 | Good `value`                                  | Bad `value`        |
 |-----------------------------------------------|--------------------|

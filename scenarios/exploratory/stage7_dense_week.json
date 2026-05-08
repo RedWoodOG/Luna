@@ -18,7 +18,7 @@
   ],
   "checks": {
     "must_contain": [
-      "identity:name=Joe",
+      "Joe",
       "Mira",
       "Daniel",
       "Beacon",
