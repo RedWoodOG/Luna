@@ -10,7 +10,7 @@ Risks identified during the audit (`docs/memory_current_state.md`). Each risk ha
 | R-002 | medium | `Utc::now()` in replay creates time drift | `luna-store:109` | **closed** `16e1736` | pr-1.0a |
 | R-003 | medium | Assertion fine-capture outside event log | `luna-runtime:722-728` | **closed** `pr-1.1a` | pr-1.1a |
 | R-004 | medium | Hardcoded assertion-intent mapping | `luna-tcf:201-223` | open | pr-1.4 |
-| R-005 | medium | MemoryMap node/edge merge is silent | `luna-runtime:571-580` | open | pr-1.2 |
+| R-005 | medium | MemoryMap node/edge merge is silent | `luna-runtime:686-708` | **closed `pr-1.2`** | pr-1.2 |
 | R-006 | low | Question proposal rules scattered inline | `luna-runtime:1632-1677` | open | post-pr-1.0 |
 | R-007 | low | RootOrb override policy never exercised | `luna-core:557-632` | open | pr-1.0 |
 | R-008 | low | `AssertionCorrected`/`ContradictionDetected` defined but unused | enum variants | open | pr-1.6 |
@@ -136,19 +136,27 @@ Option (1) is the path of least disturbance and matches the planned rebuild orde
 
 ---
 
-### R-005 — MemoryMap node/edge merge is silent (medium)
+### R-005 — MemoryMap node/edge merge is silent (medium) — **closed `pr-1.2`**
 
-**Location.** `crates/luna-runtime/src/lib.rs:571-580`.
+**Location.** `crates/luna-runtime/src/lib.rs:686-708` (`insert_node`).
 
-**Description.** When `MemoryState::from_episodes()` builds the MemoryMap, `insert_node()` updates an existing node's confidence tier, density, and provenance in place if the node id already exists. No event is logged for the merge.
+**Description.** When `MemoryState::from_episodes()` builds the MemoryMap, `insert_node()` updates an existing node's confidence tier, density, and provenance in place if the node id already exists. No event was logged for the merge.
 
-**Doctrine impact.** The merge happens *during graph construction*, which is itself derived from events. So strictly the doctrine "event log is truth" still holds — the merged node is fully reconstructable from the events. But the *fact of merge*, the moment two pieces of evidence collapsed into one node, isn't visible without rebuilding and diffing.
+**Doctrine impact.** The merge happens *during graph construction*, which is itself derived from events. So strictly the doctrine "event log is truth" still holds — the merged node is fully reconstructable from the events. But the *fact of merge*, the moment two pieces of evidence collapsed into one node, wasn't visible without rebuilding and diffing.
 
-**Why it matters for the rebuild.** Tethers (`pr-1.2`) make this worse: a tether is a typed edge derived from a bind-event in the log. If node merges happen during graph construction without their own events, tether attribution gets harder — which event "caused" the tether between merged nodes?
+**Why it mattered for the rebuild.** Tethers (`pr-1.2`) made this worse: a tether is a typed edge derived from a bind-event in the log. If node merges happen during graph construction without their own events, tether attribution gets harder — which event "caused" the tether between merged nodes?
 
-**Mitigation.** Emit a `NodeMerged` / `EdgeMerged` event during graph construction, or restructure construction so all merges are explicit log entries. Alternative: keep construction silent but produce a "merge ledger" as part of `MemoryState`, queryable at audit time.
+**Closure (pr-1.2).** Three changes land:
 
-**Target.** `pr-1.2/orb-tethers`.
+1. `LunaEvent::NodeMerged` variant in `luna-core` carries `{ node_id, merged_density_delta, previous_confidence_tier, new_confidence_tier, merged_provenance_count }` — *what changed*, in the audit log.
+2. `MemoryState::from_episodes_with_merges` returns `(Self, Vec<NodeMerged>)` so the merge moment is observable. The pre-existing `from_episodes` becomes a thin wrapper that discards merges (preserves call-site stability for `inspect`).
+3. `process_turn` diffs the post-turn merge set against `prior_merged_ids` (computed from `previous_episodes`) and emits one `NodeMerged` event per *fresh* merge — so per-turn audit isn't duplicated by re-derivation of historical merges. `luna-store::rebuild_episodes` ignores the variant (replay invariant: state is identical with/without `NodeMerged` in the log).
+
+**Alternative considered.** Per scope-doc Q2, a "merge ledger" inside `MemoryState` queryable at audit time. Rejected: the audit log is the single source of truth; introducing a parallel ledger means two places to keep in sync.
+
+**Locking tests.** `from_episodes_emits_node_merged_when_existing_node_extended`, `from_episodes_does_not_emit_node_merged_for_first_insert`, `rebuild_episodes_ignores_node_merged_events`, `process_turn_emits_node_merged_only_for_fresh_merges`.
+
+**Target.** `pr-1.2/orb-tethers` — landed.
 
 ---
 

@@ -50,6 +50,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Re-exports of orb-vocabulary types that live in `luna-core` so
+/// `LunaEvent::OrbTetherBound` can carry them without inducing a
+/// `luna-core ↔ luna-orbs` dependency cycle. Callers can import them
+/// from either crate; the type identity is the same.
+pub use luna_core::{OrbId, TetherKind};
+
 /// Schema version this crate produces and accepts. Mirrors
 /// `memory_schema_v1` in the JSON Schema family at the repo root.
 pub const SCHEMA_VERSION: &str = "memory_schema_v1";
@@ -70,40 +76,6 @@ pub enum OrbKind {
     Research,
     Domain,
     TraumaOrError,
-}
-
-/// Stable identifier for a memory orb. Conventionally namespaced
-/// (e.g. `orb.system_root`, `orb.user_preference.review_style`).
-///
-/// Strict on construction: empty and whitespace-only ids are rejected.
-/// Mirrors the [`luna_core::RecallReason`] discipline — invariants live
-/// at the type level, not in scattered runtime checks.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct OrbId(String);
-
-impl OrbId {
-    pub fn new(id: impl Into<String>) -> Result<Self, OrbError> {
-        let s = id.into();
-        if s.trim().is_empty() {
-            return Err(OrbError::EmptyOrbId);
-        }
-        Ok(Self(s))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_inner(self) -> String {
-        self.0
-    }
-}
-
-impl std::fmt::Display for OrbId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
 }
 
 /// A unit of compressed cognitive continuity.
@@ -185,7 +157,8 @@ impl MemoryOrb {
         now: DateTime<Utc>,
     ) -> Result<Self, OrbError> {
         let id_suffix = root.id.replace(':', ".");
-        let orb_id = OrbId::new(format!("orb.system_root.{id_suffix}"))?;
+        let orb_id = OrbId::new(format!("orb.system_root.{id_suffix}"))
+            .map_err(|_| OrbError::EmptyOrbId)?;
         let core_version = parse_root_orb_version(&root.version);
         Ok(Self {
             orb_id,
@@ -388,33 +361,101 @@ impl HaloTimeRange {
 }
 
 /// Typed graph edge between two orbs, derived from a logged bind
-/// event. Pr-1.0 ships the envelope; pr-1.2 detail-fills provenance
-/// and weight semantics.
+/// event. Pr-1.0 shipped the envelope; pr-1.2 fills in provenance,
+/// `bound_at` audit timestamp, and weight semantics.
+///
+/// **No tether without a citation.** [`OrbTether::new`] rejects empty
+/// `provenance` — every tether traces back to at least one event in
+/// the log, mirroring the [`KeyFact::source_event_ids`] discipline.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OrbTether {
     pub from_orb: OrbId,
     pub to_orb: OrbId,
     pub kind: TetherKind,
     /// 0..=1 activation weight. 0 means the tether exists but contributes
-    /// nothing to traversal scoring. Default 0.0 is intentionally
-    /// non-active so pr-1.2 has to deliberately weight new tethers.
+    /// nothing to traversal scoring. Clamped at construction by
+    /// [`OrbTether::new`] (matches `KeyFact::confidence`,
+    /// `Signal::new`, `EventEnvelope::new`).
     #[serde(default)]
     pub weight: f32,
+    /// Events that produced this tether — non-empty by constructor.
+    /// Same shape rule as [`KeyFact::source_event_ids`]: no tether
+    /// without a citation.
+    #[serde(default)]
+    pub provenance: Vec<TetherProvenance>,
+    /// Wall-clock time the tether was first bound. Audit field;
+    /// matches [`MemoryOrb::created_at`] discipline. For runtime
+    /// emitters (pr-1.6) this MUST be the event-time of the bind
+    /// event, not `Utc::now()` (R-002 closure pattern).
+    pub bound_at: DateTime<Utc>,
 }
 
+impl OrbTether {
+    /// Strict constructor. Rejects empty `provenance`. Clamps `weight`
+    /// to `[0.0, 1.0]`. The doctrinal rule "every tether traces back
+    /// to a logged event" is a type signature here — production code
+    /// cannot construct an unattributed tether.
+    pub fn new(
+        from_orb: OrbId,
+        to_orb: OrbId,
+        kind: TetherKind,
+        weight: f32,
+        provenance: Vec<TetherProvenance>,
+        bound_at: DateTime<Utc>,
+    ) -> Result<Self, OrbError> {
+        if provenance.is_empty() {
+            return Err(OrbError::TetherWithoutProvenance);
+        }
+        Ok(Self {
+            from_orb,
+            to_orb,
+            kind,
+            weight: weight.clamp(0.0, 1.0),
+            provenance,
+            bound_at,
+        })
+    }
+}
+
+/// One citation backing an [`OrbTether`]. Carries an event id that
+/// can be joined against the event log to recover full context, plus
+/// a [`TetherBinding`] tag classifying *what kind of bind* the event
+/// represented. Mirrors how [`luna_core::EpisodeRecalled`] carries
+/// just enough to be auditable without duplicating the log.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TetherProvenance {
+    /// The event in the log that caused this tether to bind.
+    pub event_id: Uuid,
+    /// What kind of binding signal this event represented. Lets audit
+    /// answer "was this from a derivation, a co-activation, or an
+    /// explicit user signal?"
+    pub binding: TetherBinding,
+}
+
+impl TetherProvenance {
+    pub fn new(event_id: Uuid, binding: TetherBinding) -> Self {
+        Self { event_id, binding }
+    }
+}
+
+/// Classifier for what kind of bind event produced a tether. Lets the
+/// audit path distinguish e.g. "this CoActiveWith tether emerged from
+/// repeated co-activation" from "this AncestorOf tether came from a
+/// consolidation lineage event".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TetherKind {
-    /// "B's content was derived from A" — typically a bud relationship.
-    DerivedFrom,
-    /// "B is a specialization of A" — branching produces this.
-    Specializes,
-    /// "A and B contradict" — surfaced for arbitration.
-    Contradicts,
-    /// "A and B repeatedly co-activate" — merge candidate signal.
-    CoActiveWith,
-    /// "A is a prior version / parent of B" — lineage record.
-    AncestorOf,
+pub enum TetherBinding {
+    /// `OrbTetherBound` event — explicit consolidation-time bind.
+    Explicit,
+    /// `EpisodeRecalled` events repeatedly co-activating two orbs —
+    /// a `CoActiveWith` tether emerged from frequency.
+    CoActivation,
+    /// An `AssertionCorrected` event surfaced a contradiction
+    /// between two orbs — a `Contradicts` tether.
+    ContradictionEvent,
+    /// A consolidation produced a child orb from a parent — an
+    /// `AncestorOf` / `Specializes` tether.
+    LineageEvent,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -423,6 +464,7 @@ pub enum OrbError {
     EmptyKeyFactStatement,
     KeyFactWithoutSourceEvents,
     InvertedTimeRange,
+    TetherWithoutProvenance,
 }
 
 impl std::fmt::Display for OrbError {
@@ -437,6 +479,9 @@ impl std::fmt::Display for OrbError {
             }
             OrbError::InvertedTimeRange => {
                 f.write_str("halo time range `to` must be >= `from`")
+            }
+            OrbError::TetherWithoutProvenance => {
+                f.write_str("orb tether must cite at least one TetherProvenance")
             }
         }
     }
@@ -570,12 +615,19 @@ mod tests {
         let id = OrbId::new("orb.project.beacon").unwrap();
         let now = fixed_time();
         let mut orb = MemoryOrb::new(id, OrbKind::Project, now);
-        orb.tethers.push(OrbTether {
-            from_orb: OrbId::new("orb.project.beacon").unwrap(),
-            to_orb: OrbId::new("orb.system_root.root.luna").unwrap(),
-            kind: TetherKind::DerivedFrom,
-            weight: 0.42,
-        });
+        let tether = OrbTether::new(
+            OrbId::new("orb.project.beacon").unwrap(),
+            OrbId::new("orb.system_root.root.luna").unwrap(),
+            TetherKind::DerivedFrom,
+            0.42,
+            vec![TetherProvenance::new(
+                Uuid::new_v4(),
+                TetherBinding::LineageEvent,
+            )],
+            now,
+        )
+        .unwrap();
+        orb.tethers.push(tether);
         orb.ancestors
             .push(OrbId::new("orb.project.beacon-draft").unwrap());
 
@@ -752,5 +804,98 @@ mod tests {
         assert_eq!(parse_root_orb_version("garbage"), 1);
         assert_eq!(parse_root_orb_version(""), 1);
         assert_eq!(parse_root_orb_version("root-orb-v"), 1);
+    }
+
+    // ---------- pr-1.2/orb-tethers: OrbTether + TetherProvenance ----------
+
+    fn sample_provenance() -> TetherProvenance {
+        TetherProvenance::new(Uuid::new_v4(), TetherBinding::Explicit)
+    }
+
+    #[test]
+    fn orb_tether_rejects_empty_provenance() {
+        let err = OrbTether::new(
+            OrbId::new("orb.a").unwrap(),
+            OrbId::new("orb.b").unwrap(),
+            TetherKind::DerivedFrom,
+            0.5,
+            vec![],
+            fixed_time(),
+        )
+        .unwrap_err();
+        assert_eq!(err, OrbError::TetherWithoutProvenance);
+    }
+
+    #[test]
+    fn orb_tether_clamps_weight_to_unit_interval() {
+        let high = OrbTether::new(
+            OrbId::new("orb.a").unwrap(),
+            OrbId::new("orb.b").unwrap(),
+            TetherKind::CoActiveWith,
+            9.5,
+            vec![sample_provenance()],
+            fixed_time(),
+        )
+        .unwrap();
+        assert_eq!(high.weight, 1.0);
+
+        let low = OrbTether::new(
+            OrbId::new("orb.a").unwrap(),
+            OrbId::new("orb.b").unwrap(),
+            TetherKind::CoActiveWith,
+            -0.4,
+            vec![sample_provenance()],
+            fixed_time(),
+        )
+        .unwrap();
+        assert_eq!(low.weight, 0.0);
+    }
+
+    #[test]
+    fn orb_tether_round_trips_through_json() {
+        let now = fixed_time();
+        let tether = OrbTether::new(
+            OrbId::new("orb.relationship.joe").unwrap(),
+            OrbId::new("orb.project.beacon").unwrap(),
+            TetherKind::CoActiveWith,
+            0.42,
+            vec![
+                TetherProvenance::new(Uuid::new_v4(), TetherBinding::CoActivation),
+                TetherProvenance::new(Uuid::new_v4(), TetherBinding::Explicit),
+            ],
+            now,
+        )
+        .unwrap();
+        let json = serde_json::to_string(&tether).unwrap();
+        let back: OrbTether = serde_json::from_str(&json).unwrap();
+        assert_eq!(tether, back);
+        assert_eq!(back.provenance.len(), 2);
+        assert_eq!(back.bound_at, now);
+    }
+
+    #[test]
+    fn tether_provenance_round_trips() {
+        let event_id = Uuid::new_v4();
+        let provenance = TetherProvenance::new(event_id, TetherBinding::LineageEvent);
+        let json = serde_json::to_string(&provenance).unwrap();
+        let back: TetherProvenance = serde_json::from_str(&json).unwrap();
+        assert_eq!(provenance, back);
+        assert_eq!(back.event_id, event_id);
+        assert_eq!(back.binding, TetherBinding::LineageEvent);
+    }
+
+    #[test]
+    fn tether_binding_serializes_snake_case() {
+        let cases = [
+            (TetherBinding::Explicit, "\"explicit\""),
+            (TetherBinding::CoActivation, "\"co_activation\""),
+            (TetherBinding::ContradictionEvent, "\"contradiction_event\""),
+            (TetherBinding::LineageEvent, "\"lineage_event\""),
+        ];
+        for (binding, expected) in cases {
+            assert_eq!(serde_json::to_string(&binding).unwrap(), expected);
+            let back: TetherBinding = serde_json::from_str(expected).unwrap();
+            assert_eq!(back, binding);
+        }
     }
 }

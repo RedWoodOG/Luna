@@ -182,6 +182,17 @@ pub enum LunaEvent {
     /// `AssertionExtracted` / `EpisodeCreated` / `EpisodeReinforced`
     /// events, which remain the source of truth for state.
     RawObservationCaptured(RawObservationCaptured),
+    /// Audit event (pr-1.2): a tether between two orbs was bound. The
+    /// "bind-event" the doctrine refers to — every tether traces back
+    /// to a logged event. Replay-informational at this slice; pr-1.6's
+    /// consolidation engine will be the producer.
+    OrbTetherBound(OrbTetherBound),
+    /// Audit event (R-005 closure): a `MemoryNode` with the same id was
+    /// observed twice during `MemoryState::from_episodes` derivation,
+    /// causing density / confidence_tier / provenance to be merged
+    /// rather than replacing. Records what changed so tether attribution
+    /// across merged nodes stays auditable. Replay-informational.
+    NodeMerged(NodeMerged),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -335,6 +346,108 @@ pub struct EpisodeDecayed {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RawObservationCaptured {
     pub observation: CognitiveObservation,
+}
+
+/// Stable identifier for a memory orb. Conventionally namespaced
+/// (e.g. `orb.system_root`, `orb.user_preference.review_style`).
+///
+/// Strict on construction: empty and whitespace-only ids are rejected
+/// (mirrors the `RecallReason` discipline — invariants live at the
+/// type level, not in scattered runtime checks).
+///
+/// Lives in luna-core (rather than luna-orbs where the orb shape
+/// crystallizes) so `LunaEvent::OrbTetherBound` can reference it
+/// without the orbs crate depending on luna-core *and* luna-core
+/// depending back on orbs.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct OrbId(String);
+
+impl OrbId {
+    pub fn new(id: impl Into<String>) -> Result<Self> {
+        let s = id.into();
+        if s.trim().is_empty() {
+            return Err(LunaError::new(
+                "OrbId cannot be empty or whitespace",
+            ));
+        }
+        Ok(Self(s))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl fmt::Display for OrbId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// The kinds of typed graph edge between two orbs. Mirrored from the
+/// pr-1.0 enum; lives here rather than in luna-orbs so the
+/// `LunaEvent::OrbTetherBound` payload can reference it directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TetherKind {
+    /// "B's content was derived from A" — typically a bud relationship.
+    DerivedFrom,
+    /// "B is a specialization of A" — branching produces this.
+    Specializes,
+    /// "A and B contradict" — surfaced for arbitration.
+    Contradicts,
+    /// "A and B repeatedly co-activate" — merge candidate signal.
+    CoActiveWith,
+    /// "A is a prior version / parent of B" — lineage record.
+    AncestorOf,
+}
+
+/// pr-1.2 audit event — the "bind-event" doctrine reference. Pr-1.6's
+/// consolidation engine will be the producer; pr-1.2 lands the
+/// vocabulary so the producer slice only writes producer code.
+///
+/// Replay-informational: `luna-store::rebuild_episodes` ignores this
+/// variant (same contract as `RawObservationCaptured`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OrbTetherBound {
+    pub from_orb: OrbId,
+    pub to_orb: OrbId,
+    pub kind: TetherKind,
+    /// Initial activation weight at bind time; clamped to `[0.0, 1.0]`
+    /// by the producer (matches `OrbTether::weight` semantics and the
+    /// `KeyFact::confidence` / `Signal::new` family).
+    pub initial_weight: f32,
+    /// Why this bind happened. Matches the audit rule that every
+    /// transformation carries its reason — surfaced as `RecallReason`
+    /// so the same "no anonymous transformations" gate that protects
+    /// recall protects bind events too.
+    pub reason: RecallReason,
+}
+
+/// pr-1.2 R-005 closure event — emitted from
+/// `MemoryState::from_episodes` whenever a duplicate `node_id` is
+/// observed and the existing node's density / confidence_tier /
+/// provenance is extended in place rather than replaced. Records
+/// *what changed* so tether attribution across merged nodes stays
+/// auditable (the original R-005 risk: "which event caused the
+/// tether between merged nodes?").
+///
+/// Replay-informational: `luna-store::rebuild_episodes` ignores this
+/// variant. The same `MemoryState` derivation runs at replay time
+/// against the same episode list, so state is reconstructed by
+/// `from_episodes` itself, not by consuming `NodeMerged` events.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NodeMerged {
+    pub node_id: String,
+    pub merged_density_delta: f32,
+    pub previous_confidence_tier: AssertionConfidenceTier,
+    pub new_confidence_tier: AssertionConfidenceTier,
+    pub merged_provenance_count: usize,
 }
 
 pub type StoredEvent = EventEnvelope<LunaEvent>;
@@ -859,5 +972,53 @@ mod tests {
         let r = RecallReason::new("state contour activation").unwrap();
         let json = serde_json::to_string(&r).unwrap();
         assert_eq!(json, "\"state contour activation\"");
+    }
+
+    // ---------- pr-1.2/orb-tethers: OrbId + event variants ----------
+
+    #[test]
+    fn orb_id_rejects_empty_and_whitespace() {
+        assert!(OrbId::new("").is_err());
+        assert!(OrbId::new("   ").is_err());
+        assert!(OrbId::new("\t\n").is_err());
+        assert!(OrbId::new("orb.x").is_ok());
+    }
+
+    #[test]
+    fn orb_tether_bound_event_round_trips_through_json() {
+        let payload = OrbTetherBound {
+            from_orb: OrbId::new("orb.relationship.joe").unwrap(),
+            to_orb: OrbId::new("orb.project.beacon").unwrap(),
+            kind: TetherKind::DerivedFrom,
+            initial_weight: 0.6,
+            reason: RecallReason::new("consolidation: joe authored beacon").unwrap(),
+        };
+        let event = LunaEvent::OrbTetherBound(payload.clone());
+        let json = serde_json::to_string(&event).unwrap();
+        let back: LunaEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, event);
+        match back {
+            LunaEvent::OrbTetherBound(p) => assert_eq!(p, payload),
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn node_merged_event_round_trips_through_json() {
+        let payload = NodeMerged {
+            node_id: "person:joe".to_string(),
+            merged_density_delta: 0.15,
+            previous_confidence_tier: AssertionConfidenceTier::Inferred,
+            new_confidence_tier: AssertionConfidenceTier::Confirmed,
+            merged_provenance_count: 3,
+        };
+        let event = LunaEvent::NodeMerged(payload.clone());
+        let json = serde_json::to_string(&event).unwrap();
+        let back: LunaEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, event);
+        match back {
+            LunaEvent::NodeMerged(p) => assert_eq!(p, payload),
+            other => panic!("unexpected variant: {other:?}"),
+        }
     }
 }

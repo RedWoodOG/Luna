@@ -156,10 +156,17 @@ pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
             // an audit record of pre-normalization extractor output; the
             // post-normalization assertions still produce
             // `AssertionExtracted` / `EpisodeCreated` / `EpisodeReinforced`
-            // events, which remain the source of truth.
+            // events, which remain the source of truth. `OrbTetherBound`
+            // (pr-1.2) and `NodeMerged` (pr-1.2 / R-005 closure) are
+            // audit records too — `NodeMerged` is rederived by
+            // `MemoryState::from_episodes` itself, and `OrbTetherBound`
+            // becomes consequential when pr-1.6 begins producing it
+            // (pr-1.2 lands the vocabulary, not the producer).
             LunaEvent::TurnObserved(_)
             | LunaEvent::AssertionExtracted(_)
-            | LunaEvent::RawObservationCaptured(_) => {}
+            | LunaEvent::RawObservationCaptured(_)
+            | LunaEvent::OrbTetherBound(_)
+            | LunaEvent::NodeMerged(_) => {}
         }
     }
 

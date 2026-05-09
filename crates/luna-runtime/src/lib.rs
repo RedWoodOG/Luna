@@ -5,8 +5,8 @@ use luna_core::{
     AssertionConfidenceTier, AssertionExtracted, CognitiveObservation, ConversationTurn, Episode,
     EpisodeCreated, EpisodeDecayed, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource,
     LunaEvent, MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance,
-    MemoryRelationKind, RawObservationCaptured, RecallMode, RecallSet, Result, Role, RootOrb,
-    StructuredAssertion, TurnObserved, WorkingMemory, WorkingMemoryBudget,
+    MemoryRelationKind, NodeMerged, RawObservationCaptured, RecallMode, RecallSet, Result, Role,
+    RootOrb, StructuredAssertion, TurnObserved, WorkingMemory, WorkingMemoryBudget,
 };
 use luna_events::JsonlEventLog;
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
@@ -102,7 +102,17 @@ where
             decay::compute_decay_events(&previous_episodes, now, &self.decay_config);
         decay::apply_decay_in_place(&mut previous_episodes, &decay_decisions);
 
-        let known_before = MemoryState::from_episodes(&previous_episodes);
+        let (known_before, prior_merges) =
+            MemoryState::from_episodes_with_merges(&previous_episodes);
+        // R-005 closure: only NEW merges (not already attested by past
+        // turns) become `NodeMerged` audit events this turn. The prior
+        // set is keyed by node_id so a re-merge of the same id this
+        // turn is a no-op for the audit log; what counts is the first
+        // time a node id is observed merging.
+        let prior_merged_ids: BTreeSet<String> = prior_merges
+            .into_iter()
+            .map(|merge| merge.node_id)
+            .collect();
         let mut observation = self.extractor.extract_runtime(&turn)?;
         // R-003 closure: log the unmodified extractor output BEFORE
         // `apply_runtime_fine_capture` mutates it. Replay treats this
@@ -220,14 +230,37 @@ where
             }
         }
 
+        // Derive the post-turn state BEFORE appending to the log so any
+        // NodeMerged audit events this turn produces ride the same
+        // batch as the rest of the turn's events. This keeps the log
+        // ordered "turn → raw → recalled → assertions → merges" within
+        // one atomic append.
+        let mut all_events = previous_events;
+        all_events.extend(new_events.iter().cloned());
+        let episodes = luna_store::rebuild_episodes(&all_events)?;
+        let (memory_state, post_merges) = MemoryState::from_episodes_with_merges(&episodes);
+
+        // R-005 closure: emit one NodeMerged event per *fresh* merge
+        // (a node id that wasn't already merged in known_before). Same
+        // event-time discipline as RawObservationCaptured (R-003).
+        for merge in post_merges {
+            if prior_merged_ids.contains(&merge.node_id) {
+                continue;
+            }
+            let mut env = EventEnvelope::new(
+                LunaEvent::NodeMerged(merge),
+                EventSource::System,
+                1.0,
+            )
+            .with_turn_id(turn_id);
+            env.timestamp = now;
+            new_events.push(env);
+        }
+
         for event in &new_events {
             self.log.append(event)?;
         }
 
-        let mut all_events = previous_events;
-        all_events.extend(new_events);
-        let episodes = luna_store::rebuild_episodes(&all_events)?;
-        let memory_state = MemoryState::from_episodes(&episodes);
         let knowledge_delta = KnowledgeDelta::from_observation(&observation, &known_before);
         let questions = propose_questions(&turn, &observation, &memory_state);
         let working_memory = activate_working_memory(
@@ -394,7 +427,28 @@ pub struct MemoryState {
 }
 
 impl MemoryState {
+    /// Derive the working state from the given episode list, discarding
+    /// any [`NodeMerged`] audit records produced along the way. Callers
+    /// that need to observe merges (the runtime path in `process_turn`,
+    /// for R-005 closure) use [`MemoryState::from_episodes_with_merges`]
+    /// instead.
     pub fn from_episodes(episodes: &[Episode]) -> Self {
+        Self::from_episodes_with_merges(episodes).0
+    }
+
+    /// Like [`from_episodes`](Self::from_episodes), but also returns the
+    /// [`NodeMerged`] events that fired when [`insert_node`] found an
+    /// existing node and extended its density / confidence_tier /
+    /// provenance instead of replacing.
+    ///
+    /// **R-005 closure (pr-1.2).** Before this method existed,
+    /// `from_episodes` would silently merge two assertions targeting
+    /// the same node id, making it impossible to attribute a tether
+    /// across the merge. The runtime now emits one `NodeMerged` event
+    /// per fresh merge each turn so the audit log records *what
+    /// changed*. Replay does not consume `NodeMerged` (the event is
+    /// informational; rebuilding state replays this same derivation).
+    pub fn from_episodes_with_merges(episodes: &[Episode]) -> (Self, Vec<NodeMerged>) {
         let mut seen = BTreeSet::new();
         let mut claims = Vec::new();
         let mut assertion_index = BTreeMap::new();
@@ -408,13 +462,16 @@ impl MemoryState {
             }
         }
         let entity_groups = group_claims_by_entity(&claims);
-        let map = memory_map_from_claims(&claims, &assertion_index);
-        Self {
-            claims,
-            entity_groups,
-            open_questions: Vec::new(),
-            map,
-        }
+        let (map, merges) = memory_map_from_claims(&claims, &assertion_index);
+        (
+            Self {
+                claims,
+                entity_groups,
+                open_questions: Vec::new(),
+                map,
+            },
+            merges,
+        )
     }
 
     pub fn has_domain_kind(&self, domain: &str, kind: &str) -> bool {
@@ -513,9 +570,10 @@ fn project_entity_key(value: &str) -> (String, String, String) {
 fn memory_map_from_claims(
     claims: &[MemoryClaim],
     assertion_index: &BTreeMap<String, (Uuid, StructuredAssertion)>,
-) -> MemoryMap {
+) -> (MemoryMap, Vec<NodeMerged>) {
     let mut nodes = BTreeMap::<String, MemoryNode>::new();
     let mut edges = Vec::new();
+    let mut merges: Vec<NodeMerged> = Vec::new();
 
     insert_node(
         &mut nodes,
@@ -528,8 +586,9 @@ fn memory_map_from_claims(
             activation: 0.0,
             provenance: Vec::new(),
         },
+        &mut merges,
     );
-    seed_root_orb(&mut nodes, &mut edges);
+    seed_root_orb(&mut nodes, &mut edges, &mut merges);
 
     let mut seen_edges = BTreeSet::new();
     for claim in claims {
@@ -560,6 +619,7 @@ fn memory_map_from_claims(
                 activation: 0.0,
                 provenance: provenance.clone(),
             },
+            &mut merges,
         );
         let entity_keys = entity_keys_for_claim(claim);
         if entity_keys.is_empty() {
@@ -592,6 +652,7 @@ fn memory_map_from_claims(
                         activation: 0.0,
                         provenance: provenance.clone(),
                     },
+                    &mut merges,
                 );
                 push_edge_once(
                     &mut edges,
@@ -629,21 +690,47 @@ fn memory_map_from_claims(
         }
     }
 
-    MemoryMap {
-        nodes: nodes.into_values().collect(),
-        edges,
-    }
+    (
+        MemoryMap {
+            nodes: nodes.into_values().collect(),
+            edges,
+        },
+        merges,
+    )
 }
 
-fn insert_node(nodes: &mut BTreeMap<String, MemoryNode>, node: MemoryNode) {
-    nodes
-        .entry(node.id.clone())
-        .and_modify(|existing| {
+/// Insert a node into the working-memory map, or extend an existing
+/// node with the same id. R-005 closure (pr-1.2): every extension
+/// records a [`NodeMerged`] entry in `merges` so the merge is visible
+/// at audit time. The audit fields capture *what changed*: density
+/// delta, confidence-tier transition, count of provenance entries
+/// folded in.
+fn insert_node(
+    nodes: &mut BTreeMap<String, MemoryNode>,
+    node: MemoryNode,
+    merges: &mut Vec<NodeMerged>,
+) {
+    match nodes.entry(node.id.clone()) {
+        std::collections::btree_map::Entry::Occupied(mut entry) => {
+            let existing = entry.get_mut();
+            let previous_tier = existing.confidence_tier;
+            let previous_density = existing.density;
+            let merged_provenance_count = node.provenance.len();
             existing.confidence_tier = existing.confidence_tier.max(node.confidence_tier);
             existing.density = existing.density.max(node.density);
-            existing.provenance.extend(node.provenance.clone());
-        })
-        .or_insert(node);
+            existing.provenance.extend(node.provenance);
+            merges.push(NodeMerged {
+                node_id: existing.id.clone(),
+                merged_density_delta: existing.density - previous_density,
+                previous_confidence_tier: previous_tier,
+                new_confidence_tier: existing.confidence_tier,
+                merged_provenance_count,
+            });
+        }
+        std::collections::btree_map::Entry::Vacant(entry) => {
+            entry.insert(node);
+        }
+    }
 }
 
 fn push_edge_once(
@@ -657,7 +744,11 @@ fn push_edge_once(
     }
 }
 
-fn seed_root_orb(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<MemoryEdge>) {
+fn seed_root_orb(
+    nodes: &mut BTreeMap<String, MemoryNode>,
+    edges: &mut Vec<MemoryEdge>,
+    merges: &mut Vec<NodeMerged>,
+) {
     let root = RootOrb::default();
     let root_provenance = vec![MemoryProvenance {
         episode_id: None,
@@ -676,6 +767,7 @@ fn seed_root_orb(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<Memor
             activation: 0.0,
             provenance: root_provenance.clone(),
         },
+        merges,
     );
 
     for principle in root.principles {
@@ -696,6 +788,7 @@ fn seed_root_orb(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<Memor
                 activation: 0.0,
                 provenance: provenance.clone(),
             },
+            merges,
         );
         edges.push(MemoryEdge {
             source: root.id.clone(),
@@ -2651,5 +2744,298 @@ mod tests {
             without_raw, with_raw,
             "rebuild_episodes must be byte-identical with or without RawObservationCaptured events"
         );
+    }
+
+    // ---------- pr-1.2: R-005 closure (silent node merge visibility) ----------
+
+    /// Helper: build a tiny `Episode` carrying a single assertion. Bypasses
+    /// the normal event-log path so unit tests can drive `MemoryState`
+    /// derivation directly.
+    fn episode_with_assertion(seconds: i64, assertion: StructuredAssertion) -> Episode {
+        use chrono::TimeZone;
+        let when = Utc.timestamp_opt(seconds, 0).unwrap();
+        Episode {
+            id: Uuid::new_v4(),
+            assertions: vec![assertion],
+            confidence: 1.0,
+            forgotten_risk: 0.0,
+            coherence_score: 1.0,
+            recall_history: Vec::new(),
+            contour: luna_core::EpisodeContour {
+                semantic: None,
+                intent: None,
+                attention: None,
+                goal_pressure: None,
+                emotional_valence: None,
+                emotional_arousal: None,
+                identity_relevance: None,
+                trust_relevance: None,
+                social_frame: None,
+                temporal_relevance: None,
+                reinforcement_count: 0,
+                contradiction_count: 0,
+                successful_recall_count: 0,
+                failed_recall_count: 0,
+            },
+            created_at: when,
+            updated_at: when,
+        }
+    }
+
+    /// R-005 closure: when two assertions converge on the same memory-node
+    /// id (e.g. two claims about Joe), `from_episodes_with_merges` must
+    /// surface a `NodeMerged` audit record so the merge is no longer
+    /// silent. Before pr-1.2 this was the doctrine hole the risk register
+    /// flagged for tether attribution across merged nodes.
+    #[test]
+    fn from_episodes_emits_node_merged_when_existing_node_extended() {
+        let joe_a = StructuredAssertion {
+            domain: "person".into(),
+            kind: "lives_in".into(),
+            value: "Joe lives in Brooklyn".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Inferred,
+        };
+        let joe_b = StructuredAssertion {
+            domain: "person".into(),
+            kind: "writes".into(),
+            value: "Joe writes fiction".into(),
+            source_count: 2,
+            reinforcement_count: 1,
+            confidence_tier: AssertionConfidenceTier::Confirmed,
+        };
+        let episodes = vec![
+            episode_with_assertion(1_000_000_000, joe_a),
+            episode_with_assertion(1_000_000_010, joe_b),
+        ];
+        let (_state, merges) = MemoryState::from_episodes_with_merges(&episodes);
+        let joe_merge = merges
+            .iter()
+            .find(|m| m.node_id == "person:Joe")
+            .expect("expected a NodeMerged record for person:Joe across two assertions");
+        assert!(
+            joe_merge.merged_provenance_count >= 1,
+            "merge must report a non-zero provenance fold-in count, got {}",
+            joe_merge.merged_provenance_count
+        );
+        assert_eq!(
+            joe_merge.previous_confidence_tier,
+            AssertionConfidenceTier::Inferred,
+            "first claim seeded tier=Inferred",
+        );
+        assert_eq!(
+            joe_merge.new_confidence_tier,
+            AssertionConfidenceTier::Confirmed,
+            "second claim's Confirmed tier should win the max",
+        );
+    }
+
+    /// Negative case: the very first insert for a node id is NOT a merge
+    /// — it's the seed. Only subsequent inserts targeting the same id
+    /// produce `NodeMerged` records. Without this invariant the audit log
+    /// would treat node creation and node merging as the same event.
+    #[test]
+    fn from_episodes_does_not_emit_node_merged_for_first_insert() {
+        let single = StructuredAssertion {
+            domain: "person".into(),
+            kind: "lives_in".into(),
+            value: "Aria lives in Vermont".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Inferred,
+        };
+        let episodes = vec![episode_with_assertion(1_000_000_000, single)];
+        let (_state, merges) = MemoryState::from_episodes_with_merges(&episodes);
+        assert!(
+            !merges.iter().any(|m| m.node_id == "person:Aria"),
+            "first insert for an entity must not produce a NodeMerged record",
+        );
+    }
+
+    /// Replay invariant: `NodeMerged` events are informational. A log
+    /// containing them must rebuild to the same `Episode` output as a
+    /// log without them. Same contract as `RawObservationCaptured`.
+    #[test]
+    fn rebuild_episodes_ignores_node_merged_events() {
+        use chrono::TimeZone;
+        use luna_core::{EpisodeCreated, EventEnvelope, EventSource, NodeMerged};
+
+        let t0 = Utc.with_ymd_and_hms(2026, 7, 2, 0, 0, 0).unwrap();
+        let assertion = StructuredAssertion {
+            domain: "identity".into(),
+            kind: "profession".into(),
+            value: "engineer".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Confirmed,
+        };
+        let observation = observation_with_assertion(assertion.clone());
+
+        let mut episode_event = EventEnvelope::new(
+            LunaEvent::EpisodeCreated(EpisodeCreated {
+                assertion,
+                observation,
+            }),
+            EventSource::ClassifierExtractor,
+            0.9,
+        )
+        .with_episode_id(Uuid::new_v4());
+        episode_event.timestamp = t0;
+
+        let mut merged_event = EventEnvelope::new(
+            LunaEvent::NodeMerged(NodeMerged {
+                node_id: "person:Joe".into(),
+                merged_density_delta: 0.1,
+                previous_confidence_tier: AssertionConfidenceTier::Inferred,
+                new_confidence_tier: AssertionConfidenceTier::Confirmed,
+                merged_provenance_count: 2,
+            }),
+            EventSource::System,
+            1.0,
+        );
+        merged_event.timestamp = t0;
+
+        let without_merge = luna_store::rebuild_episodes(&[episode_event.clone()]).unwrap();
+        let with_merge = luna_store::rebuild_episodes(&[merged_event, episode_event]).unwrap();
+        assert_eq!(
+            without_merge, with_merge,
+            "rebuild_episodes must be byte-identical with or without NodeMerged events",
+        );
+    }
+
+    /// pr-1.2 vocabulary check: `OrbTetherBound` is wired into the event
+    /// enum *and* into the no-op rebuild arm. A log containing one must
+    /// rebuild to the same `Episode` output as a log without — pr-1.2
+    /// lands the variant; pr-1.6 will produce it from runtime.
+    #[test]
+    fn rebuild_episodes_ignores_orb_tether_bound_events() {
+        use chrono::TimeZone;
+        use luna_core::{
+            EpisodeCreated, EventEnvelope, EventSource, OrbId, OrbTetherBound, RecallReason,
+            TetherKind,
+        };
+
+        let t0 = Utc.with_ymd_and_hms(2026, 7, 3, 0, 0, 0).unwrap();
+        let assertion = StructuredAssertion {
+            domain: "identity".into(),
+            kind: "profession".into(),
+            value: "engineer".into(),
+            source_count: 1,
+            reinforcement_count: 0,
+            confidence_tier: AssertionConfidenceTier::Confirmed,
+        };
+        let observation = observation_with_assertion(assertion.clone());
+
+        let mut episode_event = EventEnvelope::new(
+            LunaEvent::EpisodeCreated(EpisodeCreated {
+                assertion,
+                observation,
+            }),
+            EventSource::ClassifierExtractor,
+            0.9,
+        )
+        .with_episode_id(Uuid::new_v4());
+        episode_event.timestamp = t0;
+
+        let mut bind_event = EventEnvelope::new(
+            LunaEvent::OrbTetherBound(OrbTetherBound {
+                from_orb: OrbId::new("orb.relationship.joe").unwrap(),
+                to_orb: OrbId::new("orb.project.beacon").unwrap(),
+                kind: TetherKind::DerivedFrom,
+                initial_weight: 0.6,
+                reason: RecallReason::new("consolidation: joe authored beacon").unwrap(),
+            }),
+            EventSource::System,
+            1.0,
+        );
+        bind_event.timestamp = t0;
+
+        let without_bind = luna_store::rebuild_episodes(&[episode_event.clone()]).unwrap();
+        let with_bind = luna_store::rebuild_episodes(&[bind_event, episode_event]).unwrap();
+        assert_eq!(
+            without_bind, with_bind,
+            "rebuild_episodes must be byte-identical with or without OrbTetherBound events",
+        );
+    }
+
+    /// Runtime integration: when a turn produces two assertions that
+    /// converge on the same entity node id, `process_turn` must emit at
+    /// least one `NodeMerged` audit event. Locks the wiring
+    /// (`process_turn` → `from_episodes_with_merges` → diff against
+    /// `prior_merged_ids`) so pr-1.6 can rely on it.
+    ///
+    /// Uses `StubExtractor` (returning two assertions about Joe) so the
+    /// test isn't coupled to FusedExtractor's evolving heuristics.
+    #[test]
+    fn process_turn_emits_node_merged_only_for_fresh_merges() {
+        use luna_core::{Signal, SignalReliability};
+
+        let observation = CognitiveObservation {
+            turn_id: Uuid::new_v4(),
+            semantic: None,
+            intent: None,
+            attention: None,
+            goal_pressure: None,
+            emotional_valence: None,
+            emotional_arousal: None,
+            identity_relevance: None,
+            trust_relevance: None,
+            social_frame: None,
+            temporal_relevance: None,
+            uncertainty: Signal::new(0.3, 0.7, SignalReliability::Heuristic),
+            cue_terms: Vec::new(),
+            query_intents: Vec::new(),
+            assertions: vec![
+                StructuredAssertion {
+                    domain: "person".into(),
+                    kind: "lives_in".into(),
+                    value: "Joe lives in Brooklyn".into(),
+                    source_count: 1,
+                    reinforcement_count: 0,
+                    confidence_tier: AssertionConfidenceTier::Inferred,
+                },
+                StructuredAssertion {
+                    domain: "person".into(),
+                    kind: "writes".into(),
+                    value: "Joe writes fiction".into(),
+                    source_count: 2,
+                    reinforcement_count: 0,
+                    confidence_tier: AssertionConfidenceTier::Confirmed,
+                },
+            ],
+        };
+
+        let log_path = temp_log();
+        let log = JsonlEventLog::new(&log_path);
+        let session = RuntimeSession::new(&log_path, StubExtractor { observation });
+
+        session
+            .process_user_turn("two assertions about Joe in one turn")
+            .unwrap();
+
+        let events = log.load().unwrap();
+        let merges: Vec<_> = events
+            .iter()
+            .filter(|e| matches!(&e.payload, LunaEvent::NodeMerged(_)))
+            .collect();
+        assert!(
+            merges.iter().any(|e| matches!(
+                &e.payload,
+                LunaEvent::NodeMerged(m) if m.node_id == "person:Joe"
+            )),
+            "expected a NodeMerged audit event for person:Joe after a turn with two converging assertions; \
+             got {} merges (ids: {:?})",
+            merges.len(),
+            merges
+                .iter()
+                .filter_map(|e| match &e.payload {
+                    LunaEvent::NodeMerged(m) => Some(m.node_id.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+        );
+
+        let _ = fs::remove_dir_all(log_path.parent().unwrap());
     }
 }
