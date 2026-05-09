@@ -104,15 +104,18 @@ where
 
         let (known_before, prior_merges) =
             MemoryState::from_episodes_with_merges(&previous_episodes);
-        // R-005 closure: only NEW merges (not already attested by past
-        // turns) become `NodeMerged` audit events this turn. The prior
-        // set is keyed by node_id so a re-merge of the same id this
-        // turn is a no-op for the audit log; what counts is the first
-        // time a node id is observed merging.
-        let prior_merged_ids: BTreeSet<String> = prior_merges
-            .into_iter()
-            .map(|merge| merge.node_id)
-            .collect();
+        // R-005 closure: this turn's NodeMerged audit events are the
+        // multiset difference between post-turn merges and pre-turn
+        // merges, keyed by node_id. The prior counts capture how many
+        // times each node id has *already* been logged as merging in
+        // past turns; this turn emits one event for each merge beyond
+        // that count. Set semantics would be wrong: the third claim
+        // about person:Joe is a fresh merge moment even though
+        // person:Joe was already merged in a past turn.
+        let mut prior_merge_counts: BTreeMap<String, usize> = BTreeMap::new();
+        for merge in prior_merges {
+            *prior_merge_counts.entry(merge.node_id).or_insert(0) += 1;
+        }
         let mut observation = self.extractor.extract_runtime(&turn)?;
         // R-003 closure: log the unmodified extractor output BEFORE
         // `apply_runtime_fine_capture` mutates it. Replay treats this
@@ -240,21 +243,27 @@ where
         let episodes = luna_store::rebuild_episodes(&all_events)?;
         let (memory_state, post_merges) = MemoryState::from_episodes_with_merges(&episodes);
 
-        // R-005 closure: emit one NodeMerged event per *fresh* merge
-        // (a node id that wasn't already merged in known_before). Same
-        // event-time discipline as RawObservationCaptured (R-003).
+        // R-005 closure: emit one NodeMerged event per fresh merge —
+        // multiset diff against `prior_merge_counts`. Same event-time
+        // discipline as RawObservationCaptured (R-003).
+        let mut emitted_so_far: BTreeMap<String, usize> = BTreeMap::new();
         for merge in post_merges {
-            if prior_merged_ids.contains(&merge.node_id) {
-                continue;
+            let prior_count = prior_merge_counts
+                .get(&merge.node_id)
+                .copied()
+                .unwrap_or(0);
+            let already_emitted = emitted_so_far.entry(merge.node_id.clone()).or_insert(0);
+            if *already_emitted >= prior_count {
+                let mut env = EventEnvelope::new(
+                    LunaEvent::NodeMerged(merge),
+                    EventSource::System,
+                    1.0,
+                )
+                .with_turn_id(turn_id);
+                env.timestamp = now;
+                new_events.push(env);
             }
-            let mut env = EventEnvelope::new(
-                LunaEvent::NodeMerged(merge),
-                EventSource::System,
-                1.0,
-            )
-            .with_turn_id(turn_id);
-            env.timestamp = now;
-            new_events.push(env);
+            *already_emitted += 1;
         }
 
         for event in &new_events {
@@ -3034,6 +3043,108 @@ mod tests {
                     _ => None,
                 })
                 .collect::<Vec<_>>(),
+        );
+
+        let _ = fs::remove_dir_all(log_path.parent().unwrap());
+    }
+
+    /// Regression test for the multiset-diff bug: a third claim about
+    /// the same entity in a later turn produces another fresh merge
+    /// moment, and that moment must reach the audit log. The earlier
+    /// (incorrect) `prior_merged_ids: BTreeSet<String>` filter would
+    /// have suppressed this event because `person:Joe` was already
+    /// in the set after turn 1.
+    #[test]
+    fn process_turn_emits_node_merged_for_each_fresh_merge_across_turns() {
+        use luna_core::{Signal, SignalReliability};
+
+        fn observation_with(assertions: Vec<StructuredAssertion>) -> CognitiveObservation {
+            CognitiveObservation {
+                turn_id: Uuid::new_v4(),
+                semantic: None,
+                intent: None,
+                attention: None,
+                goal_pressure: None,
+                emotional_valence: None,
+                emotional_arousal: None,
+                identity_relevance: None,
+                trust_relevance: None,
+                social_frame: None,
+                temporal_relevance: None,
+                uncertainty: Signal::new(0.3, 0.7, SignalReliability::Heuristic),
+                cue_terms: Vec::new(),
+                query_intents: Vec::new(),
+                assertions,
+            }
+        }
+        fn joe(kind: &str, value: &str) -> StructuredAssertion {
+            StructuredAssertion {
+                domain: "person".into(),
+                kind: kind.into(),
+                value: value.into(),
+                source_count: 1,
+                reinforcement_count: 0,
+                confidence_tier: AssertionConfidenceTier::Inferred,
+            }
+        }
+
+        let log_path = temp_log();
+        let log = JsonlEventLog::new(&log_path);
+
+        // Turn 1: two assertions about Joe in one turn → one merge.
+        let session = RuntimeSession::new(
+            &log_path,
+            StubExtractor {
+                observation: observation_with(vec![
+                    joe("lives_in", "Joe lives in Brooklyn"),
+                    joe("writes", "Joe writes fiction"),
+                ]),
+            },
+        );
+        session.process_user_turn("turn 1").unwrap();
+        let after_t1: Vec<_> = log
+            .load()
+            .unwrap()
+            .into_iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    LunaEvent::NodeMerged(m) if m.node_id == "person:Joe"
+                )
+            })
+            .collect();
+        assert_eq!(
+            after_t1.len(),
+            1,
+            "turn 1 should produce exactly one person:Joe NodeMerged"
+        );
+
+        // Turn 2: a third assertion about Joe → another merge moment.
+        // The buggy set-based diff would have suppressed this because
+        // person:Joe was already in `prior_merged_ids`. The multiset
+        // diff lets it through.
+        let session = RuntimeSession::new(
+            &log_path,
+            StubExtractor {
+                observation: observation_with(vec![joe("has", "Joe has a brother")]),
+            },
+        );
+        session.process_user_turn("turn 2").unwrap();
+        let after_t2: Vec<_> = log
+            .load()
+            .unwrap()
+            .into_iter()
+            .filter(|e| {
+                matches!(
+                    &e.payload,
+                    LunaEvent::NodeMerged(m) if m.node_id == "person:Joe"
+                )
+            })
+            .collect();
+        assert_eq!(
+            after_t2.len(),
+            2,
+            "turn 2 must emit a second person:Joe NodeMerged for the third converging claim"
         );
 
         let _ = fs::remove_dir_all(log_path.parent().unwrap());
