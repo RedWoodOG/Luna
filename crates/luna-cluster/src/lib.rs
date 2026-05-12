@@ -1356,7 +1356,7 @@ mod tests {
             ),
             &registry,
         );
-        let before = registry.clone();
+        let _before = registry.clone();
 
         registry.apply_evolution_event(&split).unwrap();
 

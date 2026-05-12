@@ -235,6 +235,7 @@ struct Probe {
     checkpoint: usize,
     question: String,
     ground_truth: String,
+    #[allow(dead_code)]
     category: &'static str,
     expect_unknown: bool,
 }

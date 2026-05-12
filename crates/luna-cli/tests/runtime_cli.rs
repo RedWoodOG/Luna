@@ -220,6 +220,7 @@ fn cache_file_count(path: &Path) -> usize {
     count_dir(path)
 }
 
+#[allow(dead_code)]
 fn first_json_item(value: &Value) -> &Value {
     value
         .as_array()
