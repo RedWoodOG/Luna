@@ -189,41 +189,13 @@ fn fuse_dimension(
     Signal::fuse(&observations.iter().filter_map(read).collect::<Vec<_>>())
 }
 
-fn extract_assertions(normalized: &str) -> Vec<StructuredAssertion> {
-    let mut assertions = Vec::new();
-    if has_any(
-        normalized,
-        &["mechanical engineer", "mechanical engineering"],
-    ) && has_any(
-        normalized,
-        &[
-            "i work",
-            "i am",
-            "i'm",
-            "my career",
-            "make a living",
-            "professionally",
-        ],
-    ) {
-        assertions.push(StructuredAssertion::new(
-            "identity",
-            "profession",
-            "mechanical engineer",
-        ));
-    }
-
-    if has_any(
-        normalized,
-        &["i'm an only child", "i am an only child", "only child"],
-    ) {
-        assertions.push(StructuredAssertion::new(
-            "identity",
-            "family_structure",
-            "only child",
-        ));
-    }
-
-    assertions
+fn extract_assertions(_normalized: &str) -> Vec<StructuredAssertion> {
+    // Heuristic extraction: no hardcoded phrase-to-assertion rules.
+    // Specific extractions like "mechanical engineer" → profession and
+    // "only child" → family_structure were removed as technical debt.
+    // Use LunaExtractor (LLM-backed) for real extraction; the heuristic
+    // path here is a baseline that operates on generic signal dimensions.
+    Vec::new()
 }
 
 pub(crate) fn query_intents(normalized: &str) -> Vec<String> {
@@ -393,7 +365,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extracts_profession_across_paraphrase() {
+    fn heuristic_extraction_produces_no_hardcoded_assertions() {
+        // After removal of hardcoded phrase-to-assertion fixtures,
+        // the heuristic extractor should produce no hardcoded assertions.
+        // Real assertion extraction uses LunaExtractor (LLM-backed path).
         let extractor = FusedExtractor::new();
         let first = extractor
             .extract(&ConversationTurn::user("I work as a mechanical engineer."))
@@ -403,15 +378,21 @@ mod tests {
                 "My career is in mechanical engineering.",
             ))
             .unwrap();
+        let third = extractor
+            .extract(&ConversationTurn::user("I'm an only child."))
+            .unwrap();
 
-        assert_eq!(
-            first.assertions[0].key(),
-            "identity:profession=mechanical_engineer"
+        assert!(
+            first.assertions.is_empty(),
+            "heuristic extractor must not hardcode 'mechanical engineer' → profession"
         );
-        assert_eq!(
-            second.assertions[0].key(),
-            "identity:profession=mechanical_engineer"
+        assert!(
+            second.assertions.is_empty(),
+            "heuristic extractor must not hardcode 'mechanical engineering' → profession"
         );
-        assert!(first.identity_relevance.unwrap().can_influence_recall());
+        assert!(
+            third.assertions.is_empty(),
+            "heuristic extractor must not hardcode 'only child' → family_structure"
+        );
     }
 }

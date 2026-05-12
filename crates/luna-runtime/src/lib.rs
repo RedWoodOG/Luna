@@ -4636,22 +4636,55 @@ mod tests {
     }
 
     #[test]
-    fn entity_sieve_strengthens_matching_llm_assertions_without_proof_path() {
+    fn entity_sieve_strengthens_matching_llm_assertions() {
+        use luna_extract::{LlmExtractor, LunaExtractor, RecordingFakeBackend, FileExtractionCache};
+        use tempfile::TempDir;
+
         let log = temp_log();
-        let session = RuntimeSession::new(&log, FusedExtractor::new());
+        let root = TempDir::new().unwrap();
+        let cache = FileExtractionCache::new(root.path());
+        let fake = RecordingFakeBackend::new("test-model@v1");
+
+        // Craft an LLM response that produces an identity/profession assertion
+        let llm_response = serde_json::json!({
+            "schema_version": "v3",
+            "assertions": [{
+                "domain": "identity",
+                "kind": "profession",
+                "value": "pilot",
+                "confidence": 0.92,
+                "evidence_span": "pilot"
+            }],
+            "signals": {}
+        });
+        fake.expect("pilot", &serde_json::to_string(&llm_response).unwrap());
+        fake.expect("for a living", &serde_json::to_string(&serde_json::json!({
+            "schema_version": "v3",
+            "assertions": [],
+            "signals": {}
+        })).unwrap());
+
+        let llm = LlmExtractor::new(fake.clone(), cache);
+        let extractor = LunaExtractor::new(llm, Vec::new());
+        let session = RuntimeSession::new(&log, extractor);
 
         session
-            .process_user_turn("I am a mechanical engineer.")
+            .process_user_turn("I am a pilot.")
             .unwrap();
-        let state = session.inspect().unwrap();
 
+        // Ask the same thing again — entity sieve should strengthen it
+        session
+            .process_user_turn("I make a living as a pilot.")
+            .unwrap();
+
+        let state = session.inspect().unwrap();
         let claim = state
             .claims
             .iter()
             .find(|claim| {
                 claim.domain == "identity"
                     && claim.kind == "profession"
-                    && claim.value == "mechanical engineer"
+                    && claim.value == "pilot"
             })
             .unwrap();
         assert_eq!(claim.status, AssertionConfidenceTier::Confirmed);

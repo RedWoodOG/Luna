@@ -214,9 +214,6 @@ fn assertion_intent_fit(current: &TurnReading, episode: &Episode) -> f32 {
             {
                 best = best.max(1.0);
             }
-            if intent == "contradiction_check" && assertion.value == "only child" {
-                best = best.max(0.95);
-            }
         }
     }
     best
