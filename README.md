@@ -7,6 +7,8 @@
 > trial. Treat current runtime scenarios as regression proxies unless a run is
 > explicitly marked eligible for a specific proof protocol.
 
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
+
 Luna is a local-first episodic memory framework that tests whether governed,
 event-sourced memory can preserve continuity across real multi-turn
 conversations better than ordinary transcript stuffing or semantic retrieval.
