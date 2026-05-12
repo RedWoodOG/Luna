@@ -1,0 +1,15 @@
+[package]
+name = "luna-store"
+version.workspace = true
+edition.workspace = true
+description = "Episode rebuilding and storage adapters for Luna."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+chrono.workspace = true
+luna-core = { path = "../luna-core" }
+luna-events = { path = "../luna-events" }
+luna-match = { path = "../luna-match" }
+uuid.workspace = true

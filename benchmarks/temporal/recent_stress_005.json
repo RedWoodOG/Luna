@@ -1,0 +1,48 @@
+{
+  "category": "temporal_disambiguation",
+  "expected": {
+    "must_not_claim": [
+      "travel",
+      "unknown"
+    ],
+    "must_recall": [
+      "product launch"
+    ]
+  },
+  "id": "recent_stress_005",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "temporal_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "authorial",
+  "turns": [
+    {
+      "content": "Last month I was nervous about travel.",
+      "role": "user",
+      "timestamp": "2026-03-30T12:00:00Z"
+    },
+    {
+      "content": "Okay.",
+      "role": "assistant",
+      "timestamp": "2026-03-30T12:01:00Z"
+    },
+    {
+      "content": "This week the product launch is the stressful thing.",
+      "role": "user",
+      "timestamp": "2026-04-30T12:00:00Z"
+    },
+    {
+      "content": "Understood.",
+      "role": "assistant",
+      "timestamp": "2026-04-30T12:01:00Z"
+    },
+    {
+      "content": "What's the current stressful thing?",
+      "role": "user",
+      "timestamp": "2026-05-03T10:00:00Z"
+    }
+  ]
+}

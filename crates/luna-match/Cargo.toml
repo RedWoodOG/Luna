@@ -1,0 +1,12 @@
+[package]
+name = "luna-match"
+version.workspace = true
+edition.workspace = true
+description = "Episode matching and relevance scoring for Luna"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+serde.workspace = true

@@ -1,0 +1,48 @@
+{
+  "category": "temporal_disambiguation",
+  "expected": {
+    "must_not_claim": [
+      "tuition",
+      "unknown"
+    ],
+    "must_recall": [
+      "manager's feedback"
+    ]
+  },
+  "id": "recent_stress_003",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "temporal_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "authorial",
+  "turns": [
+    {
+      "content": "Earlier this year I worried about tuition.",
+      "role": "user",
+      "timestamp": "2026-02-15T10:00:00Z"
+    },
+    {
+      "content": "I hear you.",
+      "role": "assistant",
+      "timestamp": "2026-02-15T10:01:00Z"
+    },
+    {
+      "content": "Yesterday my manager's feedback was what bothered me.",
+      "role": "user",
+      "timestamp": "2026-05-02T16:00:00Z"
+    },
+    {
+      "content": "That is more recent.",
+      "role": "assistant",
+      "timestamp": "2026-05-02T16:01:00Z"
+    },
+    {
+      "content": "What bothered me lately?",
+      "role": "user",
+      "timestamp": "2026-05-03T10:00:00Z"
+    }
+  ]
+}

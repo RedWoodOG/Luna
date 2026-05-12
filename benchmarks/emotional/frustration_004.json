@@ -1,0 +1,37 @@
+{
+  "category": "emotional_recall",
+  "expected": {
+    "must_not_claim": [
+      "client conflict",
+      "unknown"
+    ],
+    "must_recall": [
+      "mentoring the new hire"
+    ]
+  },
+  "id": "frustration_004",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "emotional_arousal"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I was excited about mentoring the new hire.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "Nice.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What work situation energized me?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
+}

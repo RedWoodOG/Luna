@@ -1,0 +1,61 @@
+{
+  "protocol": "first-human-controlled-runtime-trial-v1",
+  "source_boundary": {
+    "source_scope": "Only the turns in this JSON are source material for this controlled local runtime trial.",
+    "locked_before_questions": true,
+    "forbidden_question_terms": [
+      "according to the source",
+      "open the source",
+      "reread",
+      "search the source"
+    ]
+  },
+  "prompt_boundary": {
+    "questions_created_before_answers": true,
+    "no_source_text_in_questions": true,
+    "no_answer_hints_in_questions": true,
+    "no_retrieval_time_reread_or_search": true
+  },
+  "scoring": {
+    "reviewer": "example-reviewer",
+    "scale": "pass|partial|fail|justified_unknown|boundary_violation",
+    "pass_rule": "All required questions pass or are justified unknowns, and every miss is captured in review/regression_backlog.md."
+  },
+  "regression_capture": {
+    "required": true,
+    "backlog_path": "review/regression_backlog.md"
+  },
+  "turns": [
+    "Mara is the founder of Northstar Maps.",
+    "Northstar Maps helps hikers plan safe trail routes.",
+    "Mara is preparing a spring pilot with three local hiking clubs.",
+    "Correction: Northstar Maps is now called Cleartrail.",
+    "Cleartrail's pilot focuses on safer weekend route planning."
+  ],
+  "questions": [
+    {
+      "id": "q001",
+      "category": "project_identity_correction",
+      "question": "What is Mara's trail-planning project called now?",
+      "expected_evidence": "The current project name should reflect the later correction.",
+      "must_not_include": "Northstar Maps as current",
+      "notes": ""
+    },
+    {
+      "id": "q002",
+      "category": "project_description",
+      "question": "What does Mara's project help people do?",
+      "expected_evidence": "The answer should recall the project purpose without source text in the prompt.",
+      "must_not_include": "",
+      "notes": ""
+    },
+    {
+      "id": "q003",
+      "category": "project_plan",
+      "question": "Who is Mara preparing the pilot with?",
+      "expected_evidence": "The answer should recall the pilot partners from memory.",
+      "must_not_include": "",
+      "notes": ""
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+[package]
+name = "luna-gauges"
+version.workspace = true
+edition.workspace = true
+description = "Read-only gauge observers and drift detection for Luna topology."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true

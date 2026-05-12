@@ -1,0 +1,24 @@
+[package]
+name = "luna-tests"
+version.workspace = true
+edition.workspace = true
+description = "Milestone verification tests for Luna memory topology."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+chrono.workspace = true
+jsonschema = "0.17"
+serde_json.workspace = true
+luna-gauges = { path = "../luna-gauges" }
+luna-genesis = { path = "../luna-genesis" }
+luna-inspector = { path = "../luna-inspector" }
+luna-ledger = { path = "../luna-ledger" }
+luna-node = { path = "../luna-node" }
+luna-cluster = { path = "../luna-cluster" }
+luna-replay = { path = "../luna-replay" }
+luna-sentinels = { path = "../luna-sentinels" }
+luna-tether = { path = "../luna-tether" }

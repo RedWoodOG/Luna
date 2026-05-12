@@ -1,0 +1,99 @@
+name: doctrine
+
+# Doctrine-as-build.
+# This workflow turns LUNA_BUILD_DOCTRINE.md from a document into enforcement.
+# Every push and PR runs the code/scenario gates. Pull requests also validate
+# the PR doctrine-template body. Red build = no merge.
+#
+# Gates:
+#   1. cargo test --workspace --all-features must pass
+#   2. cargo clippy --workspace --all-features -- -D warnings must pass
+#   3. workspace member check must prove every crates/* crate is in Cargo workspace
+#   4. scripts/doctrine_check.sh must pass (forbidden-pattern lint)
+#   5. PR bodies must answer the doctrine template on pull requests
+#   6. luna-cli release build must pass
+#   7. Every scenario registered in SCENARIO_MANIFEST.txt must pass
+#   8. `luna-cli runtime smoke` must pass as the local product-loop gate
+#   9. Windows CI must run the same PowerShell local gate used by developers
+#
+# Scenarios in CI use the deterministic (heuristic) extractor by default.
+# LLM-backed scenarios require localhost infrastructure and are not run here.
+# If/when LLM-required scenarios land, gate them behind a separate workflow.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo test --workspace --all-features
+        run: cargo test --workspace --all-features
+
+      - name: cargo clippy --workspace --all-features
+        run: cargo clippy --workspace --all-features -- -D warnings
+
+      - name: Workspace member check
+        run: python scripts/check_workspace_members.py
+
+      - name: Doctrine check (forbidden patterns, scenario presence)
+        run: bash scripts/doctrine_check.sh
+
+      - name: PR doctrine template check
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python scripts/validate_pr_doctrine_template.py
+
+      - name: Build luna-cli
+        run: cargo build -p luna-cli --release
+
+      - name: Runtime scenarios
+        # If `runtime scenario` CLI shape changes, this is the line to update.
+        run: |
+          set -e
+          manifest=scenarios/runtime/SCENARIO_MANIFEST.txt
+          if [ ! -f "$manifest" ]; then
+            echo "ERROR: missing $manifest" >&2
+            exit 1
+          fi
+          while IFS= read -r name; do
+            name="${name#"${name%%[![:space:]]*}"}"
+            name="${name%"${name##*[![:space:]]}"}"
+            [ -z "$name" ] && continue
+            case "$name" in \#*) continue ;; esac
+            f="scenarios/runtime/$name"
+            if [ ! -f "$f" ]; then
+              echo "ERROR: manifest scenario missing: $name" >&2
+              exit 1
+            fi
+            echo "=== scenario: $f ==="
+            ./target/release/luna runtime scenario "$f"
+          done < "$manifest"
+
+      - name: Local product smoke
+        run: ./target/release/luna runtime smoke --log /tmp/luna-product-smoke.jsonl --reset --json
+
+  windows-gate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: PowerShell local gate
+        shell: powershell
+        run: .\scripts\gate.ps1

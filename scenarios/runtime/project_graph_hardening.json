@@ -1,0 +1,119 @@
+{
+  "name": "project_graph_hardening",
+  "turns": [
+    "MKPE is my provenance engine. Atlas Loom is my planning engine.",
+    "I made soup and read weather notes for a while. This should not change the projects.",
+    "What did I say about Atlas Loom?"
+  ],
+  "checks": {
+    "must_contain": [
+      "project:identity=MKPE is my provenance engine",
+      "project:identity=Atlas Loom is my planning engine"
+    ],
+    "must_not_contain": [
+      "project:unknown",
+      "unknown project"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "MKPE is my provenance engine"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Atlas Loom is my planning engine"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "project:MKPE",
+          "label": "MKPE",
+          "kind": "project",
+          "claims": [
+            {
+              "domain": "project",
+              "kind": "identity",
+              "value": "MKPE is my provenance engine"
+            }
+          ]
+        },
+        {
+          "id": "project:Atlas_Loom",
+          "label": "Atlas Loom",
+          "kind": "project",
+          "claims": [
+            {
+              "domain": "project",
+              "kind": "identity",
+              "value": "Atlas Loom is my planning engine"
+            }
+          ]
+        }
+      ],
+      "must_exclude": [
+        {
+          "id": "project:unknown",
+          "label": "unknown project",
+          "kind": "project"
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "project:MKPE",
+          "relation": "provenance_for",
+          "target_label": "MKPE is my provenance engine"
+        },
+        {
+          "source": "project:Atlas_Loom",
+          "relation": "provenance_for",
+          "target_label": "Atlas Loom is my planning engine"
+        }
+      ],
+      "must_exclude": [
+        {
+          "source": "project:Atlas_Loom",
+          "relation": "provenance_for",
+          "target_label": "MKPE is my provenance engine"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Atlas Loom"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "answers": [
+      {
+        "turn_index": 3,
+        "must_contain": [
+          "Atlas Loom is my planning engine"
+        ],
+        "must_not_contain": [
+          "MKPE is my provenance engine",
+          "soup",
+          "weather"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

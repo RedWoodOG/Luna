@@ -1,0 +1,39 @@
+{
+  "category": "temporal_disambiguation",
+  "expected": {
+    "must_not_claim": [
+      "family",
+      "health",
+      "unknown"
+    ],
+    "must_recall": [
+      "job"
+    ]
+  },
+  "id": "recent_stress_001",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "temporal_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "authorial",
+  "turns": [
+    {
+      "content": "Last week I was struggling with my job.",
+      "role": "user",
+      "timestamp": "2026-04-27T09:00:00Z"
+    },
+    {
+      "content": "That sounds heavy.",
+      "role": "assistant",
+      "timestamp": "2026-04-27T09:01:00Z"
+    },
+    {
+      "content": "Recently, what was stressing me?",
+      "role": "user",
+      "timestamp": "2026-05-03T10:00:00Z"
+    }
+  ]
+}

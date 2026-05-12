@@ -1,0 +1,16 @@
+[package]
+name = "luna-extract"
+version.workspace = true
+edition.workspace = true
+description = "Feature extraction for Luna."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+chrono.workspace = true
+luna-core = { path = "../luna-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+uuid.workspace = true

@@ -1,0 +1,42 @@
+{
+  "category": "identity_continuity",
+  "expected": {
+    "must_not_claim": [
+      "manager",
+      "unknown"
+    ],
+    "must_recall": [
+      "helping the newer employees with my knowledge"
+    ]
+  },
+  "id": "career_goal_004",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I've been wanting to spend more time helping the newer folks at work.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "Is that about the formal side of mentoring, or just helping them get up to speed with what you know?",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "More the second. Just helping the newer employees with my knowledge — there's no formal program for it. I see them struggle with things I figured out years ago, and I want to actually take the time to teach. That impact matters to me more than another title bump.",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    },
+    {
+      "content": "What kind of professional identity am I building?",
+      "role": "user",
+      "timestamp": "2026-01-01T13:00:00Z"
+    }
+  ]
+}

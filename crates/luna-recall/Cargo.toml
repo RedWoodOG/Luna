@@ -1,0 +1,17 @@
+[package]
+name = "luna-recall"
+version.workspace = true
+edition.workspace = true
+description = "Recall engines and baselines for Luna."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+luna-match = { path = "../luna-match" }
+
+[dev-dependencies]
+chrono.workspace = true
+luna-extract = { path = "../luna-extract" }
+uuid.workspace = true

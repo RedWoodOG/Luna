@@ -1,0 +1,13 @@
+[package]
+name = "luna-sentinels"
+version.workspace = true
+edition.workspace = true
+description = "Advisory topology defect sentinels for Luna."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true

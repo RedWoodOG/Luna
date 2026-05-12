@@ -1,0 +1,37 @@
+{
+  "name": "manuscript_open_arc",
+  "turns": [
+    "MANUSCRIPT: OPEN ARC: Tidefall chart location.",
+    "The manuscript is closed. What manuscript open arc is still unresolved?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "manuscript",
+          "kind": "open_arc",
+          "value": "Tidefall chart location unresolved"
+        }
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "answers": [
+      {
+        "turn_index": 2,
+        "must_contain": [
+          "Tidefall chart location unresolved"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

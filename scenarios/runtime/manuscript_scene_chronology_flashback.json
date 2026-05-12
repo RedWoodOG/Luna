@@ -1,0 +1,101 @@
+{
+  "name": "manuscript_scene_chronology_flashback",
+  "turns": [
+    "MANUSCRIPT: SCENE 1 PRESENT: Mara Vey carries the Tidefall chart. MANUSCRIPT: SCENE 2 FLASHBACK BEFORE SCENE 1: Mara Vey lost the Tidefall chart. MANUSCRIPT: SCENE 3 PRESENT: Mara Vey still carries the Tidefall chart.",
+    "The manuscript is closed. In the present-time scene, does Mara Vey have the Tidefall chart?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "manuscript",
+          "kind": "scene_order",
+          "value": "scene:1 appears_before scene:2"
+        },
+        {
+          "domain": "manuscript",
+          "kind": "scene_order",
+          "value": "scene:2 appears_before scene:3"
+        },
+        {
+          "domain": "manuscript",
+          "kind": "story_chronology",
+          "value": "scene:2 occurs_before scene:1"
+        },
+        {
+          "domain": "manuscript",
+          "kind": "event_fact",
+          "value": "scene:1 story_time:present Mara Vey carries the Tidefall chart"
+        },
+        {
+          "domain": "manuscript",
+          "kind": "event_fact",
+          "value": "scene:2 story_time:flashback Mara Vey lost the Tidefall chart"
+        },
+        {
+          "domain": "manuscript",
+          "kind": "event_fact",
+          "value": "scene:3 story_time:present Mara Vey still carries the Tidefall chart"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "scene:1",
+          "label": "scene:1",
+          "kind": "scene"
+        },
+        {
+          "id": "scene:2",
+          "label": "scene:2",
+          "kind": "scene"
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "scene:1",
+          "relation": "appears_before",
+          "target": "scene:2"
+        },
+        {
+          "source": "scene:2",
+          "relation": "occurs_before",
+          "target": "scene:1"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "scene:1",
+        "scene:3"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "answers": [
+      {
+        "turn_index": 2,
+        "must_contain": [
+          "Mara Vey carries the Tidefall chart"
+        ],
+        "must_not_contain": [
+          "Mara Vey lost the Tidefall chart"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

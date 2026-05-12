@@ -1,0 +1,33 @@
+{
+  "category": "identity_continuity",
+  "expected": {
+    "must_not_claim": [
+      "brother",
+      "sister",
+      "siblings' names are"
+    ],
+    "must_recall": [
+      "only child"
+    ]
+  },
+  "id": "career_goal_003",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "I'm an only child — no brothers, no sisters, just me and my parents growing up.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "What are my siblings' names?",
+      "role": "user",
+      "timestamp": "2026-01-01T11:00:00Z"
+    }
+  ]
+}

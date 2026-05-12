@@ -1,0 +1,13 @@
+[package]
+name = "luna-cluster"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Memory cluster formation receipts and replay for Luna."
+
+[dependencies]
+chrono.workspace = true
+luna-core = { path = "../luna-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true

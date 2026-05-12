@@ -1,0 +1,38 @@
+{
+  "category": "paraphrase_invariance",
+  "expected": {
+    "must_not_claim": [
+      "mechanic",
+      "architect",
+      "unknown"
+    ],
+    "must_recall": [
+      "mechanical engineer"
+    ]
+  },
+  "id": "profession_paraphrase_005",
+  "proof_category": "proof_1_separability",
+  "proof_eligible": true,
+  "schema_version": 1,
+  "target_dimensions": [
+    "identity_relevance"
+  ],
+  "timestamp_origin": "mechanical_pr_0_1",
+  "turns": [
+    {
+      "content": "Engineering is what I do professionally, specifically mechanical engineering.",
+      "role": "user",
+      "timestamp": "2026-01-01T10:00:00Z"
+    },
+    {
+      "content": "I will keep that in mind.",
+      "role": "assistant",
+      "timestamp": "2026-01-01T11:00:00Z"
+    },
+    {
+      "content": "What's my line of work?",
+      "role": "user",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = [
+  # Pre-existing Luna product-track crates. They are not Milestone 0 topology
+  # stubs; they remain workspace members because the repo CI covers them with
+  # unit tests and runtime scenarios.
+  "crates/luna-core",
+  "crates/luna-events",
+  "crates/luna-extract",
+  # Luna Memory Topology Engine Milestone 0 crates. The M0 build target is
+  # `cargo +stable test -p luna-tests`.
+  "crates/luna-ledger",
+  "crates/luna-node",
+  "crates/luna-tether",
+  "crates/luna-genesis",
+  "crates/luna-inspector",
+  "crates/luna-replay",
+  "crates/luna-gauges",
+  "crates/luna-sentinels",
+  "crates/luna-cluster",
+  "crates/luna-tests",
+  # Remaining pre-existing product-track crates.
+  "crates/luna-match",
+  "crates/luna-recall",
+  "crates/luna-runtime",
+  "crates/luna-store",
+  "crates/luna-metrics",
+  "crates/luna-bench",
+  "crates/luna-activation",
+  "crates/luna-cli",
+  "crates/luna-output"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+[workspace.dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde", "clock"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+uuid = { version = "1", features = ["serde", "v4"] }
