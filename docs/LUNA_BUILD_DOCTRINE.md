@@ -31,12 +31,12 @@ event evidence
 Luna must become more coherent as memory grows. It must not become heavier,
 noisier, or more reliant on transcript stuffing.
 
-## Aura Lesson
+## Architecture Discipline
 
-AuraCore's stated architecture is useful as a warning and a reference point:
+Luna's runtime architecture follows a disciplined pipeline:
 
 ```text
-runtime reasoning before LLM output
+reasoning before model output
 bounded output packet
 relevance scoring
 scoped memory
@@ -44,16 +44,15 @@ planning before speech
 post-output validation
 ```
 
-That direction is valuable. The risk is language that hides implementation
-truth behind phrases like "fields", "geometry", "reasoning", or "mind".
+The risk is language that hides implementation truth behind phrases like "fields", "geometry", or "mind".
 
-For Luna, the claim must stay precise:
+For Luna, the claim stays precise:
 
 ```text
 No scripted user memories.
 No scripted final answers.
 Yes authored general mechanisms.
-Yes inspectable rules, provenance, confidence, and activation.
+Yes inspectable rules, provenance, confidence, and relevance scoring.
 ```
 
 "No hardcoding" is not enough. All software has authored code. The meaningful

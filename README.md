@@ -301,8 +301,3 @@ Rules:
 - SystemKernel must not override event-sourced user evidence.
 - SystemKernel may evolve by version or configuration; it is a starting point, not a
   cage.
-
-## Boundary Rule
-
-Legacy Aura code is quarantined outside this workspace. Luna must not import or
-reference it.

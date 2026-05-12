@@ -53,7 +53,7 @@ Red build = no merge.
 Forbidden patterns in production crate code:
 - `if x == "Joe"`, `match x { "Chris" => ... }` — entity-name dispatch.
   Tests are fine; **control flow dispatching on a hardcoded scenario name is
-  the Aura failure mode** and will fail the build.
+  the scripted-memory failure mode** and will fail the build.
 - `scenarios/runtime/` going empty.
 
 ### Type-System Gates (Compile-Time Impossible)
@@ -101,7 +101,7 @@ in-flight slice without coordinating.
   by a planned slice above. If yes, name the slice and align with its scope.
 - Before adding a new code path that special-cases a value, ask whether the
   same outcome can come from the entity-graph mechanism. Special cases are
-  the Aura failure mode and will fail `doctrine_check.sh`.
+  the scripted-memory failure mode and will fail `doctrine_check.sh`.
 - Static strings need `.expect("...")` after `RecallReason::new`. Dynamic
   strings need to propagate the `Result`.
 - `MemoryProvenance` currently allows all-`None`. Don't construct one until

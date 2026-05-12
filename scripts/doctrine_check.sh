@@ -8,8 +8,7 @@
 # checks. More gates land in later slices as luna-core types stabilize.
 #
 # Slice 1 checks:
-#   1. No hardcoded scenario-entity name comparisons in crate source.
-#      ("if name == \"Chris\""-style code is the Aura failure mode.)
+#      ("if name == \"Chris\""-style code is the scripted-memory failure mode.)
 #   2. scenarios/runtime/ must be non-empty (don't quietly delete the suite).
 #   3. Rust tests and Rust doc examples must not be silently ignored.
 #
