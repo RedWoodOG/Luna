@@ -211,6 +211,29 @@ if [ -n "$fixture_hits" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Check 1b: No hardcoded phrase-to-StructuredAssertion mappings in production extractor code.
+#
+# StructuredAssertion::new("domain", "kind", "value") or ::inferred(...) with
+# string-literal arguments in production code is a hardcoded extraction fixture.
+# Assertions must be derived from LLM output or generic signal processing, not
+# from literal phrase matching. This is a separate check from the fixture-literal
+# scan above because these phrases may not appear in any scenario manifest.
+# ---------------------------------------------------------------------------
+
+hardcoded_assertion_hits=$(
+  find crates/luna-extract/src -name '*.rs' -print0 |
+    xargs -0 grep -nE 'StructuredAssertion::(new|inferred)\("[^"]*",\s*"[^"]*",\s*"[^"]*"' 2>/dev/null |
+    grep -vE '^[^:]+:[0-9]+:\s*//' ||
+    true
+)
+if [ -n "$hardcoded_assertion_hits" ]; then
+  fail "Hardcoded StructuredAssertion::new/inferred with string literals in extraction crate."
+  echo "$hardcoded_assertion_hits" >&2
+  echo "  Fix: derive assertions from LLM output or generic signal processing. No literal domain/kind/value combos." >&2
+fi
+
+
+# ---------------------------------------------------------------------------
 # Check 2: scenarios/runtime/ must be non-empty.
 #
 # The scenario suite is the executable form of the doctrine. Letting it
@@ -224,7 +247,7 @@ fi
 
 while IFS= read -r scenario; do
   scenario="scenarios/runtime/$scenario"
-  check_count=$(python - "$scenario" <<'PY'
+  check_count=$(python3 - "$scenario" <<'PY'
 import json
 import sys
 
@@ -262,7 +285,7 @@ PY
   fi
 done < <(manifest_scenarios)
 
-manuscript_one_read_gate=$(python - <<'PY'
+manuscript_one_read_gate=$(python3 - <<'PY'
 import glob
 import json
 
