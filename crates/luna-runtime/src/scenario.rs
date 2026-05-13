@@ -197,6 +197,8 @@ pub struct WorkingMemoryChecks {
     pub must_include_labels: Vec<String>,
     #[serde(default)]
     pub must_exclude_labels: Vec<String>,
+    #[serde(default)]
+    pub activation_reason_must_contain: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -652,6 +654,11 @@ pub fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
             .unwrap_or(0)
         + scenario.checks.working_memory.must_include_labels.len()
         + scenario.checks.working_memory.must_exclude_labels.len()
+        + scenario
+            .checks
+            .working_memory
+            .activation_reason_must_contain
+            .len()
         + usize::from(scenario.checks.recall.must_have_hit)
         + usize::from(scenario.checks.recall.must_have_reason)
         + scenario.checks.unknowns.must_include.len()
@@ -1645,6 +1652,13 @@ fn evaluate_working_memory(
             .any(|node| contains_ci(&node.label, label))
         {
             failures.push(format!("working memory contains forbidden label: {label}"));
+        }
+    }
+    for needle in &checks.activation_reason_must_contain {
+        if !contains_ci(&result.working_memory.activation_reason, needle) {
+            failures.push(format!(
+                "working memory activation reason missing: {needle}"
+            ));
         }
     }
 }

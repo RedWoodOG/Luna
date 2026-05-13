@@ -2830,6 +2830,7 @@ fn activate_working_memory_with_orb_state(
     });
     let filtered_edge_count = scored_edges.len().saturating_sub(budget.max_edges);
     scored_edges.truncate(budget.max_edges);
+    let correction_salience = correction_salience_summaries(state, &scored_nodes);
 
     WorkingMemory {
         nodes: scored_nodes,
@@ -2839,6 +2840,7 @@ fn activate_working_memory_with_orb_state(
         activation_reason: activation_report(
             filtered_out_memory_count,
             retired_orb_filtered_node_count,
+            &correction_salience,
         ),
     }
 }
@@ -2920,9 +2922,61 @@ fn claim_matches_activation_query(claim: &MemoryClaim, query: &str, cue_terms: &
             .any(|term| !term.is_empty() && evidence.contains(term))
 }
 
+fn correction_salience_summaries(state: &MemoryState, nodes: &[MemoryNode]) -> Vec<String> {
+    let active_assertion_keys = nodes
+        .iter()
+        .flat_map(|node| node.provenance.iter())
+        .filter_map(|provenance| provenance.assertion_key.as_deref())
+        .collect::<BTreeSet<_>>();
+    let mut summaries = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for current in state.claims.iter().filter(|claim| {
+        claim.lifecycle_status == AssertionLifecycleStatus::Current
+            && active_assertion_keys.contains(claim.key.as_str())
+    }) {
+        let Some(slot) = correction_slot_for_claim(current) else {
+            continue;
+        };
+        for older in state.claims.iter().filter(|claim| {
+            claim.lifecycle_status == AssertionLifecycleStatus::Superseded
+                && claim.value != current.value
+                && correction_slot_for_claim(claim).as_deref() == Some(slot.as_str())
+        }) {
+            let summary = format!(
+                "correction_salience: {} supersedes {}",
+                current.value, older.value
+            );
+            if seen.insert(summary.clone()) {
+                summaries.push(summary);
+            }
+        }
+    }
+
+    summaries
+}
+
+fn correction_slot_for_claim(claim: &MemoryClaim) -> Option<String> {
+    let entity = match claim.domain.as_str() {
+        "person" => person_subjects_from_claim_value(&claim.value)
+            .first()
+            .cloned()?,
+        "project" => project_subject_from_claim_value(&claim.value)?,
+        "identity" => "self".to_string(),
+        _ => return None,
+    };
+    Some(format!(
+        "{}:{}:{}",
+        claim.domain,
+        claim.kind,
+        normalize_for_match(&entity)
+    ))
+}
+
 fn activation_report(
     filtered_out_memory_count: usize,
     retired_orb_filtered_node_count: usize,
+    correction_salience: &[String],
 ) -> String {
     let mut report = "entity/relation/cue/query/recalled/confidence activation over current graph with graph-depth and fixed-budget filtering".to_string();
     if filtered_out_memory_count > 0 {
@@ -2934,6 +2988,10 @@ fn activation_report(
         report.push_str(&format!(
             "; suppressed_retired_orb_memory={retired_orb_filtered_node_count}"
         ));
+    }
+    if !correction_salience.is_empty() {
+        report.push_str("; ");
+        report.push_str(&correction_salience.join(" | "));
     }
     report
 }
