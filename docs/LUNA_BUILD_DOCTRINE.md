@@ -31,6 +31,24 @@ event evidence
 Luna must become more coherent as memory grows. It must not become heavier,
 noisier, or more reliant on transcript stuffing.
 
+The binding structure contract is
+[`LUNA_MEMORY_STRUCTURE_CONTRACT.md`](LUNA_MEMORY_STRUCTURE_CONTRACT.md). Every
+memory change must preserve this chain:
+
+```text
+event log
+-> intake decision
+-> typed assertions and relations
+-> entity/event graph
+-> lifecycle status
+-> bounded working memory
+-> response plan
+-> answer with provenance
+-> replay audit
+```
+
+If a change cannot be inspected through that chain, it is not ready.
+
 ## Architecture Discipline
 
 Luna's runtime architecture follows a disciplined pipeline:

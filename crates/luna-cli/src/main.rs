@@ -1,6 +1,6 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand, ValueEnum};
-use luna_core::EngineKind;
+use luna_core::{AssertionLifecycleStatus, EngineKind};
 use luna_extract::{
     CommandBackend, CountingBackend, FileExtractionCache, FixtureBackend, FusedExtractor,
     LlmBackend, LlmExtractor, LunaExtractor,
@@ -143,6 +143,15 @@ enum RuntimeCommand {
         /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
         #[arg(long)]
         log: Option<PathBuf>,
+        /// Show only one entity group, for example `--entity Chris`.
+        #[arg(long)]
+        entity: Option<String>,
+        /// Show only current claims.
+        #[arg(long)]
+        current: bool,
+        /// Show only superseded claims.
+        #[arg(long)]
+        superseded: bool,
         /// Output format.
         #[arg(long, value_enum, default_value = "markdown")]
         format: ReportFormat,
@@ -417,13 +426,27 @@ fn main() -> anyhow::Result<ExitCode> {
                     }
                 }
             }
-            RuntimeCommand::Inspect { log, format } => {
+            RuntimeCommand::Inspect {
+                log,
+                entity,
+                current,
+                superseded,
+                format,
+            } => {
                 let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
                 let session = RuntimeSession::new(&log, FusedExtractor::new());
                 let state = session.inspect()?;
+                let filters = InspectFilters {
+                    entity,
+                    current,
+                    superseded,
+                };
                 match format {
-                    ReportFormat::Markdown => print_memory_state(&state),
-                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
+                    ReportFormat::Markdown => print_memory_state(&state, &filters),
+                    ReportFormat::Json => println!(
+                        "{}",
+                        serde_json::to_string_pretty(&filtered_claims(&state, &filters))?
+                    ),
                 }
             }
             RuntimeCommand::Audit { log, format } => {
@@ -779,18 +802,38 @@ fn build_command_runtime_extractor(
     Ok(LunaExtractor::with_default_v1_sources(llm))
 }
 
-fn print_memory_state(state: &luna_runtime::MemoryState) {
+#[derive(Debug, Clone, Default)]
+struct InspectFilters {
+    entity: Option<String>,
+    current: bool,
+    superseded: bool,
+}
+
+fn print_memory_state(state: &luna_runtime::MemoryState, filters: &InspectFilters) {
     println!("# Luna Memory State\n");
-    if state.claims.is_empty() && state.map.nodes.is_empty() && state.map.edges.is_empty() {
+    let claims = filtered_claims(state, filters);
+    if claims.is_empty() && state.map.nodes.is_empty() && state.map.edges.is_empty() {
         println!("(no claims yet)");
         return;
     }
 
     if !state.entity_groups.is_empty() {
         println!("## Entity Memory\n");
-        for group in &state.entity_groups {
+        for group in state
+            .entity_groups
+            .iter()
+            .filter(|group| group_matches(group, filters))
+        {
+            let group_claims = group
+                .claims
+                .iter()
+                .filter(|claim| claim_matches(claim, filters))
+                .collect::<Vec<_>>();
+            if group_claims.is_empty() {
+                continue;
+            }
             println!("### {} ({})", group.label, group.kind);
-            for claim in &group.claims {
+            for claim in group_claims {
                 println!(
                     "- {:?}/{:?}: {}:{} = {}",
                     claim.status, claim.lifecycle_status, claim.domain, claim.kind, claim.value
@@ -801,11 +844,19 @@ fn print_memory_state(state: &luna_runtime::MemoryState) {
     }
 
     println!("## Flat Claims\n");
-    for claim in &state.claims {
+    for claim in &claims {
         println!(
             "- {:?}/{:?}: {}:{} = {}",
             claim.status, claim.lifecycle_status, claim.domain, claim.kind, claim.value
         );
+    }
+    if filters.has_filters() {
+        println!(
+            "\nMemory map: full derived map omitted in filtered inspect view ({} node(s), {} edge(s) total)",
+            state.map.nodes.len(),
+            state.map.edges.len()
+        );
+        return;
     }
     println!(
         "\nMemory map: {} node(s), {} edge(s)",
@@ -854,6 +905,67 @@ fn print_memory_state(state: &luna_runtime::MemoryState) {
             "- {:?}: {} -> {} ({:?}, strength {:.2})",
             edge.confidence_tier, edge.source, edge.target, edge.relation, edge.strength
         );
+    }
+}
+
+fn filtered_claims(
+    state: &luna_runtime::MemoryState,
+    filters: &InspectFilters,
+) -> Vec<luna_runtime::MemoryClaim> {
+    let entity_keys = filters.entity.as_ref().map(|_| {
+        state
+            .entity_groups
+            .iter()
+            .filter(|group| group_matches(group, filters))
+            .flat_map(|group| group.claims.iter().map(|claim| claim.key.clone()))
+            .collect::<std::collections::BTreeSet<_>>()
+    });
+    state
+        .claims
+        .iter()
+        .filter(|claim| claim_matches(claim, filters))
+        .filter(|claim| {
+            entity_keys
+                .as_ref()
+                .map(|keys| keys.contains(&claim.key) || claim_value_matches_entity(claim, filters))
+                .unwrap_or(true)
+        })
+        .cloned()
+        .collect()
+}
+
+fn group_matches(group: &luna_runtime::EntityMemoryGroup, filters: &InspectFilters) -> bool {
+    let Some(entity) = &filters.entity else {
+        return true;
+    };
+    let entity = entity.to_ascii_lowercase();
+    group.label.to_ascii_lowercase().contains(&entity)
+        || group.id.to_ascii_lowercase().contains(&entity)
+}
+
+fn claim_matches(claim: &luna_runtime::MemoryClaim, filters: &InspectFilters) -> bool {
+    if filters.current && claim.lifecycle_status != AssertionLifecycleStatus::Current {
+        return false;
+    }
+    if filters.superseded && claim.lifecycle_status != AssertionLifecycleStatus::Superseded {
+        return false;
+    }
+    true
+}
+
+fn claim_value_matches_entity(claim: &luna_runtime::MemoryClaim, filters: &InspectFilters) -> bool {
+    let Some(entity) = &filters.entity else {
+        return true;
+    };
+    claim
+        .value
+        .to_ascii_lowercase()
+        .contains(&entity.to_ascii_lowercase())
+}
+
+impl InspectFilters {
+    fn has_filters(&self) -> bool {
+        self.entity.is_some() || self.current || self.superseded
     }
 }
 
