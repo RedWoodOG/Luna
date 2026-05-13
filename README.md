@@ -96,9 +96,12 @@ next:
 10. [`docs/LUNA_BUILD_PLAN.md`](docs/LUNA_BUILD_PLAN.md)
    - issue-driven engineering plan for making Luna vastly stronger without
      weakening the memory contract.
-11. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
+11. [`docs/LUNA_DESKTOP_OXIDE_INTEGRATION.md`](docs/LUNA_DESKTOP_OXIDE_INTEGRATION.md)
+   - desktop shell adoption plan for using Oxide's Tauri/Svelte interface
+     without surrendering Luna's runtime or memory contract.
+12. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
    engineering guardrails and enforcement status.
-12. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
+13. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
    topology-engine roadmap, including the runtime-to-topology bridge.
 
 ## Destination

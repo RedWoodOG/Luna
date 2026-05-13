@@ -13,7 +13,7 @@ use luna_replay::ReplayAuditor;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeScenarioFile {
     #[serde(default)]
@@ -68,7 +68,7 @@ impl From<String> for RuntimeScenarioTurn {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeScenarioChecks {
     #[serde(default)]
@@ -99,6 +99,9 @@ pub struct RuntimeScenarioChecks {
     pub runtime_replay_audit: RuntimeReplayAuditChecks,
     #[serde(default)]
     pub manuscript_one_read: ManuscriptOneReadChecks,
+
+    #[serde(default)]
+    pub lattice: LatticeChecks,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -292,6 +295,26 @@ pub struct ManuscriptOneReadChecks {
     pub require_proof_eligible: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct LatticeChecks {
+    #[serde(default)]
+    pub turns: Vec<LatticeTurnCheck>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LatticeTurnCheck {
+    pub turn_index: usize,
+    pub dimension: String,
+    #[serde(default)]
+    pub min_score: Option<f32>,
+    #[serde(default)]
+    pub max_score: Option<f32>,
+    #[serde(default)]
+    pub reason_must_contain: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TopologyNodeCheck {
@@ -431,6 +454,8 @@ pub fn evaluate_runtime_scenario_with_events(
     let last_result = results.last();
     evaluate_turn_receipts(results, events, &mut failures);
     evaluate_attention_lattice(results, events, &mut failures);
+
+    evaluate_lattice_checks(&scenario.checks.lattice, results, &mut failures);
 
     for needle in &scenario.checks.must_contain {
         if !contains_ci(&memory_text, needle) {
@@ -699,6 +724,66 @@ fn evaluate_attention_lattice(
     }
 }
 
+fn evaluate_lattice_checks(
+    checks: &LatticeChecks,
+    results: &[crate::RuntimeTurnResult],
+    failures: &mut Vec<String>,
+) {
+    for check in &checks.turns {
+        let turn_idx = check.turn_index.saturating_sub(1);
+        let Some(result) = results.get(turn_idx) else {
+            failures.push(format!(
+                "lattice check references turn {} but only {} results exist",
+                check.turn_index,
+                results.len()
+            ));
+            continue;
+        };
+        let dimension = match check.dimension.as_str() {
+            "identity" => &result.attention_lattice.identity,
+            "relationship" => &result.attention_lattice.relationship,
+            "goal" => &result.attention_lattice.goal,
+            "correction" => &result.attention_lattice.correction,
+            "context" => &result.attention_lattice.context,
+            "confidence" => &result.attention_lattice.confidence,
+            other => {
+                failures.push(format!(
+                    "turn {} lattice check references unknown dimension '{}'",
+                    check.turn_index, other
+                ));
+                continue;
+            }
+        };
+        if let Some(min) = check.min_score {
+            if dimension.score < min {
+                failures.push(format!(
+                    "turn {} lattice dimension '{}' score {} is below minimum {}",
+                    check.turn_index, check.dimension, dimension.score, min
+                ));
+            }
+        }
+        if let Some(max) = check.max_score {
+            if dimension.score > max {
+                failures.push(format!(
+                    "turn {} lattice dimension '{}' score {} exceeds maximum {}",
+                    check.turn_index, check.dimension, dimension.score, max
+                ));
+            }
+        }
+        if let Some(ref needle) = check.reason_must_contain {
+            if !dimension
+                .reason
+                .to_ascii_lowercase()
+                .contains(&needle.to_ascii_lowercase())
+            {
+                failures.push(format!(
+                    "turn {} lattice dimension '{}' reason '{}' does not contain '{}'",
+                    check.turn_index, check.dimension, dimension.reason, needle
+                ));
+            }
+        }
+    }
+}
 fn evaluate_turn_receipts(
     results: &[crate::RuntimeTurnResult],
     events: &[StoredEvent],
@@ -907,6 +992,7 @@ pub fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
                     + check.max_working_edges.map(|_| 1).unwrap_or(0)
             })
             .sum::<usize>()
+        + scenario.checks.lattice.turns.len()
 }
 
 fn evaluate_topology_bridge_checks(
