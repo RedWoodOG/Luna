@@ -1,0 +1,180 @@
+{
+  "name": "real_week_24h_acceptance",
+  "turns": [
+    {
+      "content": "I am Sarah.",
+      "timestamp": "2026-05-05T09:00:00Z"
+    },
+    {
+      "content": "I am a project manager.",
+      "timestamp": "2026-05-05T09:01:00Z"
+    },
+    {
+      "content": "Tom lives in Austin.",
+      "timestamp": "2026-05-05T09:02:00Z"
+    },
+    {
+      "content": "Atlas Loom is my ETL pipeline tool.",
+      "timestamp": "2026-05-05T09:03:00Z"
+    },
+    {
+      "content": "blue chair twelve river battery noise random",
+      "timestamp": "2026-05-05T09:04:00Z"
+    },
+    {
+      "content": "Actually Tom moved to Ohio.",
+      "timestamp": "2026-05-06T14:00:00Z"
+    },
+    {
+      "content": "Maria is my backend engineer.",
+      "timestamp": "2026-05-06T14:05:00Z"
+    },
+    {
+      "content": "Tom is a basketball fan.",
+      "timestamp": "2026-05-06T14:10:00Z"
+    },
+    {
+      "content": "I like football.",
+      "timestamp": "2026-05-06T14:15:00Z"
+    },
+    {
+      "content": "Talk soon.",
+      "timestamp": "2026-05-06T17:00:00Z"
+    },
+    {
+      "content": "What do you know about Tom?",
+      "timestamp": "2026-05-07T17:30:00Z"
+    },
+    {
+      "content": "What did I say about Atlas Loom?",
+      "timestamp": "2026-05-07T17:31:00Z"
+    },
+    {
+      "content": "What do you know about Maria?",
+      "timestamp": "2026-05-07T17:32:00Z"
+    }
+  ],
+  "restart_after_turns": [
+    10
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "identity",
+          "kind": "name",
+          "value": "Sarah"
+        },
+        {
+          "domain": "identity",
+          "kind": "profession",
+          "value": "project manager"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Tom lives in Ohio",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Tom lives in Austin",
+          "lifecycle_status": "superseded"
+        },
+        {
+          "domain": "person",
+          "kind": "role",
+          "value": "Maria is my backend engineer"
+        },
+        {
+          "domain": "person",
+          "kind": "interest",
+          "value": "Tom is a basketball fan"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Atlas Loom is my ETL pipeline tool"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 8,
+      "max_edges": 16
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "time": {
+      "require_timestamps": true,
+      "min_any_gap_seconds": 86400
+    },
+    "runtime_replay_audit": {
+      "require_clean": true,
+      "require_source_event_hashes": true,
+      "min_stored_events": 15,
+      "min_topology_nodes": 4,
+      "min_topology_tethers": 2,
+      "min_topology_orbs": 1
+    },
+    "topology_bridge": {
+      "require_source_event_hashes": true,
+      "require_recall_reason_available": true,
+      "require_durable_commit": true,
+      "min_committed_nodes": 4,
+      "min_committed_tethers": 2
+    },
+    "answers": [
+      {
+        "turn_index": 11,
+        "must_contain": [
+          "Tom"
+        ],
+        "must_not_contain": [
+          "Tom lives in Austin"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 8,
+        "max_working_edges": 16
+      },
+      {
+        "turn_index": 12,
+        "must_contain": [
+          "Atlas Loom"
+        ],
+        "must_not_contain": [
+          "blue chair"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 8,
+        "max_working_edges": 16
+      },
+      {
+        "turn_index": 13,
+        "must_contain": [
+          "Maria"
+        ],
+        "must_not_contain": [
+          "Tom lives in Austin"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 8,
+        "max_working_edges": 16
+      }
+    ]
+  }
+}

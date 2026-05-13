@@ -155,6 +155,9 @@ enum RuntimeCommand {
         /// Show only superseded claims.
         #[arg(long)]
         superseded: bool,
+        /// Show why a specific term was not surfaced in memory.
+        #[arg(long)]
+        missing: Option<String>,
         /// Output format.
         #[arg(long, value_enum, default_value = "markdown")]
         format: ReportFormat,
@@ -445,6 +448,7 @@ fn main() -> anyhow::Result<ExitCode> {
                 entity,
                 current,
                 superseded,
+                missing,
                 format,
             } => {
                 let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
@@ -454,6 +458,7 @@ fn main() -> anyhow::Result<ExitCode> {
                     entity,
                     current,
                     superseded,
+                    missing,
                 };
                 match format {
                     ReportFormat::Markdown => print_memory_state(&state, &filters),
@@ -844,9 +849,40 @@ struct InspectFilters {
     entity: Option<String>,
     current: bool,
     superseded: bool,
+    missing: Option<String>,
 }
 
+
 fn print_memory_state(state: &luna_runtime::MemoryState, filters: &InspectFilters) {
+    if let Some(query) = &filters.missing {
+        println!("# Why Not Remembered: \"{}\"\n", query);
+        let lower_q = query.to_ascii_lowercase();
+        let matching: Vec<&luna_runtime::MemoryClaim> = state.claims.iter()
+            .filter(|c| c.value.to_ascii_lowercase().contains(&lower_q))
+            .collect();
+        if matching.is_empty() {
+            println!("No claims found containing \"{}\" in memory state.\n", query);
+            println!("The term was never stored as an assertion, or the phrase was not captured by the entity sieve.");
+        } else {
+            for claim in &matching {
+                let reason = match claim.lifecycle_status {
+                    luna_core::AssertionLifecycleStatus::Current => {
+                        if claim.status == luna_core::AssertionConfidenceTier::Unconfirmed {
+                            "would be suppressed: unconfirmed (requires repeated evidence to become confirmed)"
+                        } else {
+                            "would be surfaced: current and confirmed"
+                        }
+                    }
+                    luna_core::AssertionLifecycleStatus::Superseded => "would be suppressed: superseded by a newer correction",
+                    luna_core::AssertionLifecycleStatus::Stale => "would be suppressed: marked stale (decayed or unused)",
+                    luna_core::AssertionLifecycleStatus::Contradicted => "would be suppressed: contradicted by other evidence",
+                };
+                println!("- {:?}/{:?}: {}:{} = {}", claim.status, claim.lifecycle_status, claim.domain, claim.kind, claim.value);
+                println!("  Reason: {}", reason);
+            }
+        }
+        return;
+    }
     println!("# Luna Memory State\n");
     let claims = filtered_claims(state, filters);
     if claims.is_empty() && state.map.nodes.is_empty() && state.map.edges.is_empty() {
@@ -1002,7 +1038,7 @@ fn claim_value_matches_entity(claim: &luna_runtime::MemoryClaim, filters: &Inspe
 
 impl InspectFilters {
     fn has_filters(&self) -> bool {
-        self.entity.is_some() || self.current || self.superseded
+        self.entity.is_some() || self.current || self.superseded || self.missing.is_some()
     }
 }
 

@@ -696,3 +696,58 @@ fn runtime_inspect_filters_by_entity_and_lifecycle_status() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+
+#[test]
+fn runtime_inspect_missing_explains_why_not_remembered() {
+    let root = temp_root("inspect_missing");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    for turn in [
+        "Morgan lives in Iowa.",
+        "Actually Morgan lives in Ohio now.",
+        "I am a software developer.",
+    ] {
+        let mut command = Command::new(luna_bin());
+        command
+            .args(["runtime", "turn", turn])
+            .args(["--log"])
+            .arg(&log);
+        assert_success(command);
+    }
+
+    // Test: superseded claim is found and explained
+    let mut missing = Command::new(luna_bin());
+    missing
+        .args(["runtime", "inspect", "--missing", "Iowa"])
+        .args(["--log"])
+        .arg(&log);
+    let stdout = assert_success(missing);
+    assert!(
+        stdout.contains("Why Not Remembered: \"Iowa\""),
+        "stdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Morgan lives in Iowa"),
+        "stdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("superseded by a newer correction"),
+        "stdout:\n{stdout}"
+    );
+
+    // Test: unknown term reports not found
+    let mut unknown = Command::new(luna_bin());
+    unknown
+        .args(["runtime", "inspect", "--missing", "rocket_ship"])
+        .args(["--log"])
+        .arg(&log);
+    let stdout = assert_success(unknown);
+    assert!(
+        stdout.contains("No claims found"),
+        "stdout:\n{stdout}"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
