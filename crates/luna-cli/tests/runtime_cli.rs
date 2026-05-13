@@ -697,7 +697,6 @@ fn runtime_inspect_filters_by_entity_and_lifecycle_status() {
     let _ = fs::remove_dir_all(root);
 }
 
-
 #[test]
 fn runtime_inspect_missing_explains_why_not_remembered() {
     let root = temp_root("inspect_missing");
@@ -728,10 +727,7 @@ fn runtime_inspect_missing_explains_why_not_remembered() {
         stdout.contains("Why Not Remembered: \"Iowa\""),
         "stdout:\n{stdout}"
     );
-    assert!(
-        stdout.contains("Morgan lives in Iowa"),
-        "stdout:\n{stdout}"
-    );
+    assert!(stdout.contains("Morgan lives in Iowa"), "stdout:\n{stdout}");
     assert!(
         stdout.contains("superseded by a newer correction"),
         "stdout:\n{stdout}"
@@ -744,10 +740,7 @@ fn runtime_inspect_missing_explains_why_not_remembered() {
         .args(["--log"])
         .arg(&log);
     let stdout = assert_success(unknown);
-    assert!(
-        stdout.contains("No claims found"),
-        "stdout:\n{stdout}"
-    );
+    assert!(stdout.contains("No claims found"), "stdout:\n{stdout}");
 
     let _ = fs::remove_dir_all(root);
 }

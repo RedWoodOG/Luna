@@ -852,16 +852,20 @@ struct InspectFilters {
     missing: Option<String>,
 }
 
-
 fn print_memory_state(state: &luna_runtime::MemoryState, filters: &InspectFilters) {
     if let Some(query) = &filters.missing {
         println!("# Why Not Remembered: \"{}\"\n", query);
         let lower_q = query.to_ascii_lowercase();
-        let matching: Vec<&luna_runtime::MemoryClaim> = state.claims.iter()
+        let matching: Vec<&luna_runtime::MemoryClaim> = state
+            .claims
+            .iter()
             .filter(|c| c.value.to_ascii_lowercase().contains(&lower_q))
             .collect();
         if matching.is_empty() {
-            println!("No claims found containing \"{}\" in memory state.\n", query);
+            println!(
+                "No claims found containing \"{}\" in memory state.\n",
+                query
+            );
             println!("The term was never stored as an assertion, or the phrase was not captured by the entity sieve.");
         } else {
             for claim in &matching {
@@ -873,11 +877,20 @@ fn print_memory_state(state: &luna_runtime::MemoryState, filters: &InspectFilter
                             "would be surfaced: current and confirmed"
                         }
                     }
-                    luna_core::AssertionLifecycleStatus::Superseded => "would be suppressed: superseded by a newer correction",
-                    luna_core::AssertionLifecycleStatus::Stale => "would be suppressed: marked stale (decayed or unused)",
-                    luna_core::AssertionLifecycleStatus::Contradicted => "would be suppressed: contradicted by other evidence",
+                    luna_core::AssertionLifecycleStatus::Superseded => {
+                        "would be suppressed: superseded by a newer correction"
+                    }
+                    luna_core::AssertionLifecycleStatus::Stale => {
+                        "would be suppressed: marked stale (decayed or unused)"
+                    }
+                    luna_core::AssertionLifecycleStatus::Contradicted => {
+                        "would be suppressed: contradicted by other evidence"
+                    }
                 };
-                println!("- {:?}/{:?}: {}:{} = {}", claim.status, claim.lifecycle_status, claim.domain, claim.kind, claim.value);
+                println!(
+                    "- {:?}/{:?}: {}:{} = {}",
+                    claim.status, claim.lifecycle_status, claim.domain, claim.kind, claim.value
+                );
                 println!("  Reason: {}", reason);
             }
         }

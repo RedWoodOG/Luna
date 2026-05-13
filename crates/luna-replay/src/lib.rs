@@ -1,3 +1,7 @@
+use luna_cluster::{
+    ClusterEvolutionEvent, ClusterRegistry, CompressionReceipt, CompressionReceiptRegistry,
+    ConsolidationEvent, SourceEventRef,
+};
 use luna_core::{LunaError, Result};
 use luna_genesis::{GenesisCertificate, GenesisRegistry};
 use luna_inspector::{
@@ -5,10 +9,6 @@ use luna_inspector::{
 };
 use luna_ledger::{CompressionArtifact, InMemoryLedger, LedgerEvent, RawEvent, TopologyMutation};
 use luna_node::NodeRegistry;
-use luna_cluster::{
-    CompressionReceipt, CompressionReceiptRegistry, ConsolidationEvent, ClusterEvolutionEvent,
-    ClusterRegistry, SourceEventRef,
-};
 use luna_tether::TetherRegistry;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -367,7 +367,7 @@ impl ReplayAuditor {
             live_orb_lineage: orb_lineage(live.clusters()),
             replayed_orb_lineage: orb_lineage(replayed.clusters()),
         })
-}
+    }
 }
 
 fn snapshot_hash(topology: &ReplayedTopology) -> Result<String> {

@@ -2,8 +2,7 @@ use chrono::{DateTime, Utc};
 use luna_core::{LunaError, Result};
 
 use luna_cluster::{
-    compression_output_hash, CompressionReceipt, ConsolidationEvent,
-    ClusterEvolutionEvent,
+    compression_output_hash, ClusterEvolutionEvent, CompressionReceipt, ConsolidationEvent,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -275,7 +274,6 @@ impl InMemoryLedger {
     }
 
     pub fn append_consolidation_event(&mut self, event: ConsolidationEvent) -> Result<()> {
-
         luna_cluster::validate_consolidation_event(&event)?;
         if self
             .events
@@ -292,7 +290,6 @@ impl InMemoryLedger {
     }
 
     pub fn append_compression_receipt(&mut self, receipt: CompressionReceipt) -> Result<()> {
-
         luna_cluster::validate_compression_receipt(&receipt)?;
         self.verify_compression_artifact(&receipt)?;
         self.verify_compression_source_events(&receipt)?;
@@ -307,16 +304,17 @@ impl InMemoryLedger {
             )));
         }
 
-        if matches!(receipt.decision, luna_cluster::CompressionDecision::Accepted)
-            && self.events.iter().any(|ledger_event| {
-                matches!(
-                    ledger_event,
-                    LedgerEvent::CompressionReceipt(existing)
-                        if matches!(existing.decision, luna_cluster::CompressionDecision::Accepted)
-                            && existing.compression_id == receipt.compression_id
-                )
-            })
-        {
+        if matches!(
+            receipt.decision,
+            luna_cluster::CompressionDecision::Accepted
+        ) && self.events.iter().any(|ledger_event| {
+            matches!(
+                ledger_event,
+                LedgerEvent::CompressionReceipt(existing)
+                    if matches!(existing.decision, luna_cluster::CompressionDecision::Accepted)
+                        && existing.compression_id == receipt.compression_id
+            )
+        }) {
             return Err(LunaError::new(format!(
                 "compression {} already accepted in append-only ledger",
                 receipt.compression_id
@@ -391,7 +389,6 @@ impl InMemoryLedger {
         Ok(())
     }
 
-
     pub fn append_cluster_evolution_event(&mut self, event: ClusterEvolutionEvent) -> Result<()> {
         luna_cluster::validate_cluster_evolution_event(&event)?;
         self.verify_cluster_evolution_metric_provenance(&event)?;
@@ -409,8 +406,10 @@ impl InMemoryLedger {
         Ok(())
     }
 
-
-    fn verify_cluster_evolution_metric_provenance(&self, event: &ClusterEvolutionEvent) -> Result<()> {
+    fn verify_cluster_evolution_metric_provenance(
+        &self,
+        event: &ClusterEvolutionEvent,
+    ) -> Result<()> {
         for reference in &event.metric_evidence_refs {
             let raw_event = self.raw_events.get(&reference.event_id).ok_or_else(|| {
                 LunaError::new(format!(

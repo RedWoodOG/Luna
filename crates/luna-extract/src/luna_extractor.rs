@@ -15,7 +15,7 @@ use crate::{
     fusion::fuse_observation,
     second_source::{default_v1_sources, SecondSource},
 };
-use luna_core::{TurnReading, ConversationTurn, Result};
+use luna_core::{ConversationTurn, Result, TurnReading};
 
 pub struct LunaExtractor<B: LlmBackend, C: ExtractionCache> {
     llm: LlmExtractor<B, C>,

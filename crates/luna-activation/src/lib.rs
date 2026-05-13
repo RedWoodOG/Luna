@@ -144,8 +144,8 @@ pub fn compute_activation(
             || label.starts_with("i ")
             || id.contains("user self"));
 
-    let direct_match = (!label.is_empty() && query.contains(&label))
-        || (!id.is_empty() && query.contains(&id));
+    let direct_match =
+        (!label.is_empty() && query.contains(&label)) || (!id.is_empty() && query.contains(&id));
 
     let entity_match = matches!(
         node.kind,
@@ -289,8 +289,7 @@ pub fn propagate_activation_with_context(
 
     for depth in 1..=max_depth {
         let mut next_frontier = BTreeSet::new();
-        let distance_penalty =
-            ((depth.saturating_sub(1)) as f32) * config.graph_distance_penalty;
+        let distance_penalty = ((depth.saturating_sub(1)) as f32) * config.graph_distance_penalty;
 
         for edge in edges {
             let relation_boost_val = relation_activation(&edge.relation, query, cue_terms);
@@ -394,11 +393,7 @@ fn relation_like_match(node: &MemoryNode, query: &str) -> bool {
 }
 
 /// Relation-level activation boost during propagation.
-fn relation_activation(
-    relation: &MemoryRelationKind,
-    query: &str,
-    cue_terms: &[String],
-) -> f32 {
+fn relation_activation(relation: &MemoryRelationKind, query: &str, cue_terms: &[String]) -> f32 {
     let relation_terms: &[&str] = match relation {
         MemoryRelationKind::LocatedIn => &["live", "lives", "where", "location", "moved"],
         MemoryRelationKind::HasGoal => &["goal", "want", "wants", "why"],
@@ -656,10 +651,7 @@ mod tests {
         n.created_at = Some(Utc::now() - Duration::hours(48));
         let old = compute_activation(&n, "alice", &[], &[], &cfg());
 
-        assert!(
-            recent > old,
-            "recent={recent} should be > old={old}"
-        );
+        assert!(recent > old, "recent={recent} should be > old={old}");
     }
 
     #[test]
@@ -739,14 +731,22 @@ mod tests {
 
     #[test]
     fn system_kernel_activation_for_luna_query() {
-        let n = node("root:luna", "Luna SystemKernel", MemoryNodeKind::SystemKernel);
+        let n = node(
+            "root:luna",
+            "Luna SystemKernel",
+            MemoryNodeKind::SystemKernel,
+        );
         let score = compute_activation(&n, "how does luna memory work", &[], &[], &cfg());
         assert_eq!(score, 0.9);
     }
 
     #[test]
     fn system_kernel_zero_for_unrelated() {
-        let n = node("root:luna", "Luna SystemKernel", MemoryNodeKind::SystemKernel);
+        let n = node(
+            "root:luna",
+            "Luna SystemKernel",
+            MemoryNodeKind::SystemKernel,
+        );
         let score = compute_activation(&n, "what is the weather", &[], &[], &cfg());
         assert_eq!(score, 0.0);
     }
@@ -828,7 +828,10 @@ mod tests {
         nodes[1].activation = 0.0;
         propagate_activation(&mut nodes, &edges, &cfg(), 1);
         assert!(nodes[1].activation > 0.0, "b should be boosted");
-        assert!((nodes[2].activation - 0.0).abs() < 0.001, "c should not be reached");
+        assert!(
+            (nodes[2].activation - 0.0).abs() < 0.001,
+            "c should not be reached"
+        );
 
         // Reset and try depth 2: both b and c get boosted
         nodes[1].activation = 0.0;
@@ -862,7 +865,8 @@ mod tests {
         propagate_activation(&mut nodes, &edges, &cfg(), 2);
 
         // Person node should NOT get boosted from kernel/user seeds
-        assert!((nodes[2].activation - 0.0).abs() < 0.001,
+        assert!(
+            (nodes[2].activation - 0.0).abs() < 0.001,
             "person should not receive propagation from kernel/user, got {}",
             nodes[2].activation
         );

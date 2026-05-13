@@ -33,9 +33,7 @@ use crate::{
     normalize, query_intents,
     second_source::SecondSource,
 };
-use luna_core::{
-    TurnReading, ConversationTurn, Signal, SignalReliability, StructuredAssertion,
-};
+use luna_core::{ConversationTurn, Signal, SignalReliability, StructuredAssertion, TurnReading};
 use std::collections::HashMap;
 use uuid::Uuid;
 

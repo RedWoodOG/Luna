@@ -1,4 +1,4 @@
-use luna_core::{TurnReading, Episode, EpisodeProfile, Signal};
+use luna_core::{Episode, EpisodeProfile, Signal, TurnReading};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

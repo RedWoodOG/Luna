@@ -25,8 +25,7 @@ pub use second_source::{
 };
 
 use luna_core::{
-    TurnReading, ConversationTurn, Result, Role, Signal, SignalReliability,
-    StructuredAssertion,
+    ConversationTurn, Result, Role, Signal, SignalReliability, StructuredAssertion, TurnReading,
 };
 use uuid::Uuid;
 

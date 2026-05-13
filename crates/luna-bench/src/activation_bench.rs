@@ -28,91 +28,217 @@ const BUDGET_N: usize = 5; // top-N for precision/recall
 /// Pre-baked label segments so the generated corpus is deterministic
 /// and human-auditable.
 const FIRST_NAMES: &[&str] = &[
-    "Alice", "Bob", "Carla", "Darius", "Elena", "Felix", "Grace", "Hugo",
-    "Iris", "Jasper", "Kai", "Lena", "Milo", "Nia", "Omar", "Priya",
-    "Quinn", "Rosa", "Samir", "Tessa",
+    "Alice", "Bob", "Carla", "Darius", "Elena", "Felix", "Grace", "Hugo", "Iris", "Jasper", "Kai",
+    "Lena", "Milo", "Nia", "Omar", "Priya", "Quinn", "Rosa", "Samir", "Tessa",
 ];
 
 const LAST_NAMES: &[&str] = &[
-    "Chen", "Drake", "Estevez", "Fields", "Gupta", "Hawthorne", "Ito",
-    "Jansen", "Kowalski", "Larson", "Mendes", "Novak", "Osei", "Park",
-    "Quincy", "Rossi", "Singh", "Tanaka", "Uribe", "Voss",
+    "Chen",
+    "Drake",
+    "Estevez",
+    "Fields",
+    "Gupta",
+    "Hawthorne",
+    "Ito",
+    "Jansen",
+    "Kowalski",
+    "Larson",
+    "Mendes",
+    "Novak",
+    "Osei",
+    "Park",
+    "Quincy",
+    "Rossi",
+    "Singh",
+    "Tanaka",
+    "Uribe",
+    "Voss",
 ];
 
 const PROJECT_PREFIXES: &[&str] = &[
-    "Apollo", "Borealis", "Cascade", "Delta", "Eclipse", "Fusion", "Gemini",
-    "Helios", "Icarus", "Juno", "Kepler", "Lyra", "Mirage", "Nova",
-    "Orion", "Phoenix", "Quantum", "Rigel", "Solaris", "Titan",
+    "Apollo", "Borealis", "Cascade", "Delta", "Eclipse", "Fusion", "Gemini", "Helios", "Icarus",
+    "Juno", "Kepler", "Lyra", "Mirage", "Nova", "Orion", "Phoenix", "Quantum", "Rigel", "Solaris",
+    "Titan",
 ];
 
 const PROJECT_SUFFIXES: &[&str] = &[
-    "Launch System", "Deploy Pipeline", "Analytics Engine", "Data Mesh",
-    "Runtime Core", "Security Module", "Sync Layer", "Query Engine",
-    "Cache Fabric", "Stream Hub", "Model Registry", "Feature Store",
-    "Auth Gateway", "Config Service", "Telemetry Bus", "Index Service",
-    "Schema Registry", "Policy Engine", "Rate Limiter", "Circuit Breaker",
+    "Launch System",
+    "Deploy Pipeline",
+    "Analytics Engine",
+    "Data Mesh",
+    "Runtime Core",
+    "Security Module",
+    "Sync Layer",
+    "Query Engine",
+    "Cache Fabric",
+    "Stream Hub",
+    "Model Registry",
+    "Feature Store",
+    "Auth Gateway",
+    "Config Service",
+    "Telemetry Bus",
+    "Index Service",
+    "Schema Registry",
+    "Policy Engine",
+    "Rate Limiter",
+    "Circuit Breaker",
 ];
 
 const PLACE_NAMES: &[&str] = &[
-    "Tokyo", "Paris", "Amsterdam", "Singapore", "Berlin", "Nairobi",
-    "Sao Paulo", "Dubai", "Seoul", "Toronto", "Sydney", "Mumbai",
-    "Oslo", "Lisbon", "Helsinki", "Vancouver", "Cape Town", "Buenos Aires",
-    "Stockholm", "Zurich",
+    "Tokyo",
+    "Paris",
+    "Amsterdam",
+    "Singapore",
+    "Berlin",
+    "Nairobi",
+    "Sao Paulo",
+    "Dubai",
+    "Seoul",
+    "Toronto",
+    "Sydney",
+    "Mumbai",
+    "Oslo",
+    "Lisbon",
+    "Helsinki",
+    "Vancouver",
+    "Cape Town",
+    "Buenos Aires",
+    "Stockholm",
+    "Zurich",
 ];
 
-const PLACE_TYPES: &[&str] = &[
-    "Office", "Lab", "Hub", "Data Center", "Studio", "Workshop",
-];
+const PLACE_TYPES: &[&str] = &["Office", "Lab", "Hub", "Data Center", "Studio", "Workshop"];
 
 const GOAL_VERBS: &[&str] = &[
-    "Launch", "Deploy", "Scale", "Optimize", "Integrate", "Migrate",
-    "Refactor", "Decouple", "Harden", "Benchmark", "Document", "Retire",
-    "Onboard", "Validate", "Monitor", "Archive", "Automate", "Provision",
-    "Deprecate", "Upgrade",
+    "Launch",
+    "Deploy",
+    "Scale",
+    "Optimize",
+    "Integrate",
+    "Migrate",
+    "Refactor",
+    "Decouple",
+    "Harden",
+    "Benchmark",
+    "Document",
+    "Retire",
+    "Onboard",
+    "Validate",
+    "Monitor",
+    "Archive",
+    "Automate",
+    "Provision",
+    "Deprecate",
+    "Upgrade",
 ];
 
 const GOAL_TARGETS: &[&str] = &[
-    "MVP", "v2 backend", "dashboard UI", "auth layer", "cache tier",
-    "search index", "event log", "metrics pipeline", "alert rules",
-    "deploy scripts", "CI pipeline", "data warehouse", "API gateway",
-    "mobile SDK", "admin panel", "logging framework", "backup system",
-    "rate limiter", "feature flags", "A/B test harness",
+    "MVP",
+    "v2 backend",
+    "dashboard UI",
+    "auth layer",
+    "cache tier",
+    "search index",
+    "event log",
+    "metrics pipeline",
+    "alert rules",
+    "deploy scripts",
+    "CI pipeline",
+    "data warehouse",
+    "API gateway",
+    "mobile SDK",
+    "admin panel",
+    "logging framework",
+    "backup system",
+    "rate limiter",
+    "feature flags",
+    "A/B test harness",
 ];
 
 const ASSERTION_DOMAINS: &[&str] = &[
-    "identity", "project", "location", "goal", "relationship",
-    "capability", "constraint", "preference", "schedule", "risk",
+    "identity",
+    "project",
+    "location",
+    "goal",
+    "relationship",
+    "capability",
+    "constraint",
+    "preference",
+    "schedule",
+    "risk",
 ];
 
 const ASSERTION_VALUES: &[&str] = &[
-    "Python expert", "AWS certified", "remote worker", "team lead",
-    "security cleared", "on-call rotation", "west coast tz",
-    "prefers Rust", "public speaking", "open source contributor",
-    "reviewed 200 PRs", "shipping v3 on time", "database migrations done",
-    "latency p99 < 50ms", "zero-downtime deploy", "gdpr compliant",
-    "soc2 certified stack", "backup retention 90d", "cost under $5k/mo",
+    "Python expert",
+    "AWS certified",
+    "remote worker",
+    "team lead",
+    "security cleared",
+    "on-call rotation",
+    "west coast tz",
+    "prefers Rust",
+    "public speaking",
+    "open source contributor",
+    "reviewed 200 PRs",
+    "shipping v3 on time",
+    "database migrations done",
+    "latency p99 < 50ms",
+    "zero-downtime deploy",
+    "gdpr compliant",
+    "soc2 certified stack",
+    "backup retention 90d",
+    "cost under $5k/mo",
     "meets sla targets",
 ];
 
 /// Deterministic seed labels for queries (20 noun-phrase targets).
 const QUERY_TARGETS: &[&str] = &[
-    "alice", "jasper", "priya", "samir", "rosa",     // person lookups
-    "tokyo", "paris", "seoul", "nairobi", "oslo",    // place lookups
-    "apollo", "icarus", "nova", "titan", "eclipse",  // project lookups
-    "launch", "deploy", "migrate", "decouple",       // goal lookups
-    "identity", "location", "schedule", "constraint", // assertion domain queries
-    "python", "rust", "gdpr", "soc2", "latency",     // assertion value queries
+    "alice",
+    "jasper",
+    "priya",
+    "samir",
+    "rosa", // person lookups
+    "tokyo",
+    "paris",
+    "seoul",
+    "nairobi",
+    "oslo", // place lookups
+    "apollo",
+    "icarus",
+    "nova",
+    "titan",
+    "eclipse", // project lookups
+    "launch",
+    "deploy",
+    "migrate",
+    "decouple", // goal lookups
+    "identity",
+    "location",
+    "schedule",
+    "constraint", // assertion domain queries
+    "python",
+    "rust",
+    "gdpr",
+    "soc2",
+    "latency", // assertion value queries
     // mixed / compound queries
-    "alice apollo", "jasper tokyo", "priya deploy",
-    "nova oslo", "titan identity", "migrate gdpr",
-    "rosa paris", "samir eclipse", "launch tokyo",
-    "decouple python", "icarus nairobi",
+    "alice apollo",
+    "jasper tokyo",
+    "priya deploy",
+    "nova oslo",
+    "titan identity",
+    "migrate gdpr",
+    "rosa paris",
+    "samir eclipse",
+    "launch tokyo",
+    "decouple python",
+    "icarus nairobi",
     // edge-case probes
-    "zzyzx",                      // no match
-    "chen",                       // partial last-name
-    "launch mvp v2 backend",      // multi-word goal
-    "data center",                 // place-type term
-    "pipeline",                    // project-suffix term
+    "zzyzx",                 // no match
+    "chen",                  // partial last-name
+    "launch mvp v2 backend", // multi-word goal
+    "data center",           // place-type term
+    "pipeline",              // project-suffix term
 ];
 
 // ── corpus generation ───────────────────────────────────────────────
@@ -128,10 +254,7 @@ pub fn build_corpus() -> (Vec<MemoryNode>, Vec<MemoryEdge>) {
     for i in 0..50 {
         let fn_idx = i % FIRST_NAMES.len();
         let ln_idx = i % LAST_NAMES.len();
-        let label = format!(
-            "{} {}",
-            FIRST_NAMES[fn_idx], LAST_NAMES[ln_idx]
-        );
+        let label = format!("{} {}", FIRST_NAMES[fn_idx], LAST_NAMES[ln_idx]);
         nodes.push(MemoryNode {
             id: format!("person-{i:03}"),
             label,
@@ -298,9 +421,9 @@ fn is_relevant(node: &MemoryNode, query: &str) -> bool {
         return false;
     }
     let label_lower = node.label.to_lowercase();
-    tokenize(query).iter().any(|token| {
-        token.len() >= 2 && label_lower.contains(token.as_str())
-    })
+    tokenize(query)
+        .iter()
+        .any(|token| token.len() >= 2 && label_lower.contains(token.as_str()))
 }
 
 fn tokenize(text: &str) -> Vec<String> {
@@ -409,11 +532,7 @@ struct QueryScores {
 /// - Empty query or no relevant nodes → precision=1.0, recall=1.0, mrr=1.0
 ///   (both strategies return empty; agreement is perfect).
 /// - All nodes relevant → precision=1.0, recall=N/total (both identical).
-fn compute_scores(
-    nodes: &[MemoryNode],
-    query: &str,
-    selected_indices: &[usize],
-) -> QueryScores {
+fn compute_scores(nodes: &[MemoryNode], query: &str, selected_indices: &[usize]) -> QueryScores {
     let _selected_set: std::collections::HashSet<usize> =
         selected_indices.iter().copied().collect();
 
@@ -580,19 +699,17 @@ mod tests {
 
     #[test]
     fn no_relevant_nodes_both_strategies_return_scores() {
-        let nodes = vec![
-            MemoryNode {
-                id: "a".into(),
-                label: "Alpha".into(),
-                kind: MemoryNodeKind::Person,
-                confidence_tier: AssertionConfidenceTier::Confirmed,
-                density: 0.5,
-                activation: 0.0,
-                provenance: vec![],
-                created_at: None,
-                contradiction_count: 0,
-            },
-        ];
+        let nodes = vec![MemoryNode {
+            id: "a".into(),
+            label: "Alpha".into(),
+            kind: MemoryNodeKind::Person,
+            confidence_tier: AssertionConfidenceTier::Confirmed,
+            density: 0.5,
+            activation: 0.0,
+            provenance: vec![],
+            created_at: None,
+            contradiction_count: 0,
+        }];
         let scores = compute_scores(&nodes, "zzyzx_nonexistent", &[0]);
         // No relevant nodes → per spec, both precision and recall = 1.0, mrr = 1.0
         assert_eq!(scores.precision, 1.0);

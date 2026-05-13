@@ -1,6 +1,5 @@
 use luna_core::{
-    AssertionConfidenceTier, AssertionLifecycleStatus, MemoryNode, MemoryNodeKind,
-    MemoryProvenance,
+    AssertionConfidenceTier, AssertionLifecycleStatus, MemoryNode, MemoryNodeKind, MemoryProvenance,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -31,7 +30,10 @@ pub enum Classification {
 pub enum SuppressionReason {
     BudgetExceeded,
     KernelInternal,
-    IdentityBleed { from_scope: String, to_scope: String },
+    IdentityBleed {
+        from_scope: String,
+        to_scope: String,
+    },
     StaleData,
     UnconfirmedOnly,
     SafetyInternal,
@@ -204,11 +206,10 @@ impl OutputBuilder {
 // ── helpers ────────────────────────────────────────────────────────
 
 fn any_provenance_blocked(provenance: &[MemoryProvenance]) -> bool {
-    provenance.iter().any(|p| {
-        p.lifecycle_status == Some(AssertionLifecycleStatus::Superseded)
-    })
+    provenance
+        .iter()
+        .any(|p| p.lifecycle_status == Some(AssertionLifecycleStatus::Superseded))
 }
-
 
 // ── unit tests ─────────────────────────────────────────────────────
 
@@ -269,9 +270,24 @@ mod tests {
         };
         let mut builder = OutputBuilder::new(config);
 
-        let k1 = make_node("k1", "kernel-1", MemoryNodeKind::SystemKernel, AssertionConfidenceTier::Confirmed);
-        let k2 = make_node("k2", "kernel-2", MemoryNodeKind::SystemKernel, AssertionConfidenceTier::Confirmed);
-        let k3 = make_node("k3", "kernel-3", MemoryNodeKind::SystemKernel, AssertionConfidenceTier::Confirmed);
+        let k1 = make_node(
+            "k1",
+            "kernel-1",
+            MemoryNodeKind::SystemKernel,
+            AssertionConfidenceTier::Confirmed,
+        );
+        let k2 = make_node(
+            "k2",
+            "kernel-2",
+            MemoryNodeKind::SystemKernel,
+            AssertionConfidenceTier::Confirmed,
+        );
+        let k3 = make_node(
+            "k3",
+            "kernel-3",
+            MemoryNodeKind::SystemKernel,
+            AssertionConfidenceTier::Confirmed,
+        );
 
         assert_eq!(builder.add_memory_node(&k1), Classification::Allowed);
         assert_eq!(builder.add_memory_node(&k2), Classification::Allowed);
@@ -290,7 +306,12 @@ mod tests {
         let config = OutputConfig::default(); // allow_unconfirmed: false
         let mut builder = OutputBuilder::new(config);
 
-        let n = make_node("n1", "unconfirmed-fact", MemoryNodeKind::User, AssertionConfidenceTier::Unconfirmed);
+        let n = make_node(
+            "n1",
+            "unconfirmed-fact",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Unconfirmed,
+        );
 
         assert_eq!(
             builder.add_memory_node(&n),
@@ -310,7 +331,12 @@ mod tests {
         };
         let mut builder = OutputBuilder::new(config);
 
-        let n = make_node("n1", "unconfirmed-fact", MemoryNodeKind::User, AssertionConfidenceTier::Unconfirmed);
+        let n = make_node(
+            "n1",
+            "unconfirmed-fact",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Unconfirmed,
+        );
 
         assert_eq!(builder.add_memory_node(&n), Classification::Allowed);
 
@@ -374,10 +400,30 @@ mod tests {
         };
         let mut builder = OutputBuilder::new(config);
 
-        let n1 = make_node("n1", "item-one", MemoryNodeKind::User, AssertionConfidenceTier::Confirmed);
-        let n2 = make_node("n2", "item-two", MemoryNodeKind::Person, AssertionConfidenceTier::Confirmed);
-        let n3 = make_node("n3", "item-three", MemoryNodeKind::Place, AssertionConfidenceTier::Confirmed);
-        let n4 = make_node("n4", "item-four", MemoryNodeKind::Goal, AssertionConfidenceTier::Confirmed);
+        let n1 = make_node(
+            "n1",
+            "item-one",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Confirmed,
+        );
+        let n2 = make_node(
+            "n2",
+            "item-two",
+            MemoryNodeKind::Person,
+            AssertionConfidenceTier::Confirmed,
+        );
+        let n3 = make_node(
+            "n3",
+            "item-three",
+            MemoryNodeKind::Place,
+            AssertionConfidenceTier::Confirmed,
+        );
+        let n4 = make_node(
+            "n4",
+            "item-four",
+            MemoryNodeKind::Goal,
+            AssertionConfidenceTier::Confirmed,
+        );
 
         assert_eq!(builder.add_memory_node(&n1), Classification::Allowed);
         assert_eq!(builder.add_memory_node(&n2), Classification::Allowed);
@@ -399,8 +445,18 @@ mod tests {
         let config = OutputConfig::default();
         let mut builder = OutputBuilder::new(config);
 
-        let n1 = make_node("n1", "alpha", MemoryNodeKind::User, AssertionConfidenceTier::Confirmed);
-        let n2 = make_node("n2", "beta", MemoryNodeKind::Person, AssertionConfidenceTier::Confirmed);
+        let n1 = make_node(
+            "n1",
+            "alpha",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Confirmed,
+        );
+        let n2 = make_node(
+            "n2",
+            "beta",
+            MemoryNodeKind::Person,
+            AssertionConfidenceTier::Confirmed,
+        );
 
         builder.add_memory_node(&n1);
         builder.add_memory_node(&n2);
@@ -422,7 +478,12 @@ mod tests {
         };
         let mut builder = OutputBuilder::new(config);
 
-        let n = make_node("n1", "test", MemoryNodeKind::User, AssertionConfidenceTier::Confirmed);
+        let n = make_node(
+            "n1",
+            "test",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Confirmed,
+        );
         builder.add_memory_node(&n);
 
         let packet = builder.build();
@@ -441,8 +502,18 @@ mod tests {
         };
         let mut builder = OutputBuilder::new(config);
 
-        let k1 = make_node("k1", "kernel-1", MemoryNodeKind::SystemKernel, AssertionConfidenceTier::Confirmed);
-        let k2 = make_node("k2", "kernel-2", MemoryNodeKind::SystemKernel, AssertionConfidenceTier::Confirmed);
+        let k1 = make_node(
+            "k1",
+            "kernel-1",
+            MemoryNodeKind::SystemKernel,
+            AssertionConfidenceTier::Confirmed,
+        );
+        let k2 = make_node(
+            "k2",
+            "kernel-2",
+            MemoryNodeKind::SystemKernel,
+            AssertionConfidenceTier::Confirmed,
+        );
 
         builder.add_memory_node(&k1);
         builder.add_memory_node(&k2);
@@ -465,7 +536,12 @@ mod tests {
         let mut builder = OutputBuilder::new(config);
 
         // Fill budget first
-        let n1 = make_node("n1", "first", MemoryNodeKind::User, AssertionConfidenceTier::Confirmed);
+        let n1 = make_node(
+            "n1",
+            "first",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Confirmed,
+        );
         assert_eq!(builder.add_memory_node(&n1), Classification::Allowed);
 
         // Next item: staleness checked first, so gets StaleData not BudgetExceeded
@@ -494,10 +570,20 @@ mod tests {
         };
         let mut builder = OutputBuilder::new(config);
 
-        let n1 = make_node("n1", "first", MemoryNodeKind::User, AssertionConfidenceTier::Confirmed);
+        let n1 = make_node(
+            "n1",
+            "first",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Confirmed,
+        );
         assert_eq!(builder.add_memory_node(&n1), Classification::Allowed);
 
-        let n2 = make_node("n2", "unconfirmed", MemoryNodeKind::User, AssertionConfidenceTier::Unconfirmed);
+        let n2 = make_node(
+            "n2",
+            "unconfirmed",
+            MemoryNodeKind::User,
+            AssertionConfidenceTier::Unconfirmed,
+        );
 
         assert_eq!(
             builder.add_memory_node(&n2),
@@ -516,8 +602,14 @@ mod tests {
         };
         let mut builder = OutputBuilder::new(config);
 
-        assert_eq!(builder.add_text("item-1", OutputSource::WorkingFact), Classification::Allowed);
-        assert_eq!(builder.add_text("item-2", OutputSource::ContextClue), Classification::Allowed);
+        assert_eq!(
+            builder.add_text("item-1", OutputSource::WorkingFact),
+            Classification::Allowed
+        );
+        assert_eq!(
+            builder.add_text("item-2", OutputSource::ContextClue),
+            Classification::Allowed
+        );
         assert_eq!(
             builder.add_text("item-3", OutputSource::WorkingFact),
             Classification::Suppressed(SuppressionReason::BudgetExceeded)

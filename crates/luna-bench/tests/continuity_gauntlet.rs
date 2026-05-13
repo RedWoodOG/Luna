@@ -7,9 +7,7 @@
 //! the measurement framework exists and produces data.
 
 use chrono::Utc;
-use luna_core::{
-    ConversationTurn, Role,
-};
+use luna_core::{ConversationTurn, Role};
 use luna_extract::FusedExtractor;
 use luna_runtime::RuntimeSession;
 use std::collections::BTreeMap;
@@ -99,16 +97,37 @@ fn generate_corpus() -> (Vec<ConversationTurn>, Vec<Probe>) {
             // Ask a related question → reinforced
             let fact = FACTS[cycle];
             let assistant = format!("As I mentioned, {}.", fact.1);
-            (format!("Can you clarify {}?", fact.0.replace('_', " ")), assistant)
+            (
+                format!("Can you clarify {}?", fact.0.replace('_', " ")),
+                assistant,
+            )
         } else if pos >= 5 && pos <= 6 && cycle >= 10 && cycle < 15 {
             // Introduce correction facts (cycles 10-14)
             let fact_idx = 40 + (cycle - 10); // corr_0 through corr_4
             let is_old = pos == 5;
-            let fact = if is_old { FACTS[fact_idx] } else { FACTS[fact_idx + 1] };
-            let user = if is_old {
-                format!("Where does {} live?", fact.0.split("_old").next().unwrap_or("Chris").replace('_', " "))
+            let fact = if is_old {
+                FACTS[fact_idx]
             } else {
-                format!("Has anything changed with {}?", fact.0.split("_new").next().unwrap_or("Chris").replace('_', " "))
+                FACTS[fact_idx + 1]
+            };
+            let user = if is_old {
+                format!(
+                    "Where does {} live?",
+                    fact.0
+                        .split("_old")
+                        .next()
+                        .unwrap_or("Chris")
+                        .replace('_', " ")
+                )
+            } else {
+                format!(
+                    "Has anything changed with {}?",
+                    fact.0
+                        .split("_new")
+                        .next()
+                        .unwrap_or("Chris")
+                        .replace('_', " ")
+                )
             };
             fact_turns.insert(turn_idx, (fact_idx, fact.1.to_string()));
             (user, fact.1.to_string())
@@ -116,11 +135,20 @@ fn generate_corpus() -> (Vec<ConversationTurn>, Vec<Probe>) {
             // Distractor turns — casual conversation
             let distractors = [
                 ("How are you today?", "I'm doing well, ready to help."),
-                ("What time is it?", "I don't have a clock, but I can check logs."),
+                (
+                    "What time is it?",
+                    "I don't have a clock, but I can check logs.",
+                ),
                 ("Anything interesting?", "Just the usual tasks."),
                 ("What's the weather?", "I don't track weather data."),
-                ("Tell me a joke.", "Why did the struct go to therapy? It had too many unresolved fields."),
-                ("What can you help with?", "Memory, recall, provenance tracking."),
+                (
+                    "Tell me a joke.",
+                    "Why did the struct go to therapy? It had too many unresolved fields.",
+                ),
+                (
+                    "What can you help with?",
+                    "Memory, recall, provenance tracking.",
+                ),
                 ("Thanks.", "You're welcome."),
                 ("What's new?", "Nothing major. Processing as usual."),
             ];
@@ -143,13 +171,22 @@ fn generate_corpus() -> (Vec<ConversationTurn>, Vec<Probe>) {
     // Turns 30-40: more distractors + some reinforcement
     for turn_idx in 30..40 {
         let distractors = [
-            ("How has the day been?", "Productive. Several tasks completed."),
-            ("What do you remember?", "Quite a bit. What would you like to know?"),
+            (
+                "How has the day been?",
+                "Productive. Several tasks completed.",
+            ),
+            (
+                "What do you remember?",
+                "Quite a bit. What would you like to know?",
+            ),
             ("Any updates on projects?", "Several are progressing well."),
             ("What's the status?", "All systems operational."),
             ("Good morning.", "Good morning. How can I assist?"),
             ("Can you summarize?", "I can help with specific queries."),
-            ("What's on your mind?", "I'm tracking several facts and projects."),
+            (
+                "What's on your mind?",
+                "I'm tracking several facts and projects.",
+            ),
             ("Let's take a break.", "I'll be here when you return."),
         ];
         let d = distractors[turn_idx % distractors.len()];
@@ -271,7 +308,9 @@ fn evaluate_raw(turns: &[ConversationTurn], probes: &[Probe]) -> Vec<(usize, Raw
                 checkpoint_turns.join("\n")
             };
 
-            let hit = context.to_lowercase().contains(&probe.ground_truth.to_lowercase());
+            let hit = context
+                .to_lowercase()
+                .contains(&probe.ground_truth.to_lowercase());
             let any_fact = context.len() > 10;
 
             if probe.expect_unknown {
@@ -292,9 +331,21 @@ fn evaluate_raw(turns: &[ConversationTurn], probes: &[Probe]) -> Vec<(usize, Raw
         results.push((
             checkpoint,
             RawResult {
-                recall: if total > 0 { correct as f32 / total as f32 } else { 0.0 },
-                hallucination: if total > 0 { hallucinated as f32 / total as f32 } else { 0.0 },
-                negative_accuracy: if negative_total > 0 { negative_correct as f32 / negative_total as f32 } else { 0.0 },
+                recall: if total > 0 {
+                    correct as f32 / total as f32
+                } else {
+                    0.0
+                },
+                hallucination: if total > 0 {
+                    hallucinated as f32 / total as f32
+                } else {
+                    0.0
+                },
+                negative_accuracy: if negative_total > 0 {
+                    negative_correct as f32 / negative_total as f32
+                } else {
+                    0.0
+                },
             },
         ));
     }
@@ -351,7 +402,9 @@ fn evaluate_luna(turns: &[ConversationTurn], probes: &[Probe]) -> Vec<(usize, Lu
                         .output_packet
                         .items
                         .iter()
-                        .filter(|item| matches!(item.classification, luna_output::Classification::Allowed))
+                        .filter(|item| {
+                            matches!(item.classification, luna_output::Classification::Allowed)
+                        })
                         .map(|item| item.content.clone())
                         .collect::<Vec<_>>()
                         .join("\n");
@@ -388,9 +441,21 @@ fn evaluate_luna(turns: &[ConversationTurn], probes: &[Probe]) -> Vec<(usize, Lu
         results.push((
             checkpoint,
             LunaResult {
-                recall: if total > 0 { correct as f32 / total as f32 } else { 0.0 },
-                hallucination: if total > 0 { hallucinated as f32 / total as f32 } else { 0.0 },
-                negative_accuracy: if negative_total > 0 { negative_correct as f32 / negative_total as f32 } else { 0.0 },
+                recall: if total > 0 {
+                    correct as f32 / total as f32
+                } else {
+                    0.0
+                },
+                hallucination: if total > 0 {
+                    hallucinated as f32 / total as f32
+                } else {
+                    0.0
+                },
+                negative_accuracy: if negative_total > 0 {
+                    negative_correct as f32 / negative_total as f32
+                } else {
+                    0.0
+                },
             },
         ));
     }
@@ -419,20 +484,52 @@ fn continuity_gauntlet_200_turns() {
         let (_, luna) = &luna_results[i];
         println!(
             "| {:>10} |     {:.4} |      {:.4} |     {:.4} |      {:.4} |     {:.4} |      {:.4} |",
-            cp, raw.recall, luna.recall, raw.hallucination, luna.hallucination, raw.negative_accuracy, luna.negative_accuracy,
+            cp,
+            raw.recall,
+            luna.recall,
+            raw.hallucination,
+            luna.hallucination,
+            raw.negative_accuracy,
+            luna.negative_accuracy,
         );
     }
 
     // Averages
-    let avg_raw_recall: f32 = raw_results.iter().map(|(_, r)| r.recall).sum::<f32>() / raw_results.len() as f32;
-    let avg_luna_recall: f32 = luna_results.iter().map(|(_, r)| r.recall).sum::<f32>() / luna_results.len() as f32;
-    let avg_raw_halluc: f32 = raw_results.iter().map(|(_, r)| r.hallucination).sum::<f32>() / raw_results.len() as f32;
-    let avg_luna_halluc: f32 = luna_results.iter().map(|(_, r)| r.hallucination).sum::<f32>() / luna_results.len() as f32;
-    let avg_raw_neg: f32 = raw_results.iter().map(|(_, r)| r.negative_accuracy).sum::<f32>() / raw_results.len() as f32;
-    let avg_luna_neg: f32 = luna_results.iter().map(|(_, r)| r.negative_accuracy).sum::<f32>() / luna_results.len() as f32;
+    let avg_raw_recall: f32 =
+        raw_results.iter().map(|(_, r)| r.recall).sum::<f32>() / raw_results.len() as f32;
+    let avg_luna_recall: f32 =
+        luna_results.iter().map(|(_, r)| r.recall).sum::<f32>() / luna_results.len() as f32;
+    let avg_raw_halluc: f32 = raw_results
+        .iter()
+        .map(|(_, r)| r.hallucination)
+        .sum::<f32>()
+        / raw_results.len() as f32;
+    let avg_luna_halluc: f32 = luna_results
+        .iter()
+        .map(|(_, r)| r.hallucination)
+        .sum::<f32>()
+        / luna_results.len() as f32;
+    let avg_raw_neg: f32 = raw_results
+        .iter()
+        .map(|(_, r)| r.negative_accuracy)
+        .sum::<f32>()
+        / raw_results.len() as f32;
+    let avg_luna_neg: f32 = luna_results
+        .iter()
+        .map(|(_, r)| r.negative_accuracy)
+        .sum::<f32>()
+        / luna_results.len() as f32;
 
-    println!("| {:>10} |     {:.4} |      {:.4} |     {:.4} |      {:.4} |     {:.4} |      {:.4} |",
-        "AVERAGE", avg_raw_recall, avg_luna_recall, avg_raw_halluc, avg_luna_halluc, avg_raw_neg, avg_luna_neg);
+    println!(
+        "| {:>10} |     {:.4} |      {:.4} |     {:.4} |      {:.4} |     {:.4} |      {:.4} |",
+        "AVERAGE",
+        avg_raw_recall,
+        avg_luna_recall,
+        avg_raw_halluc,
+        avg_luna_halluc,
+        avg_raw_neg,
+        avg_luna_neg
+    );
     println!();
 
     println!("Raw numbers published. Gate: PASS.");

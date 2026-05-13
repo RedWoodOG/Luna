@@ -9,12 +9,9 @@
 //! here.
 
 use luna_core::{
-    AssertionConfidenceTier, AssertionLifecycleStatus, MemoryNode, MemoryNodeKind,
-    MemoryProvenance,
+    AssertionConfidenceTier, AssertionLifecycleStatus, MemoryNode, MemoryNodeKind, MemoryProvenance,
 };
-use luna_output::{
-    Classification, OutputBuilder, OutputConfig, OutputSource, SuppressionReason,
-};
+use luna_output::{Classification, OutputBuilder, OutputConfig, OutputSource, SuppressionReason};
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -87,8 +84,7 @@ fn kernel_internals_never_leak() {
         })
         .collect();
 
-    let results: Vec<Classification> =
-        kernels.iter().map(|k| builder.add_memory_node(k)).collect();
+    let results: Vec<Classification> = kernels.iter().map(|k| builder.add_memory_node(k)).collect();
 
     // First 3 are Allowed
     for (i, cls) in results.iter().enumerate().take(3) {
@@ -249,11 +245,7 @@ fn budget_exceeded_first_in_wins() {
             let index_str = format!("{:03}", i);
             let padding_len = 200 - 1 - index_str.len(); // 'N' + index + padding
             let label = format!("N{}{}", index_str, "x".repeat(padding_len));
-            assert_eq!(
-                label.len(),
-                200,
-                "node {i} label must be exactly 200 bytes"
-            );
+            assert_eq!(label.len(), 200, "node {i} label must be exactly 200 bytes");
             node(
                 &format!("n:{i}"),
                 &label,
@@ -426,8 +418,8 @@ fn confidence_gate_takes_priority_over_staleness_gate() {
 #[test]
 fn staleness_gate_takes_priority_over_budget_gate() {
     let config = OutputConfig {
-        max_bytes: 1, // tiny budget
-        ..Default::default() // allow_superseded: false
+        max_bytes: 1,         // tiny budget
+        ..Default::default()  // allow_superseded: false
     };
     let mut builder = OutputBuilder::new(config);
 
