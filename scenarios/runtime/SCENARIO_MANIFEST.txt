@@ -1,5 +1,6 @@
 chained_correction_lifecycle.json
 correction_back_to_superseded_value.json
+council_capture_vocabulary_expansion.json
 council5_runtime_topology_bridge.json
 identity_profession_correction.json
 intake_correction_supersession.json
