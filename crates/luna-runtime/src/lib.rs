@@ -2528,6 +2528,14 @@ fn capture_after_name_phrase(sentence: &str, lower_name: &str, phrase: &str) -> 
 }
 
 fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
+    if is_query_sentence(sentence)
+        || matches!(
+            lower_name,
+            "who" | "what" | "where" | "when" | "why" | "how"
+        )
+    {
+        return None;
+    }
     let lower = sentence.to_ascii_lowercase();
     let phrase = format!("{lower_name} is ");
     let index = lower.find(&phrase)?;
