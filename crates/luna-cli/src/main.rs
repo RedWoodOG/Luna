@@ -106,6 +106,9 @@ enum RuntimeCommand {
         /// Output format.
         #[arg(long, value_enum, default_value = "markdown")]
         format: ReportFormat,
+        /// Include the conversational reply with the runtime workbench output.
+        #[arg(long)]
+        include_reply: bool,
     },
     /// Start an interactive runtime loop. Type `exit` or `quit` to stop.
     Chat {
@@ -351,13 +354,15 @@ fn main() -> anyhow::Result<ExitCode> {
                 run_dir,
                 require_proof_eligible,
             } => {
-
                 let keyword = luna_bench::load_run(&run_dir, EngineKind::Keyword).ok();
                 let similarity = luna_bench::load_run(&run_dir, EngineKind::Similarity).ok();
                 match (keyword, similarity) {
                     (Some(keyword), Some(similarity)) => {
-                        let exit =
-                            print_compare(&keyword.report, &similarity.report, require_proof_eligible);
+                        let exit = print_compare(
+                            &keyword.report,
+                            &similarity.report,
+                            require_proof_eligible,
+                        );
                         return Ok(exit);
                     }
                     _ => {
@@ -379,11 +384,18 @@ fn main() -> anyhow::Result<ExitCode> {
                 timeout_secs,
                 cache,
                 format,
+                include_reply,
             } => {
                 let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
                 match extractor {
                     RuntimeExtractorChoice::Heuristic => {
-                        run_runtime_turn(&log, FusedExtractor::new(), content, format)?;
+                        run_runtime_turn(
+                            &log,
+                            FusedExtractor::new(),
+                            content,
+                            format,
+                            include_reply,
+                        )?;
                     }
                     RuntimeExtractorChoice::Command => {
                         let extractor = build_command_runtime_extractor(
@@ -393,10 +405,12 @@ fn main() -> anyhow::Result<ExitCode> {
                             timeout_secs,
                             cache,
                         )?;
-                        run_runtime_turn(&log, extractor, content, format)?;
+                        run_runtime_turn(&log, extractor, content, format, include_reply)?;
                     }
                 }
-                println!("Wrote event log {}", log.display());
+                if matches!(format, ReportFormat::Markdown) {
+                    println!("Wrote event log {}", log.display());
+                }
             }
             RuntimeCommand::Chat {
                 log,
@@ -653,12 +667,35 @@ fn run_runtime_turn<E: RuntimeExtractor>(
     extractor: E,
     content: String,
     format: ReportFormat,
+    include_reply: bool,
 ) -> anyhow::Result<()> {
     let session = RuntimeSession::new(log, extractor);
-    let result = session.process_user_turn(content)?;
+    let result = session.process_user_turn(content.clone())?;
     match format {
-        ReportFormat::Markdown => println!("{}", render_runtime_markdown(&result)),
-        ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&result)?),
+        ReportFormat::Markdown => {
+            if include_reply {
+                println!(
+                    "# Luna Conversation Reply\n\n{}\n\n---\n\n{}",
+                    render_conversation_reply(&content, &result),
+                    render_runtime_markdown(&result)
+                );
+            } else {
+                println!("{}", render_runtime_markdown(&result));
+            }
+        }
+        ReportFormat::Json => {
+            if include_reply {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "conversation_reply": render_conversation_reply(&content, &result),
+                        "result": result,
+                    }))?
+                );
+            } else {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            }
+        }
     }
     Ok(())
 }
@@ -998,8 +1035,6 @@ fn print_delta(label: &str, keyword: f32, similarity: f32) {
         similarity,
         similarity - keyword
     );
-
-
 }
 
 /// Renders the compare table in either strict (proof-eligible only) or
@@ -1063,7 +1098,11 @@ fn print_compare_table(keyword: &BenchmarkSubreport, similarity: &BenchmarkSubre
         keyword.false_memory_rate,
         similarity.false_memory_rate,
     );
-        print_delta("Overclaim rate", keyword.overclaim_rate, similarity.overclaim_rate);
+    print_delta(
+        "Overclaim rate",
+        keyword.overclaim_rate,
+        similarity.overclaim_rate,
+    );
     print_delta(
         "Mean latency ms",
         keyword.mean_latency_ms,
@@ -1084,7 +1123,11 @@ fn print_compare_table_total(keyword: &BenchmarkReport, similarity: &BenchmarkRe
         keyword.false_memory_rate,
         similarity.false_memory_rate,
     );
-        print_delta("Overclaim rate", keyword.overclaim_rate, similarity.overclaim_rate);
+    print_delta(
+        "Overclaim rate",
+        keyword.overclaim_rate,
+        similarity.overclaim_rate,
+    );
     print_delta(
         "Mean latency ms",
         keyword.mean_latency_ms,

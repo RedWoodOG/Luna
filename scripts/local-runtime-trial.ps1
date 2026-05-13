@@ -8,6 +8,8 @@ param(
     [string] $TurnsFile,
     [string[]] $Question = @(),
     [string] $QuestionsFile,
+    [string] $Luna,
+    [switch] $BuildRelease,
     [switch] $Live,
     [switch] $Controlled,
     [switch] $ResetLog,
@@ -51,6 +53,18 @@ function Write-Text {
     )
 
     Set-Content -LiteralPath $Path -Value $Value -Encoding UTF8
+}
+
+function Write-Json {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+        [Parameter(Mandatory = $true)]
+        [object] $Value,
+        [int] $Depth = 12
+    )
+
+    Write-Text -Path $Path -Value ($Value | ConvertTo-Json -Depth $Depth)
 }
 
 function Read-StringListFile {
@@ -373,12 +387,32 @@ function Invoke-Captured {
 }
 
 function Resolve-LunaBinary {
-    $base = Join-Path $repoRoot "target/release/luna"
-    $candidates = @($base, "$base.exe")
-    foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate) {
-            return $candidate
+    param(
+        [string] $ExplicitPath,
+        [switch] $BuildReleaseBinary
+    )
+
+    if ($ExplicitPath) {
+        $resolved = Resolve-RepoPath $ExplicitPath
+        if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+            throw "-Luna binary not found at $resolved"
         }
+        return $resolved
+    }
+
+    if ($BuildReleaseBinary) {
+        cargo build -p luna-cli --release
+        if ($LASTEXITCODE -ne 0) {
+            throw "cargo build -p luna-cli --release failed"
+        }
+        $base = Join-Path $repoRoot "target/release/luna"
+        $candidates = @($base, "$base.exe")
+        foreach ($candidate in $candidates) {
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                return $candidate
+            }
+        }
+        throw "Release Luna binary was not found after build."
     }
 
     return $null
@@ -393,7 +427,7 @@ function Invoke-Luna {
     if ($script:lunaBinary) {
         & $script:lunaBinary @Arguments
     } else {
-        cargo run -p luna-cli -- @Arguments
+        cargo run --quiet -p luna-cli -- @Arguments
     }
 }
 
@@ -402,7 +436,99 @@ function Luna-CommandLine {
         return "& " + (Quote-PowerShellArg $script:lunaBinary)
     }
 
-    return "cargo run -p luna-cli --"
+    return "cargo run --quiet -p luna-cli --"
+}
+
+function Get-LunaInvocationInfo {
+    if ($script:lunaBinary) {
+        $item = Get-Item -LiteralPath $script:lunaBinary
+        $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $script:lunaBinary
+        return [ordered]@{
+            mode = if ($BuildRelease) { "release_binary_built" } else { "explicit_binary" }
+            command = "& " + (Quote-PowerShellArg $script:lunaBinary)
+            binary = $script:lunaBinary
+            binary_sha256 = $hash.Hash
+            binary_last_write_utc = $item.LastWriteTimeUtc.ToString("o")
+        }
+    }
+
+    return [ordered]@{
+        mode = "cargo_run_source_current"
+        command = "cargo run --quiet -p luna-cli --"
+        binary = $null
+        binary_sha256 = $null
+        binary_last_write_utc = $null
+    }
+}
+
+function Write-QuestionAnswerArtifact {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+        [Parameter(Mandatory = $true)]
+        [string] $Number,
+        [Parameter(Mandatory = $true)]
+        [object] $QuestionSpec,
+        [Parameter(Mandatory = $true)]
+        [string] $Reply,
+        [Parameter(Mandatory = $true)]
+        [string] $WorkbenchFile,
+        [Parameter(Mandatory = $true)]
+        [string] $EvidenceFile
+    )
+
+    Write-Text -Path $Path -Value @"
+# Reviewer Question $Number
+
+- Id: $($QuestionSpec.id)
+- Category: $($QuestionSpec.category)
+- Workbench: $WorkbenchFile
+- Evidence: $EvidenceFile
+
+## Question
+
+$($QuestionSpec.question)
+
+## Luna Reply
+
+$Reply
+
+## Expected Evidence Note
+
+$($QuestionSpec.expected_evidence)
+
+## Must Not Include
+
+$($QuestionSpec.must_not_include)
+
+## Reviewer Notes
+
+$($QuestionSpec.notes)
+"@
+}
+
+function Write-QuestionEvidenceArtifact {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+        [Parameter(Mandatory = $true)]
+        [object] $QuestionSpec,
+        [Parameter(Mandatory = $true)]
+        [object] $Payload
+    )
+
+    $result = $Payload.result
+    $evidence = [ordered]@{
+        question = $QuestionSpec
+        conversation_reply = [string]$Payload.conversation_reply
+        intake = $result.intake
+        recalled = $result.recalled
+        working_memory = $result.working_memory
+        context_packet = $result.context_packet
+        memory_state = $result.memory_state
+        output_packet = $result.output_packet
+    }
+    Write-Json -Path $Path -Value $evidence -Depth 20
 }
 
 Push-Location -LiteralPath $repoRoot
@@ -514,8 +640,9 @@ try {
         New-Item -ItemType Directory -Force -Path $logParent | Out-Null
     }
 
-    $script:lunaBinary = Resolve-LunaBinary
+    $script:lunaBinary = Resolve-LunaBinary -ExplicitPath $Luna -BuildReleaseBinary:$BuildRelease
     $lunaPrefix = Luna-CommandLine
+    $lunaInvocation = Get-LunaInvocationInfo
 
     git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $OutDir "commit.txt") -Encoding UTF8
     git status --short --branch | Set-Content -LiteralPath (Join-Path $OutDir "git-status.txt") -Encoding UTF8
@@ -531,6 +658,7 @@ try {
         live = [bool]$Live
         dirty = $dirty
         allow_dirty = [bool]$AllowDirty
+        luna_invocation = $lunaInvocation
     }
     $inputObject | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutDir "trial-inputs.json") -Encoding UTF8
 
@@ -585,12 +713,28 @@ try {
 
     for ($index = 0; $index -lt $questions.Count; $index++) {
         $number = "{0:D2}" -f ($index + 1)
-        $output = Join-Path $OutDir "question-$number.md"
+        $workbenchOutput = Join-Path $OutDir "question-$number.workbench.json"
+        $answerOutput = Join-Path $OutDir "question-$number.md"
+        $evidenceOutput = Join-Path $OutDir "question-$number.evidence.json"
         $questionText = $questions[$index]
-        $commandLines.Add("$lunaPrefix runtime turn $(Quote-PowerShellArg $questionText) --log $(Quote-PowerShellArg $logPath) --format markdown")
-        Invoke-Captured "reviewer question $number" $output {
-            Invoke-Luna -Arguments @("runtime", "turn", $questionText, "--log", $logPath, "--format", "markdown")
+        $questionSpec = $questionSpecs[$index]
+        $commandLines.Add("$lunaPrefix runtime turn $(Quote-PowerShellArg $questionText) --log $(Quote-PowerShellArg $logPath) --format json --include-reply")
+        Invoke-Captured "reviewer question $number workbench" $workbenchOutput {
+            Invoke-Luna -Arguments @("runtime", "turn", $questionText, "--log", $logPath, "--format", "json", "--include-reply")
         }
+        $payload = Get-Content -LiteralPath $workbenchOutput -Raw | ConvertFrom-Json
+        Write-QuestionEvidenceArtifact `
+            -Path $evidenceOutput `
+            -QuestionSpec $questionSpec `
+            -Payload $payload
+        Write-QuestionAnswerArtifact `
+            -Path $answerOutput `
+            -Number $number `
+            -QuestionSpec $questionSpec `
+            -Reply ([string]$payload.conversation_reply) `
+            -WorkbenchFile ("question-$number.workbench.json") `
+            -EvidenceFile ("question-$number.evidence.json")
+        Get-Content -LiteralPath $answerOutput
     }
 
     $commandLines.Add("$lunaPrefix runtime inspect --log $(Quote-PowerShellArg $logPath) --format markdown")
@@ -651,6 +795,8 @@ try {
     )
     for ($index = 0; $index -lt $questions.Count; $index++) {
         $artifactNames += ("question-{0:D2}.md" -f ($index + 1))
+        $artifactNames += ("question-{0:D2}.workbench.json" -f ($index + 1))
+        $artifactNames += ("question-{0:D2}.evidence.json" -f ($index + 1))
     }
     $artifactNames += @(
         "inspect-final.md",
@@ -676,6 +822,23 @@ try {
             "untracked/"
         )
     }
+    $artifactNames += "artifact-hashes.json"
+
+    $artifactHashes = @()
+    foreach ($artifactName in $artifactNames) {
+        if ($artifactName -eq "artifact-hashes.json" -or $artifactName.EndsWith("/")) {
+            continue
+        }
+        $artifactPath = Join-Path $OutDir $artifactName
+        if (Test-Path -LiteralPath $artifactPath -PathType Leaf) {
+            $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $artifactPath
+            $artifactHashes += [ordered]@{
+                artifact = $artifactName
+                sha256 = $hash.Hash
+            }
+        }
+    }
+    Write-Json -Path (Join-Path $OutDir "artifact-hashes.json") -Value $artifactHashes -Depth 5
 
     $manifestObject = [ordered]@{
         created = (Get-Date -Format o)
@@ -689,7 +852,8 @@ try {
         log_sha256 = $logHash.Hash
         packet_log = $packetLog
         packet_log_sha256 = $packetLogHash.Hash
-        luna_binary = if ($script:lunaBinary) { $script:lunaBinary } else { "cargo run -p luna-cli --" }
+        luna_invocation = $lunaInvocation
+        luna_binary = if ($script:lunaBinary) { $script:lunaBinary } else { "cargo run --quiet -p luna-cli --" }
         turn_count = $turns.Count
         reviewer_question_count = $questions.Count
         scoring_template = if ($Controlled) { "review/scoring.md" } else { $null }
@@ -722,7 +886,9 @@ try {
   archived before answer generation.
 - events.jsonl: copied event log captured after the trial.
 - inspect-after-turns.md and audit-after-turns.md: reopened-log checks before reviewer questions.
-- question-*.md: reviewer-owned question transcripts.
+- question-*.md: reviewer-facing question answers.
+- question-*.workbench.json: exact single-execution runtime workbench output for each answer.
+- question-*.evidence.json: extracted answer evidence, recall, working memory, and context packet.
 - inspect-final.md/json and audit-final.md/json: final replay and memory-state evidence.
 - review/source-prompt-boundary.md, review/scoring.md, and
   review/regression_backlog.md: controlled-review artifacts when `-Controlled`

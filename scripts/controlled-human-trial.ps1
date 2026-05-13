@@ -5,6 +5,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $TrialFile,
     [string] $OutDir,
+    [string] $Luna,
+    [switch] $BuildRelease,
     [switch] $AllowDirty
 )
 
@@ -187,6 +189,12 @@ try {
     )
     if ($AllowDirty) {
         $trialArgs += "-AllowDirty"
+    }
+    if ($Luna) {
+        $trialArgs += @("-Luna", $Luna)
+    }
+    if ($BuildRelease) {
+        $trialArgs += "-BuildRelease"
     }
 
     $global:LASTEXITCODE = 0
