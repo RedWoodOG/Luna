@@ -617,6 +617,35 @@ pub struct MemoryProvenance {
     pub lifecycle_status: Option<AssertionLifecycleStatus>,
 }
 
+impl MemoryProvenance {
+    /// Construct provenance backed by an assertion key.
+    pub fn from_assertion(key: String) -> Self {
+        Self {
+            episode_id: None,
+            turn_id: None,
+            assertion_key: Some(key),
+            system_root: None,
+            lifecycle_status: None,
+        }
+    }
+
+    /// Construct provenance for a system-kernel root.
+    pub fn from_system_root(root: String) -> Self {
+        Self {
+            episode_id: None,
+            turn_id: None,
+            assertion_key: None,
+            system_root: Some(root),
+            lifecycle_status: None,
+        }
+    }
+
+    /// Returns true if at least one source field is populated.
+    pub fn has_source(&self) -> bool {
+        self.assertion_key.is_some() || self.system_root.is_some()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct MemoryMap {
     pub nodes: Vec<MemoryNode>,

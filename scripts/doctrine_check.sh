@@ -234,6 +234,57 @@ fi
 
 
 # ---------------------------------------------------------------------------
+# Check 1c: No bare `MemoryProvenance {` construction in production source.
+#
+# MemoryProvenance must be constructed via from_assertion() or from_system_root()
+# so that every provenance record carries at least one source field.
+# Bare struct literal construction in production code (not tests) is a
+# violation of the provenance non-empty contract.
+# ---------------------------------------------------------------------------
+
+
+bare_provenance_hits=$(
+  find crates -path '*/src/*.rs' -print0 |
+    xargs -0 grep -n 'MemoryProvenance {' 2>/dev/null |
+    grep -v 'struct MemoryProvenance' |
+    grep -vE '^[^:]+:[0-9]+:\s*(//|/\*)' ||
+    true
+)
+if [ -n "$bare_provenance_hits" ]; then
+  fail "Bare MemoryProvenance struct literal in production source."
+  echo "$bare_provenance_hits" >&2
+  echo "  Fix: use MemoryProvenance::from_assertion(key) or MemoryProvenance::from_system_root(root)." >&2
+fi
+
+
+# ---------------------------------------------------------------------------
+# Check 1d: No phrase-to-answer maps in production source.
+#
+# A phrase-to-answer map is any control-flow construct that checks user-facing
+# text for a specific phrase and returns a hardcoded answer string. Canonical
+# examples: match on question text returning literal answers, if/else chains
+# with specific phrase checks and hardcoded returns, or lookup tables mapping
+# questions to answers. This is the scripted-answer failure mode.
+# ---------------------------------------------------------------------------
+
+
+phrase_answer_hits=$(
+  find crates -path '*/src/*.rs' -print0 |
+    xargs -0 grep -n '=> "[A-Z]' 2>/dev/null |
+    grep -vE '^[^:]+:[0-9]+:\s*(//|/\*)' |
+    grep -v '#\[cfg\(test\)\]' |
+    grep -v 'expect(' |
+    grep -v 'panic!' ||
+    true
+)
+if [ -n "$phrase_answer_hits" ]; then
+  fail "Phrase-to-answer map detected in production source (match arm returning hardcoded string)."
+  echo "$phrase_answer_hits" >&2
+  echo "  Fix: answers must be derived from event-sourced memory, not from hardcoded phrase dispatch." >&2
+fi
+
+
+# ---------------------------------------------------------------------------
 # Check 2: scenarios/runtime/ must be non-empty.
 #
 # The scenario suite is the executable form of the doctrine. Letting it
