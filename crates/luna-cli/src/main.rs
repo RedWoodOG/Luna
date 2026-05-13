@@ -158,6 +158,9 @@ enum RuntimeCommand {
         /// Show why a specific term was not surfaced in memory.
         #[arg(long)]
         missing: Option<String>,
+        /// Show the latest Attention Lattice derived from typed memory.
+        #[arg(long)]
+        lattice: bool,
         /// Output format.
         #[arg(long, value_enum, default_value = "markdown")]
         format: ReportFormat,
@@ -449,11 +452,17 @@ fn main() -> anyhow::Result<ExitCode> {
                 current,
                 superseded,
                 missing,
+                lattice,
                 format,
             } => {
                 let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
                 let session = RuntimeSession::new(&log, FusedExtractor::new());
                 let state = session.inspect()?;
+                let latest_lattice = if lattice {
+                    session.latest_attention_lattice()?
+                } else {
+                    None
+                };
                 let filters = InspectFilters {
                     entity,
                     current,
@@ -461,11 +470,22 @@ fn main() -> anyhow::Result<ExitCode> {
                     missing,
                 };
                 match format {
-                    ReportFormat::Markdown => print_memory_state(&state, &filters),
-                    ReportFormat::Json => println!(
-                        "{}",
-                        serde_json::to_string_pretty(&filtered_claims(&state, &filters))?
-                    ),
+                    ReportFormat::Markdown => {
+                        print_memory_state(&state, &filters);
+                        if lattice {
+                            print_attention_lattice(latest_lattice.as_ref());
+                        }
+                    }
+                    ReportFormat::Json => {
+                        if lattice {
+                            println!("{}", serde_json::to_string_pretty(&latest_lattice)?);
+                        } else {
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&filtered_claims(&state, &filters))?
+                            );
+                        }
+                    }
                 }
             }
             RuntimeCommand::Audit { log, format } => {
@@ -1053,6 +1073,39 @@ impl InspectFilters {
     fn has_filters(&self) -> bool {
         self.entity.is_some() || self.current || self.superseded || self.missing.is_some()
     }
+}
+
+fn print_attention_lattice(lattice: Option<&luna_core::AttentionLattice>) {
+    println!("\n## Attention Lattice\n");
+    let Some(lattice) = lattice else {
+        println!("(no lattice computed yet)");
+        return;
+    };
+    print_lattice_dimension("identity", &lattice.identity);
+    print_lattice_dimension("relationship", &lattice.relationship);
+    print_lattice_dimension("goal", &lattice.goal);
+    print_lattice_dimension("correction", &lattice.correction);
+    print_lattice_dimension("context", &lattice.context);
+    print_lattice_dimension("confidence", &lattice.confidence);
+}
+
+fn print_lattice_dimension(name: &str, dimension: &luna_core::LatticeDimension) {
+    let sources = dimension
+        .provenance
+        .iter()
+        .filter_map(|provenance| provenance.assertion_key.as_deref())
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!(
+        "- {name}: {:.2} - {} (sources: {})",
+        dimension.score,
+        dimension.reason,
+        if sources.is_empty() {
+            "none"
+        } else {
+            sources.as_str()
+        }
+    );
 }
 
 fn print_runtime_replay_audit(log: &Path, report: &luna_runtime::RuntimeReplayAuditReport) {

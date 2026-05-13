@@ -8,9 +8,9 @@ use std::{
 };
 
 pub use luna_core::{
-    AssertionCorrected, AssertionExtracted, ContradictionDetected, EpisodeCreated, EpisodeDecayed,
-    EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource, LunaEvent, RecallFailed,
-    RecallSucceeded, StoredEvent, TurnObserved,
+    AssertionCorrected, AssertionExtracted, AttentionLattice, ContradictionDetected,
+    EpisodeCreated, EpisodeDecayed, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource,
+    LunaEvent, RecallFailed, RecallSucceeded, RuntimeTurnReceipt, StoredEvent, TurnObserved,
 };
 
 #[derive(Debug, Clone)]

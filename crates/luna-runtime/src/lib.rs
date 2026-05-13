@@ -6,10 +6,11 @@ use luna_cluster::{
 };
 use luna_core::{
     AssertionConfidenceTier, AssertionCorrected, AssertionExtracted, AssertionLifecycleStatus,
-    ContradictionDetected, ConversationTurn, Episode, EpisodeCreated, EpisodeRecalled,
-    EpisodeReinforced, EventEnvelope, EventSource, LunaError, LunaEvent, MemoryEdge, MemoryMap,
-    MemoryNode, MemoryNodeKind, MemoryProvenance, MemoryRelationKind, RecallMode, RecallSet,
-    Result, Role, StructuredAssertion, SystemKernel, TurnObserved, TurnReading, WorkingMemory,
+    AttentionLattice, ContradictionDetected, ConversationTurn, Episode, EpisodeCreated,
+    EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource, LatticeDimension, LunaError,
+    LunaEvent, MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance,
+    MemoryRelationKind, RecallMode, RecallSet, Result, Role, RuntimeTurnReceipt,
+    StructuredAssertion, SystemKernel, TurnObserved, TurnReading, WorkingMemory,
     WorkingMemoryBudget,
 };
 use luna_events::{load_jsonl_events_strict, stable_stored_event_hash, JsonlEventLog};
@@ -235,7 +236,7 @@ where
         )
         .with_turn_id(turn_id);
         self.log.append(&topology_commit_event)?;
-        all_events.push(topology_commit_event);
+        all_events.push(topology_commit_event.clone());
 
         let episodes = luna_store::rebuild_episodes(&all_events)?;
         let mut memory_state = MemoryState::from_episodes(&episodes);
@@ -266,8 +267,16 @@ where
             output_builder.add_memory_node(node);
         }
         let output_packet = output_builder.build();
+        let attention_lattice = compute_attention_lattice(&memory_state, &working_memory);
+        let lattice_event = EventEnvelope::new(
+            LunaEvent::LatticeComputed(attention_lattice.clone()),
+            EventSource::System,
+            1.0,
+        )
+        .with_turn_id(turn_id);
+        self.log.append(&lattice_event)?;
 
-        Ok(RuntimeTurnResult {
+        let mut result = RuntimeTurnResult {
             turn_id,
             observation,
             knowledge_delta,
@@ -279,12 +288,48 @@ where
             context_packet,
             intake,
             output_packet,
-        })
+            turn_receipt: RuntimeTurnReceipt::default(),
+            attention_lattice,
+        };
+        let response_plan = plan_conversation_response(&turn.content, &result);
+        let persisted_events = self.log.load()?;
+        let receipt = build_runtime_turn_receipt(
+            turn_id,
+            &persisted_events,
+            result.observation.assertions.len(),
+            &result.intake,
+            result.recall_mode,
+            &result.recalled,
+            &result.working_memory,
+            &response_plan,
+            &result.output_packet,
+            &topology_commit_event,
+        );
+        let receipt_event = EventEnvelope::new(
+            LunaEvent::RuntimeTurnReceipted(receipt.clone()),
+            EventSource::System,
+            1.0,
+        )
+        .with_turn_id(turn_id);
+        self.log.append(&receipt_event)?;
+        result.turn_receipt = receipt;
+
+        Ok(result)
     }
 
     pub fn inspect(&self) -> Result<MemoryState> {
         let events = self.log.load()?;
         runtime_state_from_events(&events)
+    }
+
+    pub fn latest_attention_lattice(&self) -> Result<Option<AttentionLattice>> {
+        Ok(self.log.load()?.iter().rev().find_map(|event| {
+            if let LunaEvent::LatticeComputed(lattice) = &event.payload {
+                Some(lattice.clone())
+            } else {
+                None
+            }
+        }))
     }
 
     pub fn audit_replay(&self) -> Result<RuntimeReplayAuditReport> {
@@ -435,6 +480,201 @@ pub struct RuntimeTurnResult {
     pub context_packet: ContextPacket,
     pub intake: MemoryIntakeDecision,
     pub output_packet: OutputPacket,
+    pub turn_receipt: RuntimeTurnReceipt,
+    pub attention_lattice: AttentionLattice,
+}
+
+const LATTICE_SCORE_PER_SOURCE: f32 = 0.2;
+
+pub fn compute_attention_lattice(
+    state: &MemoryState,
+    working_memory: &WorkingMemory,
+) -> AttentionLattice {
+    let identity_sources = claim_provenance_by_predicate(state, |claim| {
+        claim.lifecycle_status == AssertionLifecycleStatus::Current && claim.domain == "identity"
+    });
+    let relationship_sources = claim_provenance_by_predicate(state, |claim| {
+        claim.lifecycle_status == AssertionLifecycleStatus::Current
+            && (claim.domain == "relationship" || claim.kind == "collaboration")
+    });
+    let goal_sources = claim_provenance_by_predicate(state, |claim| {
+        claim.lifecycle_status == AssertionLifecycleStatus::Current
+            && matches!(claim.domain.as_str(), "goal" | "work" | "project")
+    });
+    let correction_sources = claim_provenance_by_predicate(state, |claim| {
+        matches!(
+            claim.lifecycle_status,
+            AssertionLifecycleStatus::Superseded | AssertionLifecycleStatus::Contradicted
+        )
+    });
+    let context_sources = dedupe_provenance(
+        working_memory
+            .nodes
+            .iter()
+            .flat_map(|node| node.provenance.iter().cloned())
+            .collect(),
+    );
+    let confidence_sources = claim_provenance_by_predicate(state, |claim| {
+        claim.lifecycle_status == AssertionLifecycleStatus::Current
+            && claim.status == AssertionConfidenceTier::Confirmed
+    });
+
+    AttentionLattice {
+        identity: lattice_dimension("identity", identity_sources),
+        relationship: lattice_dimension("relationship", relationship_sources),
+        goal: lattice_dimension("goal", goal_sources),
+        correction: lattice_dimension("correction", correction_sources),
+        context: lattice_dimension("context", context_sources),
+        confidence: lattice_dimension("confidence", confidence_sources),
+    }
+}
+
+fn lattice_dimension(name: &str, provenance: Vec<MemoryProvenance>) -> LatticeDimension {
+    let source_count = provenance.len();
+    LatticeDimension {
+        score: (source_count as f32 * LATTICE_SCORE_PER_SOURCE).clamp(0.0, 1.0),
+        reason: format!("{name} lattice score from {source_count} typed source(s)"),
+        provenance,
+    }
+}
+
+fn claim_provenance_by_predicate(
+    state: &MemoryState,
+    predicate: impl Fn(&MemoryClaim) -> bool,
+) -> Vec<MemoryProvenance> {
+    dedupe_provenance(
+        state
+            .claims
+            .iter()
+            .filter(|claim| predicate(claim))
+            .flat_map(|claim| provenance_for_claim(state, claim))
+            .collect(),
+    )
+}
+
+fn provenance_for_claim(state: &MemoryState, claim: &MemoryClaim) -> Vec<MemoryProvenance> {
+    let mut provenance = state
+        .map
+        .nodes
+        .iter()
+        .flat_map(|node| node.provenance.iter())
+        .chain(
+            state
+                .map
+                .edges
+                .iter()
+                .flat_map(|edge| edge.provenance.iter()),
+        )
+        .filter(|provenance| provenance.assertion_key.as_deref() == Some(claim.key.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if provenance.is_empty() {
+        provenance.push(MemoryProvenance::from_assertion(claim.key.clone()));
+    }
+    provenance
+}
+
+fn dedupe_provenance(provenance: Vec<MemoryProvenance>) -> Vec<MemoryProvenance> {
+    let mut seen = BTreeSet::new();
+    provenance
+        .into_iter()
+        .filter(|item| seen.insert(stable_provenance_key(item)))
+        .collect()
+}
+
+fn stable_provenance_key(provenance: &MemoryProvenance) -> String {
+    format!(
+        "{:?}:{:?}:{:?}:{:?}:{:?}",
+        provenance.episode_id,
+        provenance.turn_id,
+        provenance.assertion_key,
+        provenance.system_root,
+        provenance.lifecycle_status
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_runtime_turn_receipt(
+    turn_id: Uuid,
+    persisted_events: &[luna_events::StoredEvent],
+    assertion_count: usize,
+    intake: &MemoryIntakeDecision,
+    recall_mode: RecallMode,
+    recalled: &RecallSet,
+    working_memory: &WorkingMemory,
+    response_plan: &ResponsePlan,
+    output_packet: &OutputPacket,
+    topology_commit_event: &luna_events::StoredEvent,
+) -> RuntimeTurnReceipt {
+    let turn_events = persisted_events
+        .iter()
+        .filter(|event| event.turn_id == Some(turn_id))
+        .filter(|event| !matches!(&event.payload, LunaEvent::RuntimeTurnReceipted(_)))
+        .collect::<Vec<_>>();
+
+    let mut source_event_ids = Vec::new();
+    let mut source_event_hashes = Vec::new();
+    let mut created_claim_keys = Vec::new();
+    let mut reinforced_claim_keys = Vec::new();
+    let mut corrected_claim_keys = Vec::new();
+    let mut contradiction_count = 0;
+
+    for event in turn_events {
+        source_event_ids.push(event.event_id);
+        if let Some(hash) = event.event_hash.as_ref() {
+            source_event_hashes.push(hash.clone());
+        }
+        match &event.payload {
+            LunaEvent::EpisodeCreated(payload) => created_claim_keys.push(payload.assertion.key()),
+            LunaEvent::EpisodeReinforced(payload) => {
+                reinforced_claim_keys.push(payload.assertion.key())
+            }
+            LunaEvent::AssertionCorrected(payload) => {
+                corrected_claim_keys.push(payload.new_assertion.key())
+            }
+            LunaEvent::ContradictionDetected(_) => contradiction_count += 1,
+            _ => {}
+        }
+    }
+
+    RuntimeTurnReceipt {
+        turn_id,
+        source_event_ids,
+        source_event_hashes,
+        assertion_count,
+        created_claim_keys,
+        reinforced_claim_keys,
+        corrected_claim_keys,
+        contradiction_count,
+        intake_action: intake.action,
+        intake_reason: intake.reason.clone(),
+        recall_mode,
+        recalled_episode_ids: recalled.hits.iter().map(|hit| hit.episode_id).collect(),
+        working_node_count: working_memory.nodes.len(),
+        working_edge_count: working_memory.edges.len(),
+        filtered_node_count: working_memory.filtered_node_count,
+        filtered_edge_count: working_memory.filtered_edge_count,
+        activation_reason: working_memory.activation_reason.clone(),
+        response_actions: response_plan
+            .actions
+            .iter()
+            .map(|action| format!("{action:?}"))
+            .collect(),
+        output_item_count: output_packet.items.len(),
+        output_total_bytes: output_packet.total_bytes,
+        topology_node_refs: match &topology_commit_event.payload {
+            LunaEvent::TopologyBridgeCommitted(commit) => commit.node_refs.clone(),
+            _ => Vec::new(),
+        },
+        topology_tether_refs: match &topology_commit_event.payload {
+            LunaEvent::TopologyBridgeCommitted(commit) => commit.tether_refs.clone(),
+            _ => Vec::new(),
+        },
+        topology_ledger_event_hash: match &topology_commit_event.payload {
+            LunaEvent::TopologyBridgeCommitted(commit) => commit.ledger_event_hash.clone(),
+            _ => String::new(),
+        },
+    }
 }
 
 pub const RUNTIME_REPLAY_AUDIT_HASH_VERSION: &str = "luna.runtime_replay_audit.snapshot.v1";
@@ -3374,7 +3614,61 @@ pub fn render_runtime_markdown(result: &RuntimeTurnResult) -> String {
     out.push_str("\n## Context Packet\n");
     out.push_str(&result.context_packet.summary);
     out.push('\n');
+    out.push_str("\n## Attention Lattice\n");
+    render_lattice_dimension(&mut out, "identity", &result.attention_lattice.identity);
+    render_lattice_dimension(
+        &mut out,
+        "relationship",
+        &result.attention_lattice.relationship,
+    );
+    render_lattice_dimension(&mut out, "goal", &result.attention_lattice.goal);
+    render_lattice_dimension(&mut out, "correction", &result.attention_lattice.correction);
+    render_lattice_dimension(&mut out, "context", &result.attention_lattice.context);
+    render_lattice_dimension(&mut out, "confidence", &result.attention_lattice.confidence);
+    out.push_str("\n## Runtime Turn Receipt\n");
+    out.push_str(&format!(
+        "- source events: {} (hashes: {})\n",
+        result.turn_receipt.source_event_ids.len(),
+        result.turn_receipt.source_event_hashes.len()
+    ));
+    out.push_str(&format!(
+        "- intake: {:?} - {}\n",
+        result.turn_receipt.intake_action, result.turn_receipt.intake_reason
+    ));
+    out.push_str(&format!(
+        "- lifecycle: created={}, reinforced={}, corrected={}, contradictions={}\n",
+        result.turn_receipt.created_claim_keys.len(),
+        result.turn_receipt.reinforced_claim_keys.len(),
+        result.turn_receipt.corrected_claim_keys.len(),
+        result.turn_receipt.contradiction_count
+    ));
+    out.push_str(&format!(
+        "- working memory: nodes={}, edges={}, filtered_nodes={}, filtered_edges={}\n",
+        result.turn_receipt.working_node_count,
+        result.turn_receipt.working_edge_count,
+        result.turn_receipt.filtered_node_count,
+        result.turn_receipt.filtered_edge_count
+    ));
+    out.push_str(&format!(
+        "- response actions: {}\n",
+        result.turn_receipt.response_actions.join(", ")
+    ));
+    out.push_str(&format!(
+        "- topology: nodes={}, tethers={}, ledger_hash={}\n",
+        result.turn_receipt.topology_node_refs.len(),
+        result.turn_receipt.topology_tether_refs.len(),
+        result.turn_receipt.topology_ledger_event_hash
+    ));
     out
+}
+
+fn render_lattice_dimension(out: &mut String, name: &str, dimension: &LatticeDimension) {
+    out.push_str(&format!(
+        "- {name}: {:.2} ({}; sources: {})\n",
+        dimension.score,
+        dimension.reason,
+        dimension.provenance.len()
+    ));
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4363,6 +4657,75 @@ mod tests {
             report.replayed_counts.valid_topology_source_event_refs
         );
         assert!(report.replayed_counts.topology_orbs > 0);
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn runtime_turn_appends_hashed_turn_receipt() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        let result = session
+            .process_user_turn("MKPE is my provenance engine.")
+            .unwrap();
+        let events = JsonlEventLog::new(&log).load().unwrap();
+        let receipt_event = events
+            .iter()
+            .find(|event| {
+                event.turn_id == Some(result.turn_id)
+                    && matches!(&event.payload, LunaEvent::RuntimeTurnReceipted(_))
+            })
+            .expect("runtime turn should append a receipt event");
+        let LunaEvent::RuntimeTurnReceipted(receipt) = &receipt_event.payload else {
+            unreachable!("receipt event payload already matched");
+        };
+
+        assert_eq!(receipt, &result.turn_receipt);
+        assert!(receipt_event
+            .event_hash
+            .as_deref()
+            .is_some_and(|hash| hash.len() == 64));
+        assert!(!receipt.source_event_ids.is_empty());
+        assert!(!receipt.source_event_hashes.is_empty());
+        assert_eq!(receipt.intake_action, result.intake.action);
+        assert_eq!(
+            receipt.working_node_count,
+            result.working_memory.nodes.len()
+        );
+        assert_eq!(receipt.output_item_count, result.output_packet.items.len());
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn runtime_turn_appends_hashed_attention_lattice() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        let result = session
+            .process_user_turn("I am a software developer.")
+            .unwrap();
+        let events = JsonlEventLog::new(&log).load().unwrap();
+        let lattice_event = events
+            .iter()
+            .find(|event| {
+                event.turn_id == Some(result.turn_id)
+                    && matches!(&event.payload, LunaEvent::LatticeComputed(_))
+            })
+            .expect("runtime turn should append an attention lattice event");
+        let LunaEvent::LatticeComputed(lattice) = &lattice_event.payload else {
+            unreachable!("lattice event payload already matched");
+        };
+
+        assert_eq!(lattice, &result.attention_lattice);
+        assert!(lattice_event
+            .event_hash
+            .as_deref()
+            .is_some_and(|hash| hash.len() == 64));
+        assert!(lattice.identity.score > 0.0);
+        assert!(!lattice.identity.provenance.is_empty());
+        assert!(lattice.context.score > 0.0);
 
         let _ = fs::remove_dir_all(log.parent().unwrap());
     }
@@ -6347,6 +6710,8 @@ mod tests {
                     suppressed_count: 0,
                 },
             },
+            turn_receipt: RuntimeTurnReceipt::default(),
+            attention_lattice: AttentionLattice::default(),
         }
     }
 

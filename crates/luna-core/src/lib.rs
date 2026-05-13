@@ -183,6 +183,82 @@ pub enum LunaEvent {
     ContradictionDetected(ContradictionDetected),
     EpisodeDecayed(EpisodeDecayed),
     TopologyBridgeCommitted(TopologyBridgeCommitted),
+    RuntimeTurnReceipted(RuntimeTurnReceipt),
+    LatticeComputed(AttentionLattice),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct AttentionLattice {
+    pub identity: LatticeDimension,
+    pub relationship: LatticeDimension,
+    pub goal: LatticeDimension,
+    pub correction: LatticeDimension,
+    pub context: LatticeDimension,
+    pub confidence: LatticeDimension,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct LatticeDimension {
+    pub score: f32,
+    pub reason: String,
+    pub provenance: Vec<MemoryProvenance>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeTurnReceipt {
+    pub turn_id: Uuid,
+    pub source_event_ids: Vec<Uuid>,
+    pub source_event_hashes: Vec<String>,
+    pub assertion_count: usize,
+    pub created_claim_keys: Vec<String>,
+    pub reinforced_claim_keys: Vec<String>,
+    pub corrected_claim_keys: Vec<String>,
+    pub contradiction_count: usize,
+    pub intake_action: MemoryIntakeAction,
+    pub intake_reason: String,
+    pub recall_mode: RecallMode,
+    pub recalled_episode_ids: Vec<Uuid>,
+    pub working_node_count: usize,
+    pub working_edge_count: usize,
+    pub filtered_node_count: usize,
+    pub filtered_edge_count: usize,
+    pub activation_reason: String,
+    pub response_actions: Vec<String>,
+    pub output_item_count: usize,
+    pub output_total_bytes: usize,
+    pub topology_node_refs: Vec<String>,
+    pub topology_tether_refs: Vec<String>,
+    pub topology_ledger_event_hash: String,
+}
+
+impl Default for RuntimeTurnReceipt {
+    fn default() -> Self {
+        Self {
+            turn_id: Uuid::nil(),
+            source_event_ids: Vec::new(),
+            source_event_hashes: Vec::new(),
+            assertion_count: 0,
+            created_claim_keys: Vec::new(),
+            reinforced_claim_keys: Vec::new(),
+            corrected_claim_keys: Vec::new(),
+            contradiction_count: 0,
+            intake_action: MemoryIntakeAction::Accept,
+            intake_reason: String::new(),
+            recall_mode: RecallMode::OpenEnded,
+            recalled_episode_ids: Vec::new(),
+            working_node_count: 0,
+            working_edge_count: 0,
+            filtered_node_count: 0,
+            filtered_edge_count: 0,
+            activation_reason: String::new(),
+            response_actions: Vec::new(),
+            output_item_count: 0,
+            output_total_bytes: 0,
+            topology_node_refs: Vec::new(),
+            topology_tether_refs: Vec::new(),
+            topology_ledger_event_hash: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -209,9 +285,10 @@ pub struct MemoryIntakeDecision {
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum MemoryIntakeAction {
+    #[default]
     Accept,
     StoreWithUncertainty,
     AskForAnchor,

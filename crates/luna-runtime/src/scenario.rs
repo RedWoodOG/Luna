@@ -429,6 +429,8 @@ pub fn evaluate_runtime_scenario_with_events(
     let memory_text = scenario_memory_text(state);
     let mut failures = Vec::new();
     let last_result = results.last();
+    evaluate_turn_receipts(results, events, &mut failures);
+    evaluate_attention_lattice(results, events, &mut failures);
 
     for needle in &scenario.checks.must_contain {
         if !contains_ci(&memory_text, needle) {
@@ -629,6 +631,150 @@ pub fn evaluate_runtime_scenario_with_events(
     );
 
     failures
+}
+
+fn evaluate_attention_lattice(
+    results: &[crate::RuntimeTurnResult],
+    events: &[StoredEvent],
+    failures: &mut Vec<String>,
+) {
+    if events.is_empty() {
+        return;
+    }
+
+    for (index, result) in results.iter().enumerate() {
+        for (name, dimension) in [
+            ("identity", &result.attention_lattice.identity),
+            ("relationship", &result.attention_lattice.relationship),
+            ("goal", &result.attention_lattice.goal),
+            ("correction", &result.attention_lattice.correction),
+            ("context", &result.attention_lattice.context),
+            ("confidence", &result.attention_lattice.confidence),
+        ] {
+            if !(0.0..=1.0).contains(&dimension.score) {
+                failures.push(format!(
+                    "turn {} attention lattice {name} score is out of range",
+                    index + 1
+                ));
+            }
+            if dimension.reason.trim().is_empty() {
+                failures.push(format!(
+                    "turn {} attention lattice {name} dimension has no reason",
+                    index + 1
+                ));
+            }
+        }
+    }
+
+    for result in results {
+        let Some(lattice_event) = events.iter().find(|event| {
+            event.turn_id == Some(result.turn_id)
+                && matches!(&event.payload, LunaEvent::LatticeComputed(_))
+        }) else {
+            failures.push(format!(
+                "turn {} has no persisted attention lattice event",
+                result.turn_id
+            ));
+            continue;
+        };
+        let LunaEvent::LatticeComputed(lattice) = &lattice_event.payload else {
+            continue;
+        };
+        if lattice != &result.attention_lattice {
+            failures.push(format!(
+                "turn {} persisted attention lattice does not match runtime result",
+                result.turn_id
+            ));
+        }
+        if lattice_event
+            .event_hash
+            .as_deref()
+            .is_none_or(str::is_empty)
+        {
+            failures.push(format!(
+                "turn {} persisted attention lattice is missing event_hash",
+                result.turn_id
+            ));
+        }
+    }
+}
+
+fn evaluate_turn_receipts(
+    results: &[crate::RuntimeTurnResult],
+    events: &[StoredEvent],
+    failures: &mut Vec<String>,
+) {
+    if events.is_empty() {
+        return;
+    }
+
+    for (index, result) in results.iter().enumerate() {
+        if result.turn_receipt.turn_id != result.turn_id {
+            failures.push(format!(
+                "turn {} receipt turn_id does not match runtime result",
+                index + 1
+            ));
+        }
+        if result.turn_receipt.source_event_ids.is_empty() {
+            failures.push(format!(
+                "turn {} receipt has no source event ids",
+                index + 1
+            ));
+        }
+        if result.turn_receipt.source_event_hashes.is_empty() {
+            failures.push(format!(
+                "turn {} receipt has no source event hashes",
+                index + 1
+            ));
+        }
+        if result.turn_receipt.intake_reason.trim().is_empty() {
+            failures.push(format!("turn {} receipt has no intake reason", index + 1));
+        }
+        if result.turn_receipt.activation_reason.trim().is_empty() {
+            failures.push(format!(
+                "turn {} receipt has no activation reason",
+                index + 1
+            ));
+        }
+        if result.turn_receipt.output_item_count != result.output_packet.items.len() {
+            failures.push(format!(
+                "turn {} receipt output item count does not match output packet",
+                index + 1
+            ));
+        }
+    }
+
+    for result in results {
+        let Some(receipt_event) = events.iter().find(|event| {
+            event.turn_id == Some(result.turn_id)
+                && matches!(&event.payload, LunaEvent::RuntimeTurnReceipted(_))
+        }) else {
+            failures.push(format!(
+                "turn {} has no persisted runtime turn receipt event",
+                result.turn_id
+            ));
+            continue;
+        };
+        let LunaEvent::RuntimeTurnReceipted(receipt) = &receipt_event.payload else {
+            continue;
+        };
+        if receipt != &result.turn_receipt {
+            failures.push(format!(
+                "turn {} persisted receipt does not match runtime result",
+                result.turn_id
+            ));
+        }
+        if receipt_event
+            .event_hash
+            .as_deref()
+            .is_none_or(str::is_empty)
+        {
+            failures.push(format!(
+                "turn {} persisted receipt is missing event_hash",
+                result.turn_id
+            ));
+        }
+    }
 }
 
 pub fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
@@ -1900,8 +2046,9 @@ mod tests {
             },
         };
         let state = MemoryState::default();
+        let turn_id = uuid::Uuid::new_v4();
         let result = crate::RuntimeTurnResult {
-            turn_id: uuid::Uuid::new_v4(),
+            turn_id,
             observation: test_observation(),
             knowledge_delta: crate::KnowledgeDelta::default(),
             memory_state: MemoryState::default(),
@@ -1932,6 +2079,8 @@ mod tests {
                     suppressed_count: 0,
                 },
             },
+            turn_receipt: test_turn_receipt(turn_id),
+            attention_lattice: luna_core::AttentionLattice::default(),
         };
 
         let failures = evaluate_runtime_scenario(&scenario, &state, &[result]);
@@ -2112,8 +2261,9 @@ mod tests {
                 ..RuntimeScenarioChecks::default()
             },
         };
+        let turn_id = uuid::Uuid::new_v4();
         let mut result = crate::RuntimeTurnResult {
-            turn_id: uuid::Uuid::new_v4(),
+            turn_id,
             observation: test_observation(),
             knowledge_delta: crate::KnowledgeDelta::default(),
             memory_state: MemoryState::default(),
@@ -2148,6 +2298,8 @@ mod tests {
                     suppressed_count: 0,
                 },
             },
+            turn_receipt: test_turn_receipt(turn_id),
+            attention_lattice: luna_core::AttentionLattice::default(),
         };
         result
             .memory_state
@@ -2610,8 +2762,9 @@ mod tests {
     }
 
     fn test_result(action: crate::MemoryIntakeAction) -> crate::RuntimeTurnResult {
+        let turn_id = uuid::Uuid::new_v4();
         crate::RuntimeTurnResult {
-            turn_id: uuid::Uuid::new_v4(),
+            turn_id,
             observation: test_observation(),
             knowledge_delta: crate::KnowledgeDelta::default(),
             memory_state: MemoryState::default(),
@@ -2642,6 +2795,19 @@ mod tests {
                     suppressed_count: 0,
                 },
             },
+            turn_receipt: test_turn_receipt(turn_id),
+            attention_lattice: luna_core::AttentionLattice::default(),
+        }
+    }
+
+    fn test_turn_receipt(turn_id: uuid::Uuid) -> luna_core::RuntimeTurnReceipt {
+        luna_core::RuntimeTurnReceipt {
+            turn_id,
+            source_event_ids: vec![uuid::Uuid::new_v4()],
+            source_event_hashes: vec!["test-event-hash".to_string()],
+            intake_reason: "test fixture".to_string(),
+            activation_reason: "test activation".to_string(),
+            ..luna_core::RuntimeTurnReceipt::default()
         }
     }
 }

@@ -744,3 +744,29 @@ fn runtime_inspect_missing_explains_why_not_remembered() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn runtime_inspect_lattice_shows_sources() {
+    let root = temp_root("inspect_lattice");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    let mut turn = Command::new(luna_bin());
+    turn.args(["runtime", "turn", "I am a software developer."])
+        .args(["--log"])
+        .arg(&log);
+    assert_success(turn);
+
+    let mut inspect = Command::new(luna_bin());
+    inspect
+        .args(["runtime", "inspect", "--lattice"])
+        .args(["--log"])
+        .arg(&log);
+    let stdout = assert_success(inspect);
+
+    assert!(stdout.contains("Attention Lattice"), "stdout:\n{stdout}");
+    assert!(stdout.contains("identity:"), "stdout:\n{stdout}");
+    assert!(stdout.contains("identity:profession"), "stdout:\n{stdout}");
+
+    let _ = fs::remove_dir_all(root);
+}
