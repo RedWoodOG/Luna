@@ -669,13 +669,8 @@ mod tests {
     #[test]
     fn staleness_penalizes_superseded_provenance() {
         let mut n = node("n1", "Alice Chen", MemoryNodeKind::Person);
-        n.provenance = vec![MemoryProvenance {
-            episode_id: None,
-            turn_id: None,
-            assertion_key: None,
-            system_root: None,
-            lifecycle_status: Some(AssertionLifecycleStatus::Superseded),
-        }];
+        n.provenance = vec![MemoryProvenance::from_assertion("test".to_string())
+            .with_lifecycle_status(AssertionLifecycleStatus::Superseded)];
 
         let score = compute_activation(&n, "alice chen", &[], &[], &cfg());
         // direct 1.0 + entity 0.7 + conf 0.08 + dens 0.1 - staleness 0.3 = 1.58
@@ -685,13 +680,8 @@ mod tests {
     #[test]
     fn staleness_does_not_penalize_current() {
         let mut n = node("n1", "Alice Chen", MemoryNodeKind::Person);
-        n.provenance = vec![MemoryProvenance {
-            episode_id: None,
-            turn_id: None,
-            assertion_key: None,
-            system_root: None,
-            lifecycle_status: Some(AssertionLifecycleStatus::Current),
-        }];
+        n.provenance = vec![MemoryProvenance::from_assertion("test".to_string())
+            .with_lifecycle_status(AssertionLifecycleStatus::Current)];
 
         let score = compute_activation(&n, "alice chen", &[], &[], &cfg());
         // direct 1.0 + entity 0.7 + conf 0.08 + dens 0.1 = 1.88 (Current: no staleness)

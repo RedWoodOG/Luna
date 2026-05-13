@@ -250,13 +250,8 @@ mod tests {
             confidence_tier: tier,
             density: 0.5,
             activation: 0.5,
-            provenance: vec![MemoryProvenance {
-                episode_id: None,
-                turn_id: None,
-                assertion_key: None,
-                system_root: None,
-                lifecycle_status: Some(lifecycle),
-            }],
+            provenance: vec![MemoryProvenance::from_assertion("test".to_string())
+                .with_lifecycle_status(lifecycle)],
             created_at: None,
             contradiction_count: 0,
         }

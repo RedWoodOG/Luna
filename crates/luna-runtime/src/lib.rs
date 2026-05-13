@@ -814,13 +814,7 @@ fn append_system_roots(provenance: &mut Vec<MemoryProvenance>, system_roots: &BT
         {
             continue;
         }
-        provenance.push(MemoryProvenance {
-            episode_id: None,
-            turn_id: None,
-            assertion_key: None,
-            system_root: Some(system_root.clone()),
-            lifecycle_status: None,
-        });
+        provenance.push(MemoryProvenance::from_system_root(system_root.clone()));
     }
 }
 
@@ -1348,12 +1342,8 @@ fn memory_map_from_claims(
     for claim in claims {
         let provenance = assertion_index
             .get(&claim.key)
-            .map(|(episode_id, assertion)| MemoryProvenance {
-                episode_id: Some(*episode_id),
-                turn_id: None,
-                assertion_key: Some(assertion.key()),
-                system_root: None,
-                lifecycle_status: None,
+            .map(|(episode_id, assertion)| {
+                MemoryProvenance::from_assertion(assertion.key()).with_episode_id(*episode_id)
             })
             .into_iter()
             .collect::<Vec<_>>();
@@ -1625,13 +1615,7 @@ fn graph_id_fragment(value: &str) -> String {
 
 fn seed_system_kernel(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<MemoryEdge>) {
     let root = SystemKernel::default();
-    let root_provenance = vec![MemoryProvenance {
-        episode_id: None,
-        turn_id: None,
-        assertion_key: None,
-        system_root: Some(root.id.clone()),
-        lifecycle_status: None,
-    }];
+    let root_provenance = vec![MemoryProvenance::from_system_root(root.id.clone())];
     insert_node(
         nodes,
         MemoryNode {
@@ -1648,13 +1632,7 @@ fn seed_system_kernel(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<
     );
 
     for principle in root.principles {
-        let provenance = vec![MemoryProvenance {
-            episode_id: None,
-            turn_id: None,
-            assertion_key: None,
-            system_root: Some(principle.id.clone()),
-            lifecycle_status: None,
-        }];
+        let provenance = vec![MemoryProvenance::from_system_root(principle.id.clone())];
         insert_node(
             nodes,
             MemoryNode {
@@ -6063,13 +6041,10 @@ mod tests {
             confidence_tier: AssertionConfidenceTier::Confirmed,
             density: 1.0,
             activation: 0.0,
-            provenance: vec![MemoryProvenance {
-                episode_id: Some(Uuid::new_v4()),
-                turn_id: Some(Uuid::new_v4()),
-                assertion_key: Some(retired_key.clone()),
-                system_root: Some("orb:orb-parent-retired".to_string()),
-                lifecycle_status: None,
-            }],
+            provenance: vec![MemoryProvenance::from_assertion(retired_key.clone())
+                .with_episode_id(Uuid::new_v4())
+                .with_turn_id(Uuid::new_v4())
+                .with_system_root("orb:orb-parent-retired".to_string())],
             created_at: None,
             contradiction_count: 0,
         };
@@ -6080,13 +6055,10 @@ mod tests {
             confidence_tier: AssertionConfidenceTier::Confirmed,
             density: 1.0,
             activation: 0.0,
-            provenance: vec![MemoryProvenance {
-                episode_id: Some(Uuid::new_v4()),
-                turn_id: Some(Uuid::new_v4()),
-                assertion_key: Some(active_key.clone()),
-                system_root: Some("orb:orb-child-active".to_string()),
-                lifecycle_status: None,
-            }],
+            provenance: vec![MemoryProvenance::from_assertion(active_key.clone())
+                .with_episode_id(Uuid::new_v4())
+                .with_turn_id(Uuid::new_v4())
+                .with_system_root("orb:orb-child-active".to_string())],
             created_at: None,
             contradiction_count: 0,
         };
@@ -6262,13 +6234,8 @@ mod tests {
             confidence_tier: AssertionConfidenceTier::Confirmed,
             density: 1.0,
             activation: 1.0,
-            provenance: vec![MemoryProvenance {
-                episode_id: None,
-                turn_id: None,
-                assertion_key: Some(key),
-                system_root: Some("orb:unsupported:label".to_string()),
-                lifecycle_status: None,
-            }],
+            provenance: vec![MemoryProvenance::from_assertion(key)
+                .with_system_root("orb:unsupported:label".to_string())],
             created_at: None,
             contradiction_count: 0,
         });
@@ -6304,20 +6271,8 @@ mod tests {
             density: 1.0,
             activation: 1.0,
             provenance: vec![
-                MemoryProvenance {
-                    episode_id: None,
-                    turn_id: None,
-                    assertion_key: Some(key),
-                    system_root: None,
-                    lifecycle_status: None,
-                },
-                MemoryProvenance {
-                    episode_id: None,
-                    turn_id: None,
-                    assertion_key: None,
-                    system_root: Some("orb:runtime:project:MKPE".to_string()),
-                    lifecycle_status: None,
-                },
+                MemoryProvenance::from_assertion(key),
+                MemoryProvenance::from_system_root("orb:runtime:project:MKPE".to_string()),
             ],
             created_at: None,
             contradiction_count: 0,
@@ -6432,13 +6387,7 @@ mod tests {
             confidence_tier: AssertionConfidenceTier::Confirmed,
             density: 1.0,
             activation: 1.0,
-            provenance: vec![MemoryProvenance {
-                episode_id: None,
-                turn_id: None,
-                assertion_key: Some(assertion_key.to_string()),
-                system_root: None,
-                lifecycle_status: None,
-            }],
+            provenance: vec![MemoryProvenance::from_assertion(assertion_key.to_string())],
             created_at: None,
             contradiction_count: 0,
         }
@@ -6452,13 +6401,7 @@ mod tests {
             confidence_tier: AssertionConfidenceTier::Confirmed,
             density: 1.0,
             activation: 1.0,
-            provenance: vec![MemoryProvenance {
-                episode_id: None,
-                turn_id: Some(turn_id),
-                assertion_key: Some(id.to_string()),
-                system_root: None,
-                lifecycle_status: None,
-            }],
+            provenance: vec![MemoryProvenance::from_assertion(id.to_string()).with_turn_id(turn_id)],
             created_at: None,
             contradiction_count: 0,
         }

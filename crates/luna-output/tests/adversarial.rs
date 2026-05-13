@@ -48,13 +48,9 @@ fn node_with_lifecycle(
         confidence_tier: confidence,
         density: 1.0,
         activation: 0.0,
-        provenance: vec![MemoryProvenance {
-            episode_id: None,
-            turn_id: None,
-            assertion_key: None,
-            system_root: None,
-            lifecycle_status: Some(lifecycle),
-        }],
+        provenance: vec![
+            MemoryProvenance::from_assertion("test".to_string()).with_lifecycle_status(lifecycle)
+        ],
         created_at: None,
         contradiction_count: 0,
     }

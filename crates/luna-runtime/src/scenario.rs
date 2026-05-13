@@ -2605,13 +2605,7 @@ mod tests {
             activation: 1.0,
             created_at: None,
             contradiction_count: 0,
-            provenance: vec![MemoryProvenance {
-                episode_id: None,
-                turn_id: None,
-                assertion_key: Some(assertion.key()),
-                system_root: None,
-                lifecycle_status: None,
-            }],
+            provenance: vec![MemoryProvenance::from_assertion(assertion.key())],
         }
     }
 

@@ -640,6 +640,26 @@ impl MemoryProvenance {
         }
     }
 
+    pub fn with_episode_id(mut self, episode_id: Uuid) -> Self {
+        self.episode_id = Some(episode_id);
+        self
+    }
+
+    pub fn with_turn_id(mut self, turn_id: Uuid) -> Self {
+        self.turn_id = Some(turn_id);
+        self
+    }
+
+    pub fn with_system_root(mut self, root: String) -> Self {
+        self.system_root = Some(root);
+        self
+    }
+
+    pub fn with_lifecycle_status(mut self, status: AssertionLifecycleStatus) -> Self {
+        self.lifecycle_status = Some(status);
+        self
+    }
+
     /// Returns true if at least one source field is populated.
     pub fn has_source(&self) -> bool {
         self.assertion_key.is_some() || self.system_root.is_some()

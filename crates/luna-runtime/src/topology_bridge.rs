@@ -766,13 +766,9 @@ mod tests {
     use uuid::Uuid;
 
     fn provenance(assertion_key: &str) -> Vec<MemoryProvenance> {
-        vec![MemoryProvenance {
-            episode_id: Some(Uuid::new_v4()),
-            turn_id: Some(Uuid::new_v4()),
-            assertion_key: Some(assertion_key.to_string()),
-            system_root: None,
-            lifecycle_status: None,
-        }]
+        vec![MemoryProvenance::from_assertion(assertion_key.to_string())
+            .with_episode_id(Uuid::new_v4())
+            .with_turn_id(Uuid::new_v4())]
     }
 
     fn claim(domain: &str, kind: &str, value: &str) -> MemoryClaim {
@@ -896,13 +892,9 @@ mod tests {
                         activation: 0.0,
                         created_at: None,
                         contradiction_count: 0,
-                        provenance: vec![MemoryProvenance {
-                            episode_id: None,
-                            turn_id: None,
-                            assertion_key: None,
-                            system_root: Some("root:luna".to_string()),
-                            lifecycle_status: None,
-                        }],
+                        provenance: vec![MemoryProvenance::from_system_root(
+                            "root:luna".to_string(),
+                        )],
                     },
                     MemoryNode {
                         id: "user:self".to_string(),
@@ -934,13 +926,9 @@ mod tests {
                     confidence_tier: AssertionConfidenceTier::Confirmed,
                     strength: 1.0,
                     activation: 0.0,
-                    provenance: vec![MemoryProvenance {
-                        episode_id: None,
-                        turn_id: None,
-                        assertion_key: None,
-                        system_root: Some("root:luna:identity".to_string()),
-                        lifecycle_status: None,
-                    }],
+                    provenance: vec![MemoryProvenance::from_system_root(
+                        "root:luna:identity".to_string(),
+                    )],
                 }],
             },
         };

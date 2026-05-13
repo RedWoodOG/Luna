@@ -247,6 +247,7 @@ bare_provenance_hits=$(
   find crates -path '*/src/*.rs' -print0 |
     xargs -0 grep -n 'MemoryProvenance {' 2>/dev/null |
     grep -v 'struct MemoryProvenance' |
+    grep -v 'impl MemoryProvenance' |
     grep -vE '^[^:]+:[0-9]+:\s*(//|/\*)' ||
     true
 )
