@@ -2011,6 +2011,13 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                     format!("{name} takes public transportation"),
                 ));
             }
+            if let Some(role) = capture_person_role(sentence, &lower_name) {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "role",
+                    format!("{name} is {role}"),
+                ));
+            }
         }
 
         if !sentence_people.is_empty() {
@@ -2517,6 +2524,46 @@ fn capture_after_name_phrase(sentence: &str, lower_name: &str, phrase: &str) -> 
         None
     } else {
         Some(value.to_string())
+    }
+}
+
+fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
+    let lower = sentence.to_ascii_lowercase();
+    let phrase = format!("{lower_name} is ");
+    let index = lower.find(&phrase)?;
+    if !sentence[..index]
+        .trim_matches(|ch: char| !ch.is_ascii_alphabetic())
+        .is_empty()
+    {
+        return None;
+    }
+    let after = sentence[index + phrase.len()..].trim_start();
+    let role = after
+        .split([','])
+        .next()
+        .unwrap_or(after)
+        .trim()
+        .trim_matches(|ch: char| matches!(ch, '.' | ',' | ';' | ':' | '!' | '?'));
+    let lower_role = role.to_ascii_lowercase();
+    if role.is_empty()
+        || lower_role.starts_with("married")
+        || lower_role.starts_with("african american")
+        || lower_role.starts_with("a basketball fan")
+        || role
+            .split_whitespace()
+            .next()
+            .is_some_and(|word| word.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return None;
+    }
+    if lower_role.starts_with("my ")
+        || lower_role.starts_with("the ")
+        || lower_role.starts_with("a ")
+        || lower_role.starts_with("an ")
+    {
+        Some(clean_relation_target_label(role))
+    } else {
+        None
     }
 }
 
@@ -3333,7 +3380,7 @@ pub fn plan_conversation_response(user_text: &str, result: &RuntimeTurnResult) -
     if is_user_asking_about_luna(&text) {
         return ResponsePlan {
             actions: vec![ResponsePlanAction::Answer],
-            answer_values: vec!["I am Luna: a local-first memory layer. I store turns as events, separate confirmed from inferred or unknown facts, and only bring a small working set into the conversation.".to_string()],
+            answer_values: vec!["I am Luna: a local-first memory runtime layer. I store turns as events, separate confirmed from inferred or unknown facts, and only bring a small working set into the conversation.".to_string()],
             ..ResponsePlan::default()
         };
     }

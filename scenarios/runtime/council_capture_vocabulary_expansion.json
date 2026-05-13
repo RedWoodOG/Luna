@@ -1,0 +1,94 @@
+{
+  "name": "council_capture_vocabulary_expansion",
+  "turns": [
+    "Mara is my design partner on Luna.",
+    "Mara lives in Denver.",
+    "Actually Mara lives in Boulder now.",
+    "Who is Mara in relation to Luna?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "person",
+          "kind": "role",
+          "value": "Mara is my design partner on Luna",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Mara lives in Boulder",
+          "lifecycle_status": "current"
+        }
+      ],
+      "must_exclude": [
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Mara lives in Denver",
+          "lifecycle_status": "current"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "person:Mara",
+          "label": "Mara",
+          "kind": "person",
+          "claims": [
+            {
+              "domain": "person",
+              "kind": "role",
+              "value": "Mara is my design partner on Luna"
+            }
+          ]
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "person:Mara",
+          "relation": "has_attribute",
+          "target_label": "Mara is my design partner on Luna"
+        },
+        {
+          "source": "person:Mara",
+          "relation": "located_in",
+          "target_label": "Boulder"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Mara"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "answers": [
+      {
+        "turn_index": 4,
+        "must_contain": [
+          "Mara is my design partner on Luna"
+        ],
+        "must_not_contain": [
+          "Mara lives in Denver"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}
