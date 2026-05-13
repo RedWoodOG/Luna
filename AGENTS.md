@@ -4,12 +4,23 @@ Orientation for any AI agent working in this repo (Codex, Cursor, Claude, etc.).
 This file is short on purpose. The canonical sources are:
 
 - **Doctrine:** [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md)
+- **Memory structure contract:** [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
 - **Roadmap:** [`docs/LUNA_MEMORY_MILESTONE_ROADMAP.md`](docs/LUNA_MEMORY_MILESTONE_ROADMAP.md)
 - **Current next artifact:** [`docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md`](docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md)
 - **Acceptance test:** [`README.md`](README.md) (10-turn real-week -> 24h+ -> 3 questions)
 
 Read those before non-trivial work. This file tells you what is mechanically
 enforced so you do not propose work that the build will reject.
+
+The memory structure contract is binding for all memory work. Every memory
+change must preserve the chain:
+
+```text
+event log -> intake -> typed assertions/relations -> entity graph -> lifecycle
+-> bounded working memory -> response plan -> answer provenance -> replay audit
+```
+
+If the change cannot be inspected through that chain, it is not ready.
 
 Current ordering guard: build the local runtime product loop before attempting
 the 24-hour continuity or full-manuscript marathon trials. The current product

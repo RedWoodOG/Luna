@@ -88,9 +88,12 @@ next:
    - v1.0 Ready packet template and claim matrix.
 8. [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md) - rules that
    prevent memory from becoming transcript stuffing or scripted answers.
-9. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
+9. [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
+   - binding contract for event log -> intake -> typed graph -> lifecycle ->
+     bounded working memory -> provenance -> replay audit.
+10. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
    engineering guardrails and enforcement status.
-10. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
+11. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
    topology-engine roadmap, including the runtime-to-topology bridge.
 
 ## Destination
@@ -121,12 +124,16 @@ flattening uncertainty.
 
 Luna's implementation rules are captured in
 [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md).
+The binding memory-structure contract is captured in
+[`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md).
 The current memory milestone and forward roadmap are tracked in
 [`docs/LUNA_MEMORY_MILESTONE_ROADMAP.md`](docs/LUNA_MEMORY_MILESTONE_ROADMAP.md).
 
 The short version:
 
 - Luna must not become ordinary JSON memory plus retrieval.
+- Every memory change must preserve the event log -> intake -> typed graph ->
+  lifecycle -> bounded working memory -> provenance -> replay audit chain.
 - No scripted user facts or scripted final answers.
 - Memory behavior must come from reusable intake, ontology, graph, activation,
   working-set, and response-planning mechanisms.

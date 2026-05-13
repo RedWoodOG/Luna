@@ -1,0 +1,73 @@
+{
+  "name": "correction_surprise_salience",
+  "turns": [
+    "Memory Contract is a RAG memory system.",
+    "Memory Contract is an event-backed memory structure. Correction.",
+    "blue chair twelve river battery",
+    "weather note one: cloudy and boring",
+    "parking receipt seven nine",
+    "status ping: the clock is loud",
+    "tiny note: green mug on desk",
+    "calendar scratch: reschedule nothing",
+    "ambient fact: the hallway light flickers",
+    "random marker: silver spoon blue bowl",
+    "time check: no durable memory here",
+    "throwaway note: paperclip near keyboard",
+    "What did I say about Memory Contract?"
+  ],
+  "checks": {
+    "must_contain": [
+      "project:identity=Memory Contract is an event-backed memory structure"
+    ],
+    "must_not_contain": [
+      "project:identity=Memory Contract is a RAG memory system"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Memory Contract is an event-backed memory structure",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Memory Contract is a RAG memory system",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Memory Contract",
+        "Memory Contract is an event-backed memory structure"
+      ],
+      "must_exclude_labels": [
+        "Memory Contract is a RAG memory system"
+      ],
+      "activation_reason_must_contain": [
+        "correction_salience",
+        "Memory Contract is an event-backed memory structure",
+        "Memory Contract is a RAG memory system"
+      ]
+    },
+    "answers": [
+      {
+        "turn_index": 13,
+        "must_contain": [
+          "Memory Contract is an event-backed memory structure"
+        ],
+        "must_not_contain": [
+          "Memory Contract is a RAG memory system"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

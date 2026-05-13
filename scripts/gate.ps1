@@ -23,25 +23,35 @@ function Invoke-Step {
 }
 
 function Find-Bash {
-    $fromPath = Get-Command bash -ErrorAction SilentlyContinue
-    if ($fromPath) {
-        return $fromPath.Source
-    }
-
     $candidates = @(
         "C:\Program Files\Git\bin\bash.exe",
         "C:\Program Files\Git\usr\bin\bash.exe",
         "C:\Program Files (x86)\Git\bin\bash.exe",
-        "C:\Program Files (x86)\Git\usr\bin\bash.exe"
-    )
+        "C:\Program Files (x86)\Git\usr\bin\bash.exe",
+        (Get-Command bash -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1)
+    ) | Where-Object { $_ }
 
     foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate) {
+        if ((Test-Path -LiteralPath $candidate) -and (Test-BashCandidate $candidate)) {
             return $candidate
         }
     }
 
     return $null
+}
+
+function Test-BashCandidate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    try {
+        & $Path --version *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
 }
 
 function Resolve-LunaBinary {

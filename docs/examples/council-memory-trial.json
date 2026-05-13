@@ -1,0 +1,107 @@
+{
+  "protocol": "council-controlled-runtime-trial-v1",
+  "council": {
+    "purpose": "Review whether Luna memory feels continuous, corrected, bounded, and inspectable.",
+    "reviewers": [
+      {
+        "id": "continuity",
+        "focus": "Does Luna carry user and project continuity across distractor turns?"
+      },
+      {
+        "id": "correction",
+        "focus": "Does Luna answer with the corrected current fact while preserving old memory as non-current?"
+      },
+      {
+        "id": "boundary",
+        "focus": "Does Luna keep irrelevant chatter out of answers?"
+      },
+      {
+        "id": "audit",
+        "focus": "Do inspect and replay audit artifacts make failures debuggable?"
+      },
+      {
+        "id": "human_feel",
+        "focus": "Do answers feel like remembered context instead of transcript stuffing?"
+      }
+    ]
+  },
+  "source_boundary": {
+    "source_scope": "Only the turns in this JSON are source material for this controlled local runtime council trial.",
+    "locked_before_questions": true,
+    "forbidden_question_terms": [
+      "according to the source",
+      "open the source",
+      "reread",
+      "search the source"
+    ]
+  },
+  "prompt_boundary": {
+    "questions_created_before_answers": true,
+    "no_source_text_in_questions": true,
+    "no_answer_hints_in_questions": true,
+    "no_retrieval_time_reread_or_search": true
+  },
+  "scoring": {
+    "reviewer": "council",
+    "scale": "pass|partial|fail|justified_unknown|boundary_violation",
+    "pass_rule": "Every council question must pass, partially pass with a clear miss, or be a justified unknown; every miss goes into review/regression_backlog.md."
+  },
+  "regression_capture": {
+    "required": true,
+    "backlog_path": "review/regression_backlog.md"
+  },
+  "turns": [
+    "I am Jordan.",
+    "I am building Luna as a local-first memory system for agents.",
+    "Mara is my design partner on Luna.",
+    "Mara lives in Denver.",
+    "Luna's current focus is memory that preserves corrections instead of deleting old facts.",
+    "blue chair river seven battery",
+    "Actually Mara lives in Boulder now.",
+    "The kitchen light flickered twice and I made coffee.",
+    "The council should judge Luna on continuity, correction handling, bounded recall, and debuggable logs.",
+    "Luna should not answer from distractor chatter when I ask about Mara or the project."
+  ],
+  "questions": [
+    {
+      "id": "continuity-q001",
+      "category": "continuity",
+      "question": "What am I building Luna to be?",
+      "expected_evidence": "The answer should recall the local-first agent memory direction.",
+      "must_not_include": "blue chair river seven battery",
+      "notes": ""
+    },
+    {
+      "id": "correction-q002",
+      "category": "correction",
+      "question": "Where does Mara live now?",
+      "expected_evidence": "The answer should use the corrected current location.",
+      "must_not_include": "Denver as current",
+      "notes": ""
+    },
+    {
+      "id": "boundary-q003",
+      "category": "boundary",
+      "question": "What should the council judge Luna on?",
+      "expected_evidence": "The answer should recall the review criteria without dragging in distractor chatter.",
+      "must_not_include": "kitchen light; coffee; blue chair",
+      "notes": ""
+    },
+    {
+      "id": "audit-q004",
+      "category": "audit",
+      "question": "What kind of memory behavior is Luna currently focused on?",
+      "expected_evidence": "The answer should describe correction-preserving memory behavior.",
+      "must_not_include": "",
+      "notes": ""
+    },
+    {
+      "id": "human-feel-q005",
+      "category": "human_feel",
+      "question": "Who is Mara in relation to Luna?",
+      "expected_evidence": "The answer should recall Mara's role without needing exact source wording.",
+      "must_not_include": "",
+      "notes": ""
+    }
+  ]
+}

@@ -2011,6 +2011,13 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                     format!("{name} takes public transportation"),
                 ));
             }
+            if let Some(role) = capture_person_role(sentence, &lower_name) {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "role",
+                    format!("{name} is {role}"),
+                ));
+            }
         }
 
         if !sentence_people.is_empty() {
@@ -2520,6 +2527,54 @@ fn capture_after_name_phrase(sentence: &str, lower_name: &str, phrase: &str) -> 
     }
 }
 
+fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
+    if is_query_sentence(sentence)
+        || matches!(
+            lower_name,
+            "who" | "what" | "where" | "when" | "why" | "how"
+        )
+    {
+        return None;
+    }
+    let lower = sentence.to_ascii_lowercase();
+    let phrase = format!("{lower_name} is ");
+    let index = lower.find(&phrase)?;
+    if !sentence[..index]
+        .trim_matches(|ch: char| !ch.is_ascii_alphabetic())
+        .is_empty()
+    {
+        return None;
+    }
+    let after = sentence[index + phrase.len()..].trim_start();
+    let role = after
+        .split([','])
+        .next()
+        .unwrap_or(after)
+        .trim()
+        .trim_matches(|ch: char| matches!(ch, '.' | ',' | ';' | ':' | '!' | '?'));
+    let lower_role = role.to_ascii_lowercase();
+    if role.is_empty()
+        || lower_role.starts_with("married")
+        || lower_role.starts_with("african american")
+        || lower_role.starts_with("a basketball fan")
+        || role
+            .split_whitespace()
+            .next()
+            .is_some_and(|word| word.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return None;
+    }
+    if lower_role.starts_with("my ")
+        || lower_role.starts_with("the ")
+        || lower_role.starts_with("a ")
+        || lower_role.starts_with("an ")
+    {
+        Some(clean_relation_target_label(role))
+    } else {
+        None
+    }
+}
+
 fn clean_location_label(value: &str) -> String {
     value
         .trim()
@@ -2775,6 +2830,7 @@ fn activate_working_memory_with_orb_state(
     });
     let filtered_edge_count = scored_edges.len().saturating_sub(budget.max_edges);
     scored_edges.truncate(budget.max_edges);
+    let correction_salience = correction_salience_summaries(state, &scored_nodes);
 
     WorkingMemory {
         nodes: scored_nodes,
@@ -2784,6 +2840,7 @@ fn activate_working_memory_with_orb_state(
         activation_reason: activation_report(
             filtered_out_memory_count,
             retired_orb_filtered_node_count,
+            &correction_salience,
         ),
     }
 }
@@ -2865,9 +2922,61 @@ fn claim_matches_activation_query(claim: &MemoryClaim, query: &str, cue_terms: &
             .any(|term| !term.is_empty() && evidence.contains(term))
 }
 
+fn correction_salience_summaries(state: &MemoryState, nodes: &[MemoryNode]) -> Vec<String> {
+    let active_assertion_keys = nodes
+        .iter()
+        .flat_map(|node| node.provenance.iter())
+        .filter_map(|provenance| provenance.assertion_key.as_deref())
+        .collect::<BTreeSet<_>>();
+    let mut summaries = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for current in state.claims.iter().filter(|claim| {
+        claim.lifecycle_status == AssertionLifecycleStatus::Current
+            && active_assertion_keys.contains(claim.key.as_str())
+    }) {
+        let Some(slot) = correction_slot_for_claim(current) else {
+            continue;
+        };
+        for older in state.claims.iter().filter(|claim| {
+            claim.lifecycle_status == AssertionLifecycleStatus::Superseded
+                && claim.value != current.value
+                && correction_slot_for_claim(claim).as_deref() == Some(slot.as_str())
+        }) {
+            let summary = format!(
+                "correction_salience: {} supersedes {}",
+                current.value, older.value
+            );
+            if seen.insert(summary.clone()) {
+                summaries.push(summary);
+            }
+        }
+    }
+
+    summaries
+}
+
+fn correction_slot_for_claim(claim: &MemoryClaim) -> Option<String> {
+    let entity = match claim.domain.as_str() {
+        "person" => person_subjects_from_claim_value(&claim.value)
+            .first()
+            .cloned()?,
+        "project" => project_subject_from_claim_value(&claim.value)?,
+        "identity" => "self".to_string(),
+        _ => return None,
+    };
+    Some(format!(
+        "{}:{}:{}",
+        claim.domain,
+        claim.kind,
+        normalize_for_match(&entity)
+    ))
+}
+
 fn activation_report(
     filtered_out_memory_count: usize,
     retired_orb_filtered_node_count: usize,
+    correction_salience: &[String],
 ) -> String {
     let mut report = "entity/relation/cue/query/recalled/confidence activation over current graph with graph-depth and fixed-budget filtering".to_string();
     if filtered_out_memory_count > 0 {
@@ -2879,6 +2988,10 @@ fn activation_report(
         report.push_str(&format!(
             "; suppressed_retired_orb_memory={retired_orb_filtered_node_count}"
         ));
+    }
+    if !correction_salience.is_empty() {
+        report.push_str("; ");
+        report.push_str(&correction_salience.join(" | "));
     }
     report
 }
@@ -3333,7 +3446,7 @@ pub fn plan_conversation_response(user_text: &str, result: &RuntimeTurnResult) -
     if is_user_asking_about_luna(&text) {
         return ResponsePlan {
             actions: vec![ResponsePlanAction::Answer],
-            answer_values: vec!["I am Luna: a local-first memory layer. I store turns as events, separate confirmed from inferred or unknown facts, and only bring a small working set into the conversation.".to_string()],
+            answer_values: vec!["I am Luna: a local-first memory runtime layer. I store turns as events, separate confirmed from inferred or unknown facts, and only bring a small working set into the conversation.".to_string()],
             ..ResponsePlan::default()
         };
     }

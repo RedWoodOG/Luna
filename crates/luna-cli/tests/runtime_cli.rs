@@ -610,3 +610,89 @@ fn runtime_scenario_cli_executes_registered_gate() {
 
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn runtime_turn_json_can_include_conversation_reply() {
+    let root = temp_root("turn_include_reply");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    let mut command = Command::new(luna_bin());
+    command
+        .args([
+            "runtime",
+            "turn",
+            "Morgan lives in Iowa.",
+            "--format",
+            "json",
+            "--include-reply",
+            "--log",
+        ])
+        .arg(&log);
+    let stdout = assert_success(command);
+    let payload: Value = serde_json::from_str(&stdout).expect("turn JSON should parse");
+
+    assert!(
+        payload["conversation_reply"]
+            .as_str()
+            .expect("conversation reply should be present")
+            .contains("Morgan lives in Iowa"),
+        "payload:\n{payload:#?}"
+    );
+    assert_eq!(
+        payload["result"]["knowledge_delta"]["unconfirmed"][0]["value"],
+        Value::from("Morgan lives in Iowa")
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_inspect_filters_by_entity_and_lifecycle_status() {
+    let root = temp_root("inspect_filters");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    for turn in [
+        "Morgan lives in Iowa.",
+        "Actually Morgan lives in Ohio now.",
+        "I am a software developer.",
+    ] {
+        let mut command = Command::new(luna_bin());
+        command
+            .args(["runtime", "turn", turn])
+            .args(["--log"])
+            .arg(&log);
+        assert_success(command);
+    }
+
+    let mut current = Command::new(luna_bin());
+    current
+        .args(["runtime", "inspect", "--current", "--entity", "Morgan"])
+        .args(["--log"])
+        .arg(&log);
+    let stdout = assert_success(current);
+    assert!(stdout.contains("Morgan lives in Ohio"), "stdout:\n{stdout}");
+    assert!(
+        !stdout.contains("Morgan lives in Iowa"),
+        "current entity inspect should hide superseded claims:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("software developer"),
+        "entity inspect should hide unrelated claims:\n{stdout}"
+    );
+
+    let mut superseded = Command::new(luna_bin());
+    superseded
+        .args(["runtime", "inspect", "--superseded", "--entity", "Morgan"])
+        .args(["--log"])
+        .arg(&log);
+    let stdout = assert_success(superseded);
+    assert!(stdout.contains("Morgan lives in Iowa"), "stdout:\n{stdout}");
+    assert!(
+        !stdout.contains("Morgan lives in Ohio"),
+        "superseded entity inspect should hide current claims:\n{stdout}"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
