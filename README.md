@@ -78,27 +78,31 @@ next:
 3. [`docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md`](docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md)
    - Testing Ready product-loop protocol before 24-hour or full-manuscript
      trials.
-4. [`docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md`](docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md)
+4. [`docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md)
+   - active build track for surprise-gated intake, replay review,
+     lineage-preserving consolidation, specific activation, and miss-to-regression
+     memory.
+5. [`docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md`](docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md)
    - First reviewer-owned controlled trial before marathon or manuscript
      claims.
-5. [`docs/MARATHON_READY_PROTOCOL.md`](docs/MARATHON_READY_PROTOCOL.md)
+6. [`docs/MARATHON_READY_PROTOCOL.md`](docs/MARATHON_READY_PROTOCOL.md)
    - Marathon Ready packet protocol for the real 10-turn / 24-hour /
      3-question trial; eligibility only, not a passed trial.
-6. [`docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md`](docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md)
+7. [`docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md`](docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md)
    - Manuscript Ready packet template for a real one-read trial.
-7. [`docs/V1_RELEASE_EVIDENCE_PACKET.md`](docs/V1_RELEASE_EVIDENCE_PACKET.md)
+8. [`docs/V1_RELEASE_EVIDENCE_PACKET.md`](docs/V1_RELEASE_EVIDENCE_PACKET.md)
    - v1.0 Ready packet template and claim matrix.
-8. [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md) - rules that
+9. [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md) - rules that
    prevent memory from becoming transcript stuffing or scripted answers.
-9. [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
+10. [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
    - binding contract for event log -> intake -> typed graph -> lifecycle ->
      bounded working memory -> provenance -> replay audit.
-10. [`docs/LUNA_OVER_AURA_BUILD_PLAN.md`](docs/LUNA_OVER_AURA_BUILD_PLAN.md)
+11. [`docs/LUNA_OVER_AURA_BUILD_PLAN.md`](docs/LUNA_OVER_AURA_BUILD_PLAN.md)
    - engineering plan for making Luna stronger than Aura-style TCF systems
      without weakening the memory contract.
-11. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
+12. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
    engineering guardrails and enforcement status.
-12. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
+13. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
    topology-engine roadmap, including the runtime-to-topology bridge.
 
 ## Destination
