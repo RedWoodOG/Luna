@@ -103,16 +103,18 @@ What this milestone does not prove yet:
 
 ## Active Dense Memory Track
 
-The current build direction is dense, reliable memory: Luna should learn many
-related facts, retain them through replay, compact or quiet what is not needed,
-and answer the specific requested detail with provenance. The canonical build
-plan is [`LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](LUNA_DENSE_RELIABLE_MEMORY_PLAN.md).
+The current build direction is dense, reliable memory: Luna should move from
+plain store-and-retrieve toward fixed-capacity compressive memory. The active
+primitive is prediction -> surprise -> bounded update -> reconstruction ->
+lineage proof. The canonical build plan is
+[`LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](LUNA_DENSE_RELIABLE_MEMORY_PLAN.md).
 
 The first controlled-trial miss loop has landed as
 `scenarios/runtime/controlled_trial_project_memory_regression.json`. It proves a
 trial miss can become a manifest-registered regression, then a generic runtime
-fix, then a cleaner rerun. Continue this pattern for surprise-gated intake,
-specific activation, replay review, and product consolidation receipts.
+fix, then a cleaner rerun. Continue this pattern for surprise/update receipts,
+fixed associative state, concept codebooks, reconstruction gates, and product
+consolidation receipts.
 
 ## Current Proof Boundary
 

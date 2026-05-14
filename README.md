@@ -79,9 +79,9 @@ next:
    - Testing Ready product-loop protocol before 24-hour or full-manuscript
      trials.
 4. [`docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md)
-   - active build track for surprise-gated intake, replay review,
-     lineage-preserving consolidation, specific activation, and miss-to-regression
-     memory.
+   - active build track for fixed-capacity compressive memory: prediction,
+     surprise/update receipts, associative state, concept codebooks,
+     reconstruction, and miss-to-regression memory.
 5. [`docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md`](docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md)
    - First reviewer-owned controlled trial before marathon or manuscript
      claims.

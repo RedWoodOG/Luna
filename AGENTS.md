@@ -9,6 +9,8 @@ This file is short on purpose. The canonical sources are:
 - **Dense reliable memory plan:** [`docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md)
 - **Aura comparison build plan:** [`docs/LUNA_OVER_AURA_BUILD_PLAN.md`](docs/LUNA_OVER_AURA_BUILD_PLAN.md)
 - **Current next artifact:** [`docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md`](docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md)
+- **Current dense-memory artifact:** C2 surprise/update receipts in
+  [`docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md)
 - **Acceptance test:** [`README.md`](README.md) (10-turn real-week -> 24h+ -> 3 questions)
 
 Read those before non-trivial work. This file tells you what is mechanically

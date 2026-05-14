@@ -2,49 +2,33 @@
 
 Status: active build track
 
-Purpose: make Luna's memory denser, more selective, and more reliable as it
-learns. Luna should gain usable memory without growing into transcript stuffing,
-flat JSON recall, or a pile of unrelated facts.
+Purpose: move Luna from store-and-retrieve memory toward fixed-capacity
+compressive memory: memory that learns by updating bounded state, reconstructs
+answers from that state, and keeps enough event provenance to be trusted.
 
-The target is:
-
-```text
-experience
--> surprise and salience scoring
--> event-sourced episodic capture
--> replay and mistake review
--> lineage-preserving consolidation
--> bounded activation
--> specific answer with provenance
--> audit and regression memory
-```
-
-This plan treats human memory research as engineering inspiration. The code
-truth remains Luna's build contract:
+The primitive shift is:
 
 ```text
-event log
--> intake decision
--> typed assertions and relations
--> entity/event graph
--> lifecycle status
--> bounded working memory
--> response plan
--> answer with provenance
--> replay audit
+old shape: input -> store claim/chunk -> retrieve nearest match
+new shape: input -> predict -> measure surprise -> update fixed memory state
+           -> reconstruct answer -> cite source lineage
 ```
+
+Luna still keeps the raw event log as audit truth. The new memory layer does not
+replace provenance. It sits between event-sourced facts and bounded working
+memory as a compact learned state that can be replayed, inspected, and tested.
 
 ## Reliability Standard
 
-Luna becomes reliable when each memory behavior has four inspectable surfaces:
+Luna becomes reliable when each memory behavior has five inspectable surfaces:
 
-- **Capture**: what Luna stored, with source event id/hash.
-- **Selection**: why a memory entered or stayed out of working memory.
-- **Consolidation**: what was compressed or clustered, with raw ancestry intact.
-- **Learning From Misses**: every miss becomes a durable regression scenario or
-  deferred issue with evidence.
+- **Prediction**: what the current memory state expected.
+- **Surprise**: what was novel, corrective, contradictory, or redundant.
+- **Update**: which bounded memory state changed and by how much.
+- **Reconstruction**: what answer was produced from memory state.
+- **Lineage**: which raw events, assertions, receipts, and regressions prove it.
 
-The first controlled trial created the right loop:
+The first controlled trial established the repair loop:
 
 ```text
 trial miss
@@ -52,156 +36,137 @@ trial miss
 -> regression scenario
 -> generic mechanism fix
 -> rerun trial
--> commit gate
+-> committed gate
 ```
 
-That loop is now the model for making Luna more dependable.
+That loop remains the rule. The memory system learns from mistakes when a miss
+becomes executable evidence, not when a note is written and forgotten.
 
-## Dense Memory Architecture
+## Concrete Memory Substrates
 
-### 1. Surprise-Gated Intake
+### 1. Surprise-Gated Neural Memory
 
-Luna should store the difference between what the current memory model already
-predicts and what the new turn adds.
+Build a fixed-size memory model whose write operation is an update to model
+state, not an append to a growing table.
 
-Build shape:
+Luna-native first slice:
 
-- compute a per-turn `surprise_score`;
-- compare new assertions with current entity/project/person/manuscript state;
-- classify turns into expected, reinforcing, novel, corrective, contradictory,
-  or unresolved;
-- store high-surprise and high-salience facts with full source lineage;
-- store low-surprise repeated facts as reinforcement rather than duplicate
-  claims.
+- deterministic fixed-size state, implemented in Rust;
+- `predict(assertion_or_fact) -> reconstruction_score`;
+- `surprise_score = distance(input, prediction)`;
+- update only when surprise, correction pressure, or salience crosses a
+  threshold;
+- repeated low-surprise facts reinforce existing state instead of duplicating
+  memory.
 
-Inspectable output:
+Later neural slice:
 
-- intake report shows `surprise_score`, `redundancy_score`,
-  `correction_pressure`, and selected action.
+- a small online-trainable memory module can be added behind the same trait;
+- gradient/update details stay hidden behind a deterministic receipt interface;
+- every update records input hash, prediction hash, surprise score, update norm,
+  and resulting state hash.
 
-First guardrail:
+Required interface:
 
-- scenario where repeated project facts reinforce existing memory, while a
-  rename and a new pilot partner create separate current claims.
+```text
+MemoryModel::predict(input) -> prediction
+MemoryModel::surprise(input, prediction) -> score
+MemoryModel::update(input, score) -> update_receipt
+MemoryModel::reconstruct(query) -> candidates
+```
 
-### 2. Episodic Buffer With Fixed Budget
+Guardrail:
 
-Luna should keep raw event truth forever, while active episodic memory stays
-bounded.
+- repeated facts produce reinforcement receipts;
+- novel facts produce update receipts;
+- corrections produce supersession pressure;
+- all receipts replay to the same state hash.
 
-Build shape:
+### 2. Associative Matrix
 
-- preserve raw event log as authority;
-- add an episodic-buffer view with fixed active capacity;
-- rank episodes by surprise, recency, correction pressure, user salience,
-  unresolved-loop value, and recall success/failure;
-- expose which episodes were active, quiet, or eligible for consolidation.
-
-Inspectable output:
-
-- runtime inspect shows active episode budget and why each episode was retained
-  or quieted.
-
-First guardrail:
-
-- scenario where a quiet but directly cued episode remains retrievable without
-  expanding the working-memory packet.
-
-### 3. Replay Review
-
-Luna should periodically replay its own event evidence and repair its derived
-state before memory expands.
+Add a fixed-size associative memory for "what goes with what."
 
 Build shape:
 
-- sample recent, high-surprise, corrected, and failed-recall episodes;
-- rebuild memory state from raw events;
-- compare live and replayed topology/cluster hashes;
-- emit a replay review report with repaired claims, unstable clusters, and
-  required regression candidates.
+- encode each typed assertion into a key vector and value vector;
+- update a fixed `d x d` matrix with a bounded delta;
+- retrieve candidate values by querying the matrix;
+- decay or renormalize the matrix so magnitude does not grow without bound;
+- keep source event ids/hashes outside the matrix in a receipt index.
 
-Inspectable output:
+This gives Luna fast association without a growing vector store. The matrix is
+not authority; it is a bounded learned hint surface. The event log and receipts
+remain authority.
 
-- `runtime audit` reports replay review status, not only clean/diverged hashes.
+Guardrail:
 
-First guardrail:
+- project-name, project-purpose, and project-partner cues retrieve different
+  candidates from the same related fact set.
 
-- forced stale answer in a trial packet produces a regression candidate with the
-  exact question, answer, expected evidence note, and source event hashes.
+### 3. Discrete Concept Codebook
 
-### 4. Lineage-Preserving Consolidation
-
-Luna should compress dense related memory only when it can still prove every raw
-source behind the compressed artifact.
-
-Build shape:
-
-- use existing compression receipts as the consolidation contract;
-- form cluster/interface nodes for repeated people, projects, relationships,
-  manuscript arcs, and corrections;
-- record included claims, excluded claims, source event ids/hashes, and reason;
-- allow compressed memory into working memory only when verified source hashes
-  are available.
-
-Inspectable output:
-
-- context packet cites raw source event ids/hashes and cluster receipt id
-  together.
-
-First guardrail:
-
-- project-memory scenario where a compressed project cluster answers purpose,
-  current name, and pilot-partner questions without surfacing excluded stale or
-  irrelevant details.
-
-### 5. Specific Activation
-
-Luna should activate the right slice of memory, not merely the nearest entity.
+Add a fixed-size concept library for gist.
 
 Build shape:
 
-- activation components include entity match, relation/kind match, cue match,
-  lifecycle, confidence, recency, correction pressure, cluster authority, and
-  query specificity;
-- project-purpose queries prefer purpose claims;
-- name/current-state queries prefer identity/correction claims;
-- partner/pilot/who-with queries prefer relationship or participant claims;
-- filtered-out memory is visible in inspect, context, and scenario reports.
+- maintain `K` concept slots with stable ids;
+- assign each assertion/relation/episode summary to the nearest concept;
+- update the concept centroid with a bounded moving average;
+- merge concepts that become too similar;
+- replace dead concepts only through a receipt that preserves prior lineage;
+- track included and excluded claim ids for every concept update.
 
-Inspectable output:
+The codebook is Luna's compact abstraction layer. It should answer questions
+like "what kind of thing is this?" without carrying every raw episode into the
+working packet.
 
-- activation report lists selected and filtered claims with component scores.
+Guardrail:
 
-First guardrail:
+- a dense project conversation creates a stable project-purpose concept while
+  preserving raw source events for name, purpose, correction, and pilot facts.
 
-- `controlled_trial_project_memory_regression.json` proves Luna can remember
-  multiple related facts while answering the specific requested one.
+### 4. Reconstruction With Provenance
 
-### 6. Mistake Memory
-
-Luna should remember its own failures as build evidence, not as user facts.
+Luna should not merely return stored strings. It should reconstruct an answer
+from bounded memory state, then validate that answer against event-backed
+evidence before surfacing it.
 
 Build shape:
 
-- controlled-trial scoring creates a structured miss artifact;
-- misses map to regression scenario candidates;
-- regression scenarios keep the original source turns, questions, expected
-  evidence, forbidden leakage, and audit requirements;
-- Luna's docs and release packets distinguish passed trial evidence from
-  regression evidence.
+- query the associative matrix for candidates;
+- query the concept codebook for gist;
+- query current typed claims for source-backed specifics;
+- compose a response plan from those candidates;
+- reject any answer value that lacks direct event or receipt lineage;
+- record what was filtered out and why.
 
-Inspectable output:
+Guardrail:
 
-- miss packet links to committed scenario id and current pass/fail status.
+- when asked what a project helps people do, Luna returns the purpose slice and
+  excludes founder/pilot facts from answer, context packet, markdown, and
+  working-memory surfaces.
 
-First guardrail:
+### 5. Forgetting As Renormalization
 
-- script that checks every controlled-trial miss is either linked to a scenario
-  file or marked deferred with a reason.
+Forgetting should mean bounded state maintenance, not silent deletion of truth.
+
+Build shape:
+
+- raw event log remains append-only;
+- model state can decay, renormalize, merge, and prune;
+- every decay/merge/prune operation creates a receipt;
+- replay rebuilds model state from raw events plus receipts;
+- recall can say whether detail came from raw event, compressed receipt,
+  associative hint, or concept gist.
+
+Guardrail:
+
+- a pruned/merged concept cannot be used to answer unless the receipt can trace
+  back to raw events.
 
 ## Build Sequence
 
-### D1: Controlled Trial Miss Loop
+### C1: Miss-To-Regression Memory
 
 Current status: first slice landed for project memory.
 
@@ -212,81 +177,122 @@ Evidence:
 - fixed regression:
   `scenarios/runtime/controlled_trial_project_memory_regression.json`
 - scenario is registered in `scenarios/runtime/SCENARIO_MANIFEST.txt`
-- trial rerun answered current name, purpose, and pilot partner with clean audit.
+- reruns answer current name, purpose, and pilot partner with clean audit.
 
 Next build:
 
-- add a miss-to-regression index so future controlled-trial misses cannot stay
-  as free-text notes.
+- add a miss index so every controlled-trial miss links to a scenario or a
+  deferred issue.
 
-### D2: Surprise-Gated Intake Report
-
-Deliverable:
-
-- runtime turn output includes `surprise_score`, `redundancy_score`, and
-  `correction_pressure`.
-
-Guardrail:
-
-- repeated facts reinforce; genuinely new facts store; corrections supersede;
-  ambiguous facts ask for an anchor.
-
-### D3: Specific Activation Components
+### C2: Surprise And Update Receipts
 
 Deliverable:
 
-- activation report exposes component scores and filtered claims.
+- runtime turn output includes prediction/surprise/update fields.
+
+Receipt fields:
+
+```text
+input_event_id
+input_event_hash
+prediction_hash
+surprise_score
+redundancy_score
+correction_pressure
+update_kind
+state_hash_before
+state_hash_after
+```
 
 Guardrail:
 
-- same entity with multiple facts answers purpose/name/partner/location
-  questions with the requested slice only.
+- repeated project facts reinforce existing state;
+- renamed project facts create correction pressure;
+- replay recomputes identical state hashes.
 
-### D4: Replay Review Packet
+### C3: Fixed Associative Matrix Prototype
 
 Deliverable:
 
-- replay review identifies unstable memory and creates regression candidates.
+- deterministic fixed-size associative matrix for typed assertions.
 
 Guardrail:
 
-- a seeded bad answer produces a review artifact that points to the source log,
-  question, wrong answer, expected evidence, and scenario candidate.
+- the same entity with name, purpose, and pilot facts retrieves the requested
+  slice for each query type without growing storage per query.
 
-### D5: Product Consolidation Receipts
+### C4: Concept Codebook Prototype
 
 Deliverable:
 
-- product runtime can feed verified compression receipts into recall.
+- fixed-size concept slots for project/person/manuscript gist.
 
 Guardrail:
 
-- compressed context answers correctly while preserving raw event citations and
-  excluding stale or irrelevant details.
+- dense related facts compress into a concept with included/excluded claim ids
+  and raw event lineage.
 
-### D6: Dense Memory Trial
+### C5: Reconstruction Gate
 
 Deliverable:
 
-- 10+ turns with multiple related people/projects/corrections/distractors;
-- reopen same log;
-- ask detail-specific questions;
-- require specific answers, confidence, provenance, and clean replay.
+- response planning can use model candidates, associative candidates, concept
+  gist, and typed claims, but only event-backed values can reach the answer.
 
 Guardrail:
 
-- packet passes only when Luna remembers multiple related facts and chooses the
-  requested slice.
+- unsupported reconstruction candidates are visible in inspect and suppressed
+  from answer/context/markdown.
+
+### C6: Dense Memory Trial
+
+Deliverable:
+
+- 10+ turns with related people, projects, corrections, repeated facts,
+  distractors, and detail-specific questions.
+
+Pass:
+
+- fixed memory state remains bounded;
+- raw event lineage remains complete;
+- repeated facts reinforce instead of duplicating;
+- novel facts update;
+- corrections supersede;
+- answer chooses the requested slice;
+- replay audit is clean.
+
+## Immediate Next Artifact
+
+Build `C2: Surprise And Update Receipts`.
+
+This is the first bridge from current Luna to compressive model memory. It does
+not require a neural dependency yet. It creates the stable receipt interface
+that a later Titans-style neural memory module, Infini-style associative matrix,
+or TTT-style trainable state can plug into without weakening Luna's doctrine.
+
+The first implementation should be deterministic and boring:
+
+```text
+current typed memory state
+-> prediction/redundancy check
+-> surprise score
+-> update receipt
+-> replayed state hash
+```
+
+Once that is inspectable and gated, the underlying model can become more
+powerful without changing the proof contract.
 
 ## Current North Star
 
-The near-term proof is no longer just "does Luna remember a fact?" It is:
+Luna should become a bounded memory system that learns continuously:
 
 ```text
-Can Luna learn many related facts,
-retain them through replay,
-compress or quiet what is not needed,
-and answer the specific question from provenance-backed memory?
+predict what it already knows,
+update only when the world teaches it something,
+compress repeated structure into fixed state,
+reconstruct the requested answer,
+and prove the answer from raw lineage.
 ```
 
-That is the path from a memory concept to a memory system we can rely on.
+That is the path from a memory prototype to memory we can rely on.
