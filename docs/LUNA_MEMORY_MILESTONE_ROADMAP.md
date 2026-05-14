@@ -116,6 +116,15 @@ fix, then a cleaner rerun. Continue this pattern for surprise/update receipts,
 fixed associative state, concept codebooks, reconstruction gates, and product
 consolidation receipts.
 
+Current dense-memory slice:
+
+| Slice | Status | Description |
+|-------|--------|-------------|
+| C2a | LANDED | `SurpriseUpdateReceipt` type plus deterministic framed state/receipt hashing. |
+| C2b | PLANNED | Emit surprise/update receipts from runtime turns. |
+| C2c | PLANNED | Replay/audit surprise/update receipt state hashes. |
+| C2d | PLANNED | Scenario proves repeated facts reinforce, novel facts update, corrections create pressure. |
+
 ## Current Proof Boundary
 
 Use this table when deciding whether a claim is allowed in docs, issues, PRs, or

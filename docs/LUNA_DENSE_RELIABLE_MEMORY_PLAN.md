@@ -186,6 +186,13 @@ Next build:
 
 ### C2: Surprise And Update Receipts
 
+Status:
+
+- C2a `SurpriseUpdateReceipt` type and deterministic state hashing: LANDED.
+- C2b runtime turn emission: PLANNED.
+- C2c replay/audit receipt verification: PLANNED.
+- C2d scenario proving repeated/novel/correction receipt behavior: PLANNED.
+
 Deliverable:
 
 - runtime turn output includes prediction/surprise/update fields.
@@ -206,6 +213,9 @@ state_hash_after
 
 Guardrail:
 
+- C2a unit tests prove state hashes are order-independent, claim changes alter
+  state hashes, receipt hashes change when update kind changes, and lineage
+  hashes are required.
 - repeated project facts reinforce existing state;
 - renamed project facts create correction pressure;
 - replay recomputes identical state hashes.
@@ -263,12 +273,13 @@ Pass:
 
 ## Immediate Next Artifact
 
-Build `C2: Surprise And Update Receipts`.
+Build `C2b: runtime emission for surprise/update receipts`.
 
 This is the first bridge from current Luna to compressive model memory. It does
-not require a neural dependency yet. It creates the stable receipt interface
-that a later Titans-style neural memory module, Infini-style associative matrix,
-or TTT-style trainable state can plug into without weakening Luna's doctrine.
+not require a neural dependency yet. C2a created the stable receipt interface
+and deterministic state hash. C2b should emit that receipt from runtime turns so
+a later Titans-style neural memory module, Infini-style associative matrix, or
+TTT-style trainable state can plug into the same proof contract.
 
 The first implementation should be deterministic and boring:
 

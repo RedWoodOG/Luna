@@ -1021,6 +1021,169 @@ impl MemoryClaim {
     }
 }
 
+pub const SURPRISE_UPDATE_RECEIPT_SCHEMA_VERSION: &str = "luna.surprise_update_receipt.v1";
+pub const SURPRISE_UPDATE_STATE_HASH_VERSION: &str = "luna.surprise_update_state.v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SurpriseUpdateKind {
+    ReinforceExisting,
+    NovelUpdate,
+    CorrectionPressure,
+    IgnoredLowSurprise,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SurpriseUpdateReceipt {
+    pub schema_version: String,
+    pub input_event_id: String,
+    pub input_event_hash: String,
+    pub prediction_hash: String,
+    pub surprise_score: f32,
+    pub redundancy_score: f32,
+    pub correction_pressure: f32,
+    pub update_kind: SurpriseUpdateKind,
+    pub state_hash_before: String,
+    pub state_hash_after: String,
+    pub receipt_hash: String,
+}
+
+impl SurpriseUpdateReceipt {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        input_event_id: impl Into<String>,
+        input_event_hash: impl Into<String>,
+        prediction_hash: impl Into<String>,
+        surprise_score: f32,
+        redundancy_score: f32,
+        correction_pressure: f32,
+        update_kind: SurpriseUpdateKind,
+        state_hash_before: impl Into<String>,
+        state_hash_after: impl Into<String>,
+    ) -> Result<Self> {
+        let mut receipt = Self {
+            schema_version: SURPRISE_UPDATE_RECEIPT_SCHEMA_VERSION.to_string(),
+            input_event_id: input_event_id.into(),
+            input_event_hash: input_event_hash.into(),
+            prediction_hash: prediction_hash.into(),
+            surprise_score: surprise_score.clamp(0.0, 1.0),
+            redundancy_score: redundancy_score.clamp(0.0, 1.0),
+            correction_pressure: correction_pressure.clamp(0.0, 1.0),
+            update_kind,
+            state_hash_before: state_hash_before.into(),
+            state_hash_after: state_hash_after.into(),
+            receipt_hash: String::new(),
+        };
+        receipt.validate_without_hash()?;
+        receipt.receipt_hash = surprise_update_receipt_hash(&receipt);
+        Ok(receipt)
+    }
+
+    fn validate_without_hash(&self) -> Result<()> {
+        if self.input_event_id.trim().is_empty() {
+            return Err(luna_core::LunaError::new(
+                "surprise update receipt requires an input event id",
+            ));
+        }
+        for (label, hash) in [
+            ("input event hash", self.input_event_hash.as_str()),
+            ("prediction hash", self.prediction_hash.as_str()),
+            ("state hash before", self.state_hash_before.as_str()),
+            ("state hash after", self.state_hash_after.as_str()),
+        ] {
+            if !valid_event_hash(hash) {
+                return Err(luna_core::LunaError::new(format!(
+                    "surprise update receipt has invalid {label}"
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+pub fn surprise_update_state_hash(claims: &[MemoryClaim]) -> Result<String> {
+    let mut canonical = claims.to_vec();
+    canonical.sort_by(|left, right| {
+        left.key
+            .cmp(&right.key)
+            .then_with(|| left.domain.cmp(&right.domain))
+            .then_with(|| left.kind.cmp(&right.kind))
+            .then_with(|| left.value.cmp(&right.value))
+            .then_with(|| format!("{:?}", left.status).cmp(&format!("{:?}", right.status)))
+            .then_with(|| {
+                format!("{:?}", left.lifecycle_status).cmp(&format!("{:?}", right.lifecycle_status))
+            })
+    });
+
+    let mut hasher = Sha256::new();
+    hash_receipt_field(
+        &mut hasher,
+        "state_hash_version",
+        SURPRISE_UPDATE_STATE_HASH_VERSION,
+    );
+    for claim in canonical {
+        hash_receipt_field(&mut hasher, "claim_key", &claim.key);
+        hash_receipt_field(&mut hasher, "claim_domain", &claim.domain);
+        hash_receipt_field(&mut hasher, "claim_kind", &claim.kind);
+        hash_receipt_field(&mut hasher, "claim_value", &claim.value);
+        hash_receipt_field(&mut hasher, "claim_status", &format!("{:?}", claim.status));
+        hash_receipt_field(
+            &mut hasher,
+            "claim_lifecycle_status",
+            &format!("{:?}", claim.lifecycle_status),
+        );
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn surprise_update_receipt_hash(receipt: &SurpriseUpdateReceipt) -> String {
+    let mut hasher = Sha256::new();
+    hash_receipt_field(
+        &mut hasher,
+        "schema_version",
+        SURPRISE_UPDATE_RECEIPT_SCHEMA_VERSION,
+    );
+    hash_receipt_field(&mut hasher, "input_event_id", &receipt.input_event_id);
+    hash_receipt_field(&mut hasher, "input_event_hash", &receipt.input_event_hash);
+    hash_receipt_field(&mut hasher, "prediction_hash", &receipt.prediction_hash);
+    hash_receipt_field(
+        &mut hasher,
+        "surprise_score",
+        &canonical_score(receipt.surprise_score),
+    );
+    hash_receipt_field(
+        &mut hasher,
+        "redundancy_score",
+        &canonical_score(receipt.redundancy_score),
+    );
+    hash_receipt_field(
+        &mut hasher,
+        "correction_pressure",
+        &canonical_score(receipt.correction_pressure),
+    );
+    hash_receipt_field(
+        &mut hasher,
+        "update_kind",
+        &format!("{:?}", receipt.update_kind),
+    );
+    hash_receipt_field(&mut hasher, "state_hash_before", &receipt.state_hash_before);
+    hash_receipt_field(&mut hasher, "state_hash_after", &receipt.state_hash_after);
+    format!("{:x}", hasher.finalize())
+}
+
+fn canonical_score(score: f32) -> String {
+    format!("{:.6}", score.clamp(0.0, 1.0))
+}
+
+fn hash_receipt_field(hasher: &mut Sha256, label: &str, value: &str) {
+    hasher.update(label.as_bytes());
+    hasher.update([0]);
+    hasher.update(value.len().to_string().as_bytes());
+    hasher.update([0]);
+    hasher.update(value.as_bytes());
+    hasher.update([0xff]);
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityMemoryGroup {
     pub id: String,
@@ -4582,10 +4745,107 @@ mod tests {
     use super::*;
     use std::fs;
 
+    fn test_hash(ch: char) -> String {
+        ch.to_string().repeat(64)
+    }
+
     fn temp_log() -> PathBuf {
         std::env::temp_dir()
             .join(format!("luna_runtime_{}", Uuid::new_v4()))
             .join("events.jsonl")
+    }
+
+    #[test]
+    fn surprise_update_state_hash_is_order_independent() {
+        let first = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "purpose",
+            "Northstar Maps helps hikers plan safe trail routes",
+        ));
+        let second = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "identity",
+            "Northstar Maps is now called Cleartrail",
+        ));
+
+        let forward = surprise_update_state_hash(&[first.clone(), second.clone()]).unwrap();
+        let reversed = surprise_update_state_hash(&[second, first]).unwrap();
+
+        assert_eq!(forward, reversed);
+        assert!(valid_event_hash(&forward));
+    }
+
+    #[test]
+    fn surprise_update_state_hash_changes_when_claim_changes() {
+        let before = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "purpose",
+            "Northstar Maps helps hikers plan safe trail routes",
+        ));
+        let after = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "purpose",
+            "Northstar Maps helps hikers plan safer weekend routes",
+        ));
+
+        assert_ne!(
+            surprise_update_state_hash(&[before]).unwrap(),
+            surprise_update_state_hash(&[after]).unwrap()
+        );
+    }
+
+    #[test]
+    fn surprise_update_receipt_hash_changes_when_update_kind_changes() {
+        let before_hash = test_hash('a');
+        let after_hash = test_hash('b');
+        let prediction_hash = test_hash('c');
+        let input_hash = test_hash('d');
+        let reinforced = SurpriseUpdateReceipt::new(
+            "event-1",
+            input_hash.clone(),
+            prediction_hash.clone(),
+            0.2,
+            0.9,
+            0.0,
+            SurpriseUpdateKind::ReinforceExisting,
+            before_hash.clone(),
+            after_hash.clone(),
+        )
+        .unwrap();
+        let novel = SurpriseUpdateReceipt::new(
+            "event-1",
+            input_hash,
+            prediction_hash,
+            0.2,
+            0.9,
+            0.0,
+            SurpriseUpdateKind::NovelUpdate,
+            before_hash,
+            after_hash,
+        )
+        .unwrap();
+
+        assert_ne!(reinforced.receipt_hash, novel.receipt_hash);
+        assert!(valid_event_hash(&reinforced.receipt_hash));
+        assert!(valid_event_hash(&novel.receipt_hash));
+    }
+
+    #[test]
+    fn surprise_update_receipt_rejects_missing_lineage_hash() {
+        let error = SurpriseUpdateReceipt::new(
+            "event-1",
+            "",
+            test_hash('c'),
+            0.2,
+            0.9,
+            0.0,
+            SurpriseUpdateKind::ReinforceExisting,
+            test_hash('a'),
+            test_hash('b'),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("input event hash"));
     }
 
     #[test]
