@@ -1,8 +1,9 @@
 use crate::{
-    bridge_runtime_events_to_topology, commit_runtime_events_to_topology_ledger,
-    ledger_events_hash, plan_conversation_response, render_conversation_reply,
-    topology_commit_from_runtime_ledger_commit, topology_node_ref_for_runtime_ref,
-    MemoryIntakeAction, ResponsePlanAction, RuntimeExtractor, RuntimeSession,
+    associative_candidates_for_query, bridge_runtime_events_to_topology,
+    commit_runtime_events_to_topology_ledger, ledger_events_hash, plan_conversation_response,
+    render_conversation_reply, topology_commit_from_runtime_ledger_commit,
+    topology_node_ref_for_runtime_ref, MemoryIntakeAction, ResponsePlanAction, RuntimeExtractor,
+    RuntimeSession,
 };
 use chrono::{DateTime, Utc};
 use luna_core::{
@@ -102,6 +103,8 @@ pub struct RuntimeScenarioChecks {
     pub manuscript_one_read: ManuscriptOneReadChecks,
     #[serde(default, alias = "dense")]
     pub dense_updates: DenseUpdateChecks,
+    #[serde(default)]
+    pub associative_memory: AssociativeMemoryChecks,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -293,6 +296,31 @@ pub struct DenseUpdateChecks {
     pub must_include_kinds: Vec<UpdateKind>,
     #[serde(default)]
     pub min_correction_surprise_bps: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct AssociativeMemoryChecks {
+    #[serde(default)]
+    pub dim: Option<usize>,
+    #[serde(default)]
+    pub min_updates: Option<usize>,
+    #[serde(default)]
+    pub max_cells: Option<usize>,
+    #[serde(default)]
+    pub queries: Vec<AssociativeQueryCheck>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssociativeQueryCheck {
+    pub query: String,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub must_include_values: Vec<String>,
+    #[serde(default)]
+    pub must_not_include_values: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -639,6 +667,7 @@ pub fn evaluate_runtime_scenario_with_events(
         &mut failures,
     );
     evaluate_dense_update_checks(&scenario.checks.dense_updates, events, &mut failures);
+    evaluate_associative_memory_checks(&scenario.checks.associative_memory, state, &mut failures);
     failures.extend(
         evaluate_manuscript_one_read_protocol(
             &scenario.checks.manuscript_one_read,
@@ -778,6 +807,31 @@ pub fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
             .min_correction_surprise_bps
             .map(|_| 1)
             .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .dim
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .min_updates
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .max_cells
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .queries
+            .iter()
+            .map(|check| check.must_include_values.len() + check.must_not_include_values.len())
+            .sum::<usize>()
         + usize::from(scenario.checks.manuscript_one_read.require_source_read)
         + usize::from(scenario.checks.manuscript_one_read.require_explicit_close)
         + scenario.checks.manuscript_one_read.retrieval_turns.len()
@@ -1165,6 +1219,74 @@ fn evaluate_dense_update_checks(
             failures.push(format!(
                 "dense update expected correction surprise >= {threshold:.4}"
             ));
+        }
+    }
+}
+
+fn evaluate_associative_memory_checks(
+    checks: &AssociativeMemoryChecks,
+    state: &crate::MemoryState,
+    failures: &mut Vec<String>,
+) {
+    if checks == &AssociativeMemoryChecks::default() {
+        return;
+    }
+
+    let memory = state.associative_memory();
+    if let Some(expected_dim) = checks.dim {
+        if memory.dim != expected_dim {
+            failures.push(format!(
+                "associative memory dim was {}, expected {expected_dim}",
+                memory.dim
+            ));
+        }
+    }
+    if let Some(min_updates) = checks.min_updates {
+        if memory.update_count < min_updates {
+            failures.push(format!(
+                "associative memory saw {} update(s), expected at least {min_updates}",
+                memory.update_count
+            ));
+        }
+    }
+    if let Some(max_cells) = checks.max_cells {
+        if memory.cells.len() > max_cells {
+            failures.push(format!(
+                "associative memory has {} cell(s), expected at most {max_cells}",
+                memory.cells.len()
+            ));
+        }
+    }
+
+    for check in &checks.queries {
+        let candidates =
+            associative_candidates_for_query(state, &check.query, check.limit.unwrap_or(5));
+        for expected in &check.must_include_values {
+            if !candidates
+                .iter()
+                .any(|candidate| contains_ci(&candidate.value, expected))
+            {
+                failures.push(format!(
+                    "associative memory query {:?} missing candidate containing {:?}; candidates: {:?}",
+                    check.query,
+                    expected,
+                    candidates
+                        .iter()
+                        .map(|candidate| candidate.value.clone())
+                        .collect::<Vec<_>>()
+                ));
+            }
+        }
+        for forbidden in &check.must_not_include_values {
+            if candidates
+                .iter()
+                .any(|candidate| contains_ci(&candidate.value, forbidden))
+            {
+                failures.push(format!(
+                    "associative memory query {:?} included forbidden candidate {:?}",
+                    check.query, forbidden
+                ));
+            }
         }
     }
 }

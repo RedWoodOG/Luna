@@ -287,9 +287,20 @@ Guardrail:
 
 ### C3: Fixed Associative Matrix Prototype
 
+Status: LANDED.
+
 Deliverable:
 
 - deterministic fixed-size associative matrix for typed assertions.
+
+Evidence:
+
+- `AssociativeMemory` builds a fixed 16 x 16 matrix from current typed claims.
+- `associative_candidates_for_query` returns bounded hint candidates without
+  making the matrix answer authority.
+- `scenarios/runtime/dense_associative_project_slices.json` proves project
+  name, purpose, and pilot queries retrieve different requested slices while
+  storage remains fixed at 256 cells.
 
 Open only after:
 
@@ -372,31 +383,32 @@ Pass:
 
 ## Immediate Next Artifact
 
-Build `C3: fixed associative matrix prototype`.
+Build `C4: concept codebook prototype`.
 
-This is the first bounded learned hint surface behind the receipt contract. C2
-now records surprise/update receipts in the runtime event log and replay audit
-quarantines receipt hash divergence. C3 can add a deterministic fixed-size
-associative matrix for typed assertions without replacing event-log lineage.
+This is the first compact gist layer behind the receipt contract. C2 records
+surprise/update receipts in the runtime event log and replay audit quarantines
+receipt hash divergence. C3 added a deterministic fixed-size associative hint
+surface for typed assertions without replacing event-log lineage. C4 should add
+bounded concept slots for project/person/manuscript gist.
 
-Do not redesign the dense-memory architecture while building C3. The accepted
+Do not redesign the dense-memory architecture while building C4. The accepted
 shape is:
 
 ```text
-typed assertion
--> deterministic key/value encoding
--> bounded matrix update
--> update receipt with event/assertion lineage
--> candidate retrieval stays a hint until lineage-backed
+typed claims
+-> deterministic concept assignment
+-> bounded concept-slot update
+-> concept receipt with included/excluded claim ids
+-> gist candidates stay hints until lineage-backed
 ```
 
 The first implementation should be deterministic and boring:
 
 ```text
 current typed memory state
--> fixed-size association state
--> receipt-backed update
--> scenario proves requested slice retrieval without unbounded storage growth
+-> fixed-size concept slots
+-> merge/replace/prune only through inspectable receipts
+-> scenario proves dense related facts compress into stable gist
 ```
 
 Once that is inspectable and gated, the underlying model can become more

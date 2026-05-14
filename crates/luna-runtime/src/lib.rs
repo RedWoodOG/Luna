@@ -1169,6 +1169,72 @@ impl MemoryClaim {
     }
 }
 
+pub const ASSOCIATIVE_MEMORY_DIM: usize = 16;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssociativeMemory {
+    pub dim: usize,
+    pub cells: Vec<i32>,
+    pub update_count: usize,
+}
+
+impl Default for AssociativeMemory {
+    fn default() -> Self {
+        Self {
+            dim: ASSOCIATIVE_MEMORY_DIM,
+            cells: vec![0; ASSOCIATIVE_MEMORY_DIM * ASSOCIATIVE_MEMORY_DIM],
+            update_count: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssociativeCandidate {
+    pub assertion_key: String,
+    pub value: String,
+    pub score: i32,
+}
+
+impl AssociativeMemory {
+    pub fn from_claims(claims: &[MemoryClaim]) -> Self {
+        let mut memory = Self::default();
+        for claim in claims
+            .iter()
+            .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+        {
+            memory.update_claim(claim);
+        }
+        memory
+    }
+
+    fn update_claim(&mut self, claim: &MemoryClaim) {
+        let mut buckets = associative_buckets_for_claim(claim, self.dim);
+        buckets.sort_unstable();
+        buckets.dedup();
+        for source in &buckets {
+            for target in &buckets {
+                if source == target {
+                    continue;
+                }
+                let index = source * self.dim + target;
+                self.cells[index] = self.cells[index].saturating_add(1);
+            }
+        }
+        self.update_count = self.update_count.saturating_add(1);
+    }
+
+    fn signal(&self, query_buckets: &[usize], claim_buckets: &[usize]) -> i32 {
+        query_buckets
+            .iter()
+            .flat_map(|query| {
+                claim_buckets
+                    .iter()
+                    .map(move |claim| self.cells[query * self.dim + claim])
+            })
+            .sum()
+    }
+}
+
 pub const SURPRISE_UPDATE_STATE_HASH_VERSION: &str = "luna.surprise_update_state.v1";
 
 pub fn surprise_update_state_hash(claims: &[MemoryClaim]) -> Result<String> {
@@ -1303,6 +1369,10 @@ impl MemoryState {
         surprise_update_state_hash(&current_claims)
     }
 
+    pub fn associative_memory(&self) -> AssociativeMemory {
+        AssociativeMemory::from_claims(&self.claims)
+    }
+
     pub fn has_domain_kind(&self, domain: &str, kind: &str) -> bool {
         self.claims.iter().any(|claim| {
             claim.lifecycle_status == AssertionLifecycleStatus::Current
@@ -1310,6 +1380,133 @@ impl MemoryState {
                 && claim.kind == kind
         })
     }
+}
+
+pub fn associative_candidates_for_query(
+    state: &MemoryState,
+    query: &str,
+    limit: usize,
+) -> Vec<AssociativeCandidate> {
+    let memory = state.associative_memory();
+    let query_tokens = associative_query_tokens(query);
+    let mut query_buckets = query_tokens
+        .iter()
+        .map(|token| associative_bucket(token, memory.dim))
+        .collect::<Vec<_>>();
+    query_buckets.sort_unstable();
+    query_buckets.dedup();
+
+    let mut candidates = state
+        .claims
+        .iter()
+        .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+        .filter_map(|claim| {
+            let claim_tokens = associative_tokens_for_claim(claim);
+            let claim_buckets = claim_tokens
+                .iter()
+                .map(|token| associative_bucket(token, memory.dim))
+                .collect::<Vec<_>>();
+            let lexical_score = query_tokens
+                .iter()
+                .filter(|token| claim_tokens.contains(*token))
+                .count() as i32
+                * 12;
+            let kind_score = associative_kind_score(&query_tokens, claim) * 20;
+            let matrix_score = memory.signal(&query_buckets, &claim_buckets);
+            let score = matrix_score + lexical_score + kind_score;
+            (score > 0).then(|| AssociativeCandidate {
+                assertion_key: claim.key.clone(),
+                value: claim.value.clone(),
+                score,
+            })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .score
+            .cmp(&left.score)
+            .then_with(|| left.assertion_key.cmp(&right.assertion_key))
+    });
+    candidates.truncate(limit);
+    candidates
+}
+
+fn associative_kind_score(query_tokens: &[String], claim: &MemoryClaim) -> i32 {
+    let has = |needle: &str| query_tokens.iter().any(|token| token == needle);
+    let asks_identity = has("called") || has("name") || has("now");
+    let asks_purpose = has("help") || has("helps") || has("do") || has("purpose");
+    let asks_plan = has("pilot") || has("who") || has("with");
+    if asks_identity && claim.kind != "identity" {
+        return -3;
+    }
+    if asks_purpose && claim.kind != "purpose" {
+        return -3;
+    }
+    if asks_plan && claim.kind != "project_plan" && claim.kind != "role" {
+        return -3;
+    }
+    match claim.kind.as_str() {
+        "identity" if asks_identity => 2,
+        "purpose" if asks_purpose => 2,
+        "project_plan" if asks_plan => 2,
+        "role" if has("founder") || has("who") => 1,
+        _ => 0,
+    }
+}
+
+fn associative_buckets_for_claim(claim: &MemoryClaim, dim: usize) -> Vec<usize> {
+    associative_tokens_for_claim(claim)
+        .iter()
+        .map(|token| associative_bucket(token, dim))
+        .collect()
+}
+
+fn associative_tokens_for_claim(claim: &MemoryClaim) -> Vec<String> {
+    let mut tokens = vec![
+        format!("domain:{}", claim.domain),
+        format!("kind:{}", claim.kind),
+    ];
+    tokens.extend(memory_tokenize(&claim.domain));
+    tokens.extend(memory_tokenize(&claim.kind));
+    tokens.extend(memory_tokenize(&claim.value));
+    for (id, label, kind) in entity_keys_for_claim(claim) {
+        tokens.extend(memory_tokenize(&id));
+        tokens.extend(memory_tokenize(&label));
+        tokens.push(format!("entity_kind:{kind}"));
+    }
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
+
+fn associative_query_tokens(query: &str) -> Vec<String> {
+    let mut tokens = memory_tokenize(query);
+    if tokens.iter().any(|token| token == "project") {
+        tokens.push("entity_kind:project".to_string());
+    }
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
+
+fn associative_bucket(token: &str, dim: usize) -> usize {
+    let mut hasher = Sha256::new();
+    hash_receipt_field(&mut hasher, "associative_token", token);
+    let bytes = hasher.finalize();
+    let mut value = 0usize;
+    for byte in bytes.iter().take(std::mem::size_of::<usize>()) {
+        value = (value << 8) | (*byte as usize);
+    }
+    value % dim
+}
+
+fn memory_tokenize(text: &str) -> Vec<String> {
+    text.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter_map(|token| {
+            let token = token.trim().to_ascii_lowercase();
+            (token.len() >= 2).then_some(token)
+        })
+        .collect()
 }
 
 fn group_claims_by_entity(claims: &[MemoryClaim]) -> Vec<EntityMemoryGroup> {

@@ -1,0 +1,105 @@
+{
+  "name": "dense_associative_project_slices",
+  "turns": [
+    "Mara is the founder of Northstar Maps.",
+    "Northstar Maps helps hikers plan safe trail routes.",
+    "Mara is preparing a spring pilot with three local hiking clubs.",
+    "Correction: Northstar Maps is now called Cleartrail.",
+    "Cleartrail's pilot focuses on safer weekend route planning.",
+    "What is Mara's trail-planning project called now?",
+    "What does Mara's project help people do?",
+    "Who is Mara preparing the pilot with?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Northstar Maps is now called Cleartrail",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "purpose",
+          "value": "Northstar Maps helps hikers plan safe trail routes",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "project_plan",
+          "value": "Mara is preparing a spring pilot with three local hiking clubs",
+          "lifecycle_status": "current"
+        }
+      ]
+    },
+    "associative_memory": {
+      "dim": 16,
+      "min_updates": 5,
+      "max_cells": 256,
+      "queries": [
+        {
+          "query": "what is the project called now",
+          "limit": 2,
+          "must_include_values": [
+            "Northstar Maps is now called Cleartrail"
+          ],
+          "must_not_include_values": [
+            "Mara is the founder of Northstar Maps"
+          ]
+        },
+        {
+          "query": "what does the project help people do",
+          "limit": 2,
+          "must_include_values": [
+            "safe trail routes"
+          ],
+          "must_not_include_values": [
+            "three local hiking clubs"
+          ]
+        },
+        {
+          "query": "who is the pilot with",
+          "limit": 2,
+          "must_include_values": [
+            "three local hiking clubs"
+          ],
+          "must_not_include_values": [
+            "safe trail routes"
+          ]
+        }
+      ]
+    },
+    "runtime_replay_audit": {
+      "require_clean": true,
+      "min_dense_receipts": 5,
+      "max_dense_receipt_hash_mismatches": 0
+    },
+    "answers": [
+      {
+        "turn_index": 6,
+        "must_contain": [
+          "Cleartrail"
+        ],
+        "must_not_contain": [
+          "Mara is the founder of Northstar Maps"
+        ]
+      },
+      {
+        "turn_index": 7,
+        "must_contain": [
+          "safe trail routes"
+        ],
+        "must_not_contain": [
+          "three local hiking clubs"
+        ]
+      },
+      {
+        "turn_index": 8,
+        "must_contain": [
+          "three local hiking clubs"
+        ]
+      }
+    ]
+  }
+}

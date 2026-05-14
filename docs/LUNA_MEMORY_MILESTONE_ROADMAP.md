@@ -124,11 +124,13 @@ Current dense-memory slice:
 | C2b | LANDED | Emit surprise/update receipts from runtime turns. |
 | C2c | LANDED | Replay/audit surprise/update receipt hashes and quarantine mismatches. |
 | C2d | LANDED | Scenario proves repeated facts reinforce, novel facts update, corrections create pressure. |
+| C3 | LANDED | Fixed-size associative matrix derives bounded hint candidates for requested memory slices. |
+| C4 | PLANNED | Fixed-size concept codebook for project/person/manuscript gist. |
 
 Planning lock:
 
-- Do not redesign dense memory before C3 opens under the fixed associative
-  matrix constraints in the canonical dense memory plan.
+- Do not redesign dense memory before C4 opens under the fixed concept-codebook
+  constraints in the canonical dense memory plan.
 - Dense memory grows from the existing runtime/event-log path first.
 - New learned substrates must plug into the receipt contract; they do not
   replace event-log lineage.
