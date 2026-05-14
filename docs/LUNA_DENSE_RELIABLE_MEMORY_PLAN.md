@@ -18,6 +18,39 @@ Luna still keeps the raw event log as audit truth. The new memory layer does not
 replace provenance. It sits between event-sourced facts and bounded working
 memory as a compact learned state that can be replayed, inspected, and tested.
 
+## Canonical Direction
+
+This section is the decision lock for dense memory work. Do not reopen these
+choices unless a failing gate proves the direction is wrong.
+
+- Build dense memory inside the existing runtime/event-log spine first.
+- Keep `MemoryState`, episodes, topology bridge, and bounded working memory as
+  the product recall path until a learned substrate beats them behind gates.
+- Treat dense receipts as the first learned-memory interface. A future
+  associative matrix, concept codebook, or neural memory must plug into the same
+  receipt contract instead of replacing it.
+- Do not add a `luna-dense` crate until there is a real reusable learned-state
+  module with no dependency cycle against `luna-runtime`.
+- Do not introduce `LearnedState` as a wrapper name for existing `MemoryState`.
+  Existing state remains existing state. New names must describe actual new
+  mechanics, such as `SurpriseAssessment`, `AssociativeMemory`, or
+  `ConceptCodebook`.
+- Do not replace `decide_memory_intake` in one move. First wrap the current
+  intake/correction/reinforcement result in deterministic surprise receipts,
+  then migrate policy behind that inspectable seam.
+- Do not let reconstruction bypass lineage. Model-generated candidates are
+  hints until an event/receipt chain proves the surfaced value.
+
+Default build rule:
+
+```text
+current runtime behavior
+-> receipt it
+-> replay/audit it
+-> scenario-gate it
+-> only then make the underlying state denser
+```
+
 ## Reliability Standard
 
 Luna becomes reliable when each memory behavior has five inspectable surfaces:
@@ -166,6 +199,11 @@ Guardrail:
 
 ## Build Sequence
 
+The build sequence below is authoritative. Each slice must land with one
+capability and one guardrail before the next slice starts. If a later idea looks
+better, add it as a deferred note under the relevant future slice; do not
+reshape the current slice unless it cannot pass its gate.
+
 ### C1: Miss-To-Regression Memory
 
 Current status: first slice landed for project memory.
@@ -197,6 +235,21 @@ Deliverable:
 
 - runtime turn output includes prediction/surprise/update fields.
 
+Implementation lock:
+
+- C2 lives in `luna-runtime` and `luna-core` first.
+- `SurpriseUpdateReceipt` becomes an event-log payload before any new dense
+  crate is created.
+- Receipt emission classifies current runtime outcomes as
+  `reinforce_existing`, `novel_update`, `correction_pressure`, or
+  `ignored_low_surprise`.
+- `state_hash_before` and `state_hash_after` are hashes of the typed memory
+  claims visible to runtime at that point.
+- Prediction in C2 is the deterministic expectation implied by current typed
+  memory, not a neural model.
+- The scenario gate must fail if receipts are absent, hashes are malformed, or
+  correction/reinforcement/novel classifications regress.
+
 Receipt fields:
 
 ```text
@@ -226,6 +279,19 @@ Deliverable:
 
 - deterministic fixed-size associative matrix for typed assertions.
 
+Open only after:
+
+- C2b runtime receipt emission is landed;
+- C2c replay/audit receipt verification is landed;
+- C2d scenario proves repeated/novel/correction receipt behavior.
+
+Implementation lock:
+
+- The matrix is a bounded hint surface, not authority.
+- Matrix updates must create receipts that point back to event-log assertions.
+- Retrieval candidates cannot surface in answers without typed/event-backed
+  lineage.
+
 Guardrail:
 
 - the same entity with name, purpose, and pilot facts retrieves the requested
@@ -236,6 +302,17 @@ Guardrail:
 Deliverable:
 
 - fixed-size concept slots for project/person/manuscript gist.
+
+Open only after:
+
+- C3 proves a bounded learned state can be updated and queried without breaking
+  runtime recall.
+
+Implementation lock:
+
+- Concept slots have fixed ids and bounded count.
+- Merge, replace, and prune operations require receipts.
+- Every concept update records included and excluded claim ids.
 
 Guardrail:
 
@@ -248,6 +325,16 @@ Deliverable:
 
 - response planning can use model candidates, associative candidates, concept
   gist, and typed claims, but only event-backed values can reach the answer.
+
+Open only after:
+
+- C3 and C4 expose inspectable candidates with receipt lineage.
+
+Implementation lock:
+
+- Reconstruction is an answer-planning input, not final truth.
+- Unsupported model candidates must be visible in inspect output and filtered
+  from answer/context/markdown/working-memory surfaces.
 
 Guardrail:
 
@@ -280,6 +367,15 @@ not require a neural dependency yet. C2a created the stable receipt interface
 and deterministic state hash. C2b should emit that receipt from runtime turns so
 a later Titans-style neural memory module, Infini-style associative matrix, or
 TTT-style trainable state can plug into the same proof contract.
+
+Do not redesign the dense-memory architecture while building C2b. The accepted
+shape is:
+
+```text
+TurnObserved / AssertionExtracted / EpisodeCreated-or-Reinforced-or-Corrected
+-> SurpriseUpdateReceipted
+-> replay/audit verifies before/after state hashes
+```
 
 The first implementation should be deterministic and boring:
 

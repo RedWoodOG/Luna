@@ -125,6 +125,17 @@ Current dense-memory slice:
 | C2c | PLANNED | Replay/audit surprise/update receipt state hashes. |
 | C2d | PLANNED | Scenario proves repeated facts reinforce, novel facts update, corrections create pressure. |
 
+Planning lock:
+
+- Do not redesign dense memory before C2b-C2d land.
+- Dense memory grows from the existing runtime/event-log path first.
+- New learned substrates must plug into the receipt contract; they do not
+  replace event-log lineage.
+- A separate `luna-dense` crate waits until there is a real reusable bounded
+  learned-state module and no dependency cycle against `luna-runtime`.
+- `MemoryState` remains the product recall path until a denser substrate proves
+  itself with scenarios, replay/audit checks, and inspectable lineage.
+
 ## Current Proof Boundary
 
 Use this table when deciding whether a claim is allowed in docs, issues, PRs, or
