@@ -2885,6 +2885,7 @@ fn activate_working_memory_with_orb_state(
         &query,
         &cue_terms,
     );
+    boost_project_specific_nodes(&mut scored_nodes, &query);
     scored_nodes.retain(|node| node.activation > 0.0 && node.kind != MemoryNodeKind::User);
     scored_nodes.sort_by(|left, right| {
         right
@@ -2952,6 +2953,27 @@ fn activate_working_memory_with_orb_state(
             retired_orb_filtered_node_count,
             &correction_salience,
         ),
+    }
+}
+
+fn boost_project_specific_nodes(nodes: &mut [MemoryNode], query: &str) {
+    let desired = project_answer_kinds_for_query(query);
+    if desired.is_empty() {
+        return;
+    }
+    for node in nodes {
+        let direct_keys = node
+            .provenance
+            .iter()
+            .filter_map(direct_answer_assertion_key)
+            .collect::<Vec<_>>();
+        if direct_keys.iter().any(|key| {
+            desired
+                .iter()
+                .any(|kind| key.starts_with(&format!("project:{kind}=")))
+        }) {
+            node.activation += 2.0;
+        }
     }
 }
 
@@ -3185,6 +3207,7 @@ impl ContextPacket {
             .flat_map(|hit| hit.assertions.iter())
             .map(MemoryClaim::from_assertion)
             .filter(|claim| manuscript_claim_allowed_for_query(user_text, claim))
+            .filter(|claim| project_claim_allowed_for_query(user_text, claim))
             .filter(|claim| active_keys.contains(&claim.key))
             .take(budget.max_nodes)
             .collect::<Vec<_>>();
@@ -3872,6 +3895,9 @@ fn supported_entity_values(
     result: &RuntimeTurnResult,
     query: &str,
 ) -> Vec<String> {
+    if group.kind == "person" && !project_answer_kinds_for_query(query).is_empty() {
+        return Vec::new();
+    }
     let supported_keys = supported_assertion_keys(result);
     let desired_kinds = desired_entity_claim_kinds(query);
     let mut values = group
@@ -3909,6 +3935,7 @@ fn supported_related_project_values(
         return Vec::new();
     }
     let supported_keys = supported_assertion_keys(result);
+    let desired_project_kinds = project_answer_kinds_for_query(query);
     let mut values = result
         .memory_state
         .claims
@@ -3922,13 +3949,8 @@ fn supported_related_project_values(
                 .any(|label| claim.value.contains(label))
         })
         .filter(|claim| {
-            if contains_any(&lower_query, &["called", "name"]) {
-                claim.kind == "identity" && contains_ci(&claim.value, "called")
-            } else if contains_any(&lower_query, &["help", "helps", "do"]) {
-                claim.kind == "purpose"
-            } else {
-                false
-            }
+            desired_project_kinds.contains(&claim.kind.as_str())
+                && (claim.kind != "identity" || contains_ci(&claim.value, "called"))
         })
         .map(|claim| claim.value.clone())
         .collect::<Vec<_>>();
@@ -3936,6 +3958,17 @@ fn supported_related_project_values(
     values.dedup();
     values.truncate(3);
     values
+}
+
+fn project_answer_kinds_for_query(query: &str) -> Vec<&'static str> {
+    let lower_query = query.to_ascii_lowercase();
+    if contains_any(&lower_query, &["called", "name"]) {
+        vec!["identity"]
+    } else if contains_any(&lower_query, &["help", "helps", "do"]) {
+        vec!["purpose"]
+    } else {
+        Vec::new()
+    }
 }
 
 fn project_names_in_text(text: &str, result: &RuntimeTurnResult) -> Vec<String> {
@@ -4066,11 +4099,27 @@ fn manuscript_claim_allowed_for_query(query: &str, claim: &MemoryClaim) -> bool 
         || contains_all_terms(&normalize_for_match(&claim.value), &requested_terms)
 }
 
+fn project_claim_allowed_for_query(query: &str, claim: &MemoryClaim) -> bool {
+    let lower_query = query.to_ascii_lowercase();
+    if contains_any(&lower_query, &["help", "helps", "do"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return claim.domain != "project" || claim.kind == "purpose";
+    }
+    if contains_any(&lower_query, &["called", "name"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return claim.domain != "project" || claim.kind == "identity";
+    }
+    true
+}
+
 fn filter_working_memory_for_context(query: &str, working_memory: &WorkingMemory) -> WorkingMemory {
     let lower_query = query.to_ascii_lowercase();
     if !lower_query.contains("present")
         && !lower_query.contains("flashback")
         && !lower_query.contains("scene")
+        && !is_project_specific_query(&lower_query)
     {
         return working_memory.clone();
     }
@@ -4089,6 +4138,11 @@ fn filter_working_memory_for_context(query: &str, working_memory: &WorkingMemory
     filtered
 }
 
+fn is_project_specific_query(lower_query: &str) -> bool {
+    (lower_query.contains("project") || lower_query.contains("trail"))
+        && contains_any(lower_query, &["help", "helps", "do", "called", "name"])
+}
+
 fn working_memory_node_allowed_for_query(query: &str, node: &MemoryNode) -> bool {
     let evidence_text = format!(
         "{} {}",
@@ -4099,6 +4153,9 @@ fn working_memory_node_allowed_for_query(query: &str, node: &MemoryNode) -> bool
             .collect::<Vec<_>>()
             .join(" ")
     );
+    if !project_node_allowed_for_query(query, &evidence_text) {
+        return false;
+    }
     if !evidence_text.contains("story_time:") {
         return true;
     }
@@ -4111,6 +4168,28 @@ fn working_memory_node_allowed_for_query(query: &str, node: &MemoryNode) -> bool
         lifecycle_status: AssertionLifecycleStatus::Current,
     };
     manuscript_claim_allowed_for_query(query, &pseudo_claim)
+}
+
+fn project_node_allowed_for_query(query: &str, evidence_text: &str) -> bool {
+    let lower_query = query.to_ascii_lowercase();
+    let lower_evidence = evidence_text.to_ascii_lowercase();
+    if contains_any(&lower_query, &["help", "helps", "do"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return !contains_any(
+            &lower_evidence,
+            &["person:role=", "person:project_plan=", "project:identity="],
+        );
+    }
+    if contains_any(&lower_query, &["called", "name"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return !contains_any(
+            &lower_evidence,
+            &["person:role=", "person:project_plan=", "project:purpose="],
+        );
+    }
+    true
 }
 
 fn manuscript_desired_story_time(query: &str) -> Option<&'static str> {

@@ -73,6 +73,10 @@
         "must_contain": [
           "safe trail routes"
         ],
+        "must_not_contain": [
+          "Mara is the founder of Northstar Maps",
+          "Mara is preparing a spring pilot with three local hiking clubs"
+        ],
         "must_include_confidence": [
           "unconfirmed"
         ],
