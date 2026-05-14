@@ -1,21 +1,19 @@
 use chrono::{DateTime, Utc};
+use luna_activation::{compute_activation, propagate_activation_with_context, ActivationConfig};
+use luna_cluster::{
+    validate_compression_receipt, ClusterRegistry, CompressionDecision, CompressionReceipt,
+    MemoryCluster, SourceEventRef,
+};
 use luna_core::{
-
     AssertionConfidenceTier, AssertionCorrected, AssertionExtracted, AssertionLifecycleStatus,
-    TurnReading, ContradictionDetected, ConversationTurn, Episode, EpisodeCreated,
-    EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource, LunaError, LunaEvent,
-    MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance, MemoryRelationKind,
-
-    RecallMode, RecallSet, Result, Role, SystemKernel, StructuredAssertion, TurnObserved,
-    WorkingMemory, WorkingMemoryBudget,
+    ContradictionDetected, ConversationTurn, Episode, EpisodeCreated, EpisodeRecalled,
+    EpisodeReinforced, EventEnvelope, EventSource, LunaError, LunaEvent, MemoryEdge, MemoryMap,
+    MemoryNode, MemoryNodeKind, MemoryProvenance, MemoryRelationKind, RecallMode, RecallSet,
+    Result, Role, StructuredAssertion, SystemKernel, TurnObserved, TurnReading, WorkingMemory,
+    WorkingMemoryBudget,
 };
 use luna_events::{load_jsonl_events_strict, stable_stored_event_hash, JsonlEventLog};
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
-use luna_cluster::{
-    validate_compression_receipt, CompressionDecision, CompressionReceipt, MemoryCluster, ClusterRegistry,
-    SourceEventRef,
-};
-use luna_activation::{ActivationConfig, compute_activation, propagate_activation_with_context};
 use luna_recall::{RecallEngine, SimilarityRecallEngine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -27,6 +25,7 @@ use std::{
 pub mod scenario;
 pub mod topology_bridge;
 pub use luna_core::{MemoryIntakeAction, MemoryIntakeDecision};
+use luna_output::{OutputBuilder, OutputConfig, OutputPacket};
 pub use topology_bridge::{
     bridge_memory_to_topology, bridge_runtime_events_to_topology,
     commit_runtime_events_to_topology_ledger, ledger_events_from_persisted_json,
@@ -36,7 +35,6 @@ pub use topology_bridge::{
     TopologyTetherRecord,
 };
 use uuid::Uuid;
-use luna_output::{OutputBuilder, OutputConfig, OutputPacket};
 
 pub trait RuntimeExtractor {
     fn extract_runtime(&self, turn: &ConversationTurn) -> Result<TurnReading>;
@@ -66,7 +64,6 @@ pub struct RuntimeSession<E, R = SimilarityRecallEngine> {
     extractor: E,
     recall: R,
 }
-
 
 impl<E> RuntimeSession<E, SimilarityRecallEngine> {
     pub fn new(log_path: impl Into<PathBuf>, extractor: E) -> Self {
@@ -768,7 +765,10 @@ fn runtime_state_from_events(events: &[luna_events::StoredEvent]) -> Result<Memo
     let episodes = luna_store::rebuild_episodes(events)?;
     let mut state = MemoryState::from_episodes(&episodes);
     let ledger_commit = commit_runtime_events_to_topology_ledger(events)?;
-    apply_runtime_orb_authority(&mut state, ledger_commit.topology.clusters().clusters().values());
+    apply_runtime_orb_authority(
+        &mut state,
+        ledger_commit.topology.clusters().clusters().values(),
+    );
     Ok(state)
 }
 
@@ -1630,7 +1630,7 @@ fn seed_system_kernel(nodes: &mut BTreeMap<String, MemoryNode>, edges: &mut Vec<
         turn_id: None,
         assertion_key: None,
         system_root: Some(root.id.clone()),
-            lifecycle_status: None,
+        lifecycle_status: None,
     }];
     insert_node(
         nodes,
@@ -2763,7 +2763,13 @@ fn activate_working_memory_with_orb_state(
             filtered
         })
         .map(|mut node| {
-            node.activation = compute_activation(&node, &query, &cue_terms, &recalled_values, &ActivationConfig::default());
+            node.activation = compute_activation(
+                &node,
+                &query,
+                &cue_terms,
+                &recalled_values,
+                &ActivationConfig::default(),
+            );
             node
         })
         .collect::<Vec<_>>();
@@ -2894,8 +2900,6 @@ fn orb_id_from_system_root(system_root: &str) -> Option<String> {
     }
 }
 
-
-
 fn filtered_out_matching_claim_count(
     state: &MemoryState,
     query: &str,
@@ -3002,10 +3006,6 @@ fn tokens_overlap<L: AsRef<str>, R: AsRef<str>>(left: &[L], right: &[R]) -> bool
         token.len() > 2 && right.iter().any(|other| other.as_ref() == token)
     })
 }
-
-
-
-
 
 fn normalize_for_match(value: &str) -> String {
     value
@@ -4222,10 +4222,7 @@ fn render_context_summary(
     lines.join("\n")
 }
 
-fn assertion_confidence(
-    observation: &TurnReading,
-    assertion: &StructuredAssertion,
-) -> f32 {
+fn assertion_confidence(observation: &TurnReading, assertion: &StructuredAssertion) -> f32 {
     if assertion.domain == "identity" {
         observation
             .identity_relevance
@@ -4262,10 +4259,7 @@ fn mentions_ambiguous_person_pronoun(text: &str) -> bool {
         || text.starts_with("his ")
 }
 
-fn mentions_ambiguous_pronoun_without_anchor(
-    text: &str,
-    observation: &TurnReading,
-) -> bool {
+fn mentions_ambiguous_pronoun_without_anchor(text: &str, observation: &TurnReading) -> bool {
     mentions_ambiguous_person_pronoun(text) && !has_local_plural_anchor(text, observation)
 }
 
@@ -4750,7 +4744,9 @@ mod tests {
 
     #[test]
     fn entity_sieve_strengthens_matching_llm_assertions() {
-        use luna_extract::{LlmExtractor, LunaExtractor, RecordingFakeBackend, FileExtractionCache};
+        use luna_extract::{
+            FileExtractionCache, LlmExtractor, LunaExtractor, RecordingFakeBackend,
+        };
         use tempfile::TempDir;
 
         let log = temp_log();
@@ -4771,19 +4767,21 @@ mod tests {
             "signals": {}
         });
         fake.expect("pilot", &serde_json::to_string(&llm_response).unwrap());
-        fake.expect("for a living", &serde_json::to_string(&serde_json::json!({
-            "schema_version": "v3",
-            "assertions": [],
-            "signals": {}
-        })).unwrap());
+        fake.expect(
+            "for a living",
+            &serde_json::to_string(&serde_json::json!({
+                "schema_version": "v3",
+                "assertions": [],
+                "signals": {}
+            }))
+            .unwrap(),
+        );
 
         let llm = LlmExtractor::new(fake.clone(), cache);
         let extractor = LunaExtractor::new(llm, Vec::new());
         let session = RuntimeSession::new(&log, extractor);
 
-        session
-            .process_user_turn("I am a pilot.")
-            .unwrap();
+        session.process_user_turn("I am a pilot.").unwrap();
 
         // Ask the same thing again — entity sieve should strengthen it
         session
@@ -4795,9 +4793,7 @@ mod tests {
             .claims
             .iter()
             .find(|claim| {
-                claim.domain == "identity"
-                    && claim.kind == "profession"
-                    && claim.value == "pilot"
+                claim.domain == "identity" && claim.kind == "profession" && claim.value == "pilot"
             })
             .unwrap();
         assert_eq!(claim.status, AssertionConfidenceTier::Confirmed);
@@ -6072,7 +6068,7 @@ mod tests {
                 turn_id: Some(Uuid::new_v4()),
                 assertion_key: Some(retired_key.clone()),
                 system_root: Some("orb:orb-parent-retired".to_string()),
-            lifecycle_status: None,
+                lifecycle_status: None,
             }],
             created_at: None,
             contradiction_count: 0,
@@ -6089,7 +6085,7 @@ mod tests {
                 turn_id: Some(Uuid::new_v4()),
                 assertion_key: Some(active_key.clone()),
                 system_root: Some("orb:orb-child-active".to_string()),
-            lifecycle_status: None,
+                lifecycle_status: None,
             }],
             created_at: None,
             contradiction_count: 0,
@@ -6271,7 +6267,7 @@ mod tests {
                 turn_id: None,
                 assertion_key: Some(key),
                 system_root: Some("orb:unsupported:label".to_string()),
-            lifecycle_status: None,
+                lifecycle_status: None,
             }],
             created_at: None,
             contradiction_count: 0,
@@ -6313,14 +6309,14 @@ mod tests {
                     turn_id: None,
                     assertion_key: Some(key),
                     system_root: None,
-            lifecycle_status: None,
+                    lifecycle_status: None,
                 },
                 MemoryProvenance {
                     episode_id: None,
                     turn_id: None,
                     assertion_key: None,
                     system_root: Some("orb:runtime:project:MKPE".to_string()),
-            lifecycle_status: None,
+                    lifecycle_status: None,
                 },
             ],
             created_at: None,
@@ -6441,7 +6437,7 @@ mod tests {
                 turn_id: None,
                 assertion_key: Some(assertion_key.to_string()),
                 system_root: None,
-            lifecycle_status: None,
+                lifecycle_status: None,
             }],
             created_at: None,
             contradiction_count: 0,
@@ -6461,7 +6457,7 @@ mod tests {
                 turn_id: Some(turn_id),
                 assertion_key: Some(id.to_string()),
                 system_root: None,
-            lifecycle_status: None,
+                lifecycle_status: None,
             }],
             created_at: None,
             contradiction_count: 0,

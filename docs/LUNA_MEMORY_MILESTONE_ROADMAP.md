@@ -97,6 +97,9 @@ What this milestone does not prove yet:
 - It does not prove question quality.
 - It does not prove the full documented activation formula.
 - It does not prove baseline-vs-Luna superiority.
+- It does not prove superiority over Aura TCF-style cognitive runtime claims;
+  [`LUNA_OVER_AURA_BUILD_PLAN.md`](LUNA_OVER_AURA_BUILD_PLAN.md) defines the
+  required Luna-native build sequence and proof gates.
 
 ## Current Proof Boundary
 

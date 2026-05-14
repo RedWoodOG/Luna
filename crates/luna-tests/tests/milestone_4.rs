@@ -1,14 +1,14 @@
 use jsonschema::JSONSchema;
+use luna_cluster::{
+    evolve_cluster, form_memory_cluster, issue_compression_receipt,
+    validate_cluster_evolution_event, validate_compression_receipt, validate_consolidation_event,
+    ClusterEvolutionRequest, ClusterFormationPolicy, ClusterFormationRequest, CompressionDecision,
+    CompressionPolicy, CompressionReceipt, CompressionRequest, ConsolidationDecision,
+    ConsolidationEvent, MetricEvidenceRef, SourceEventRef,
+};
 use luna_ledger::{
     CompressionArtifact, EventPayload, EventSource, GenesisAttached, LedgerEvent, NodeCreated,
     NodeKind, RawEvent, RawEventDraft, TetherCreated, TetherKind, TopologyMutation,
-};
-use luna_cluster::{
-    evolve_cluster, form_memory_cluster, issue_compression_receipt, validate_compression_receipt,
-    validate_consolidation_event, validate_cluster_evolution_event, CompressionDecision,
-    CompressionPolicy, CompressionReceipt, CompressionRequest, ConsolidationDecision,
-    ConsolidationEvent, MetricEvidenceRef, ClusterEvolutionRequest, ClusterFormationPolicy,
-    ClusterFormationRequest, SourceEventRef,
 };
 use luna_replay::{ReplayAuditStatus, ReplayAuditor, ReplayedTopology, TopologyReplay};
 use serde_json::Value;
@@ -246,7 +246,10 @@ fn test_compression_receipt_schema_rejects_invalid_examples() {
 #[test]
 fn test_accepted_consolidation_event_forms_replayable_orb() {
     let mut topology = m1_live_topology();
-    let event = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let event = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
 
     topology.record_consolidation_event(event.clone()).unwrap();
     let replayed = TopologyReplay::replay_ledger(topology.ledger()).unwrap();
@@ -265,7 +268,10 @@ fn test_accepted_consolidation_event_forms_replayable_orb() {
 #[test]
 fn test_replay_auditor_accepts_valid_orb_backed_replay() {
     let mut topology = m1_live_topology();
-    let event = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let event = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
 
     topology.record_consolidation_event(event.clone()).unwrap();
     let report = ReplayAuditor::audit_ledger(&topology).unwrap();
@@ -293,7 +299,10 @@ fn test_replay_auditor_accepts_valid_orb_backed_replay() {
 fn test_replay_auditor_quarantines_forced_divergence_without_repair() {
     let mut topology = m1_live_topology();
     let replay_ledger_before_orb = topology.ledger().clone();
-    let event = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let event = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
 
     topology.record_consolidation_event(event).unwrap();
     let before_audit = topology.clone();
@@ -317,7 +326,10 @@ fn test_replay_auditor_quarantines_forced_divergence_without_repair() {
 #[test]
 fn test_rejected_consolidation_event_logs_without_forming_orb() {
     let mut topology = m1_live_topology();
-    let event = form_memory_cluster(orb_request(&topology, 0.2), &ClusterFormationPolicy::default());
+    let event = form_memory_cluster(
+        orb_request(&topology, 0.2),
+        &ClusterFormationPolicy::default(),
+    );
 
     topology.record_consolidation_event(event.clone()).unwrap();
     let replayed = TopologyReplay::replay_ledger(topology.ledger()).unwrap();
@@ -345,7 +357,10 @@ fn test_low_cohesion_accepted_receipt_is_rejected_before_append() {
 #[test]
 fn test_forged_replay_trace_rejects_before_append() {
     let mut topology = m1_live_topology();
-    let mut event = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let mut event = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     event.source_node_ids = vec!["node-1".to_string(), "node-2".to_string()];
     event.cohesion_rule_id = "forged-rule".to_string();
     let before = topology.clone();
@@ -375,7 +390,10 @@ fn test_low_order_score_mutation_rejects_before_append() {
 #[test]
 fn test_recorded_at_mutation_rejects_before_append() {
     let mut topology = m1_live_topology();
-    let mut event = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let mut event = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     event.recorded_at += chrono::TimeDelta::seconds(1);
     let before = topology.clone();
 
@@ -388,7 +406,10 @@ fn test_recorded_at_mutation_rejects_before_append() {
 #[test]
 fn test_blank_cohesion_rule_id_rejects_before_append() {
     let mut topology = m1_live_topology();
-    let mut event = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let mut event = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     event.cohesion_rule_id = " ".to_string();
     let before = topology.clone();
 
@@ -425,7 +446,10 @@ fn test_duplicate_sources_canonicalize_before_policy() {
 #[test]
 fn test_out_of_range_cohesion_rejected_by_rust_validation() {
     let mut topology = m1_live_topology();
-    let event = form_memory_cluster(orb_request(&topology, 1.5), &ClusterFormationPolicy::default());
+    let event = form_memory_cluster(
+        orb_request(&topology, 1.5),
+        &ClusterFormationPolicy::default(),
+    );
     let before = topology.clone();
 
     let error = topology.record_consolidation_event(event).unwrap_err();
@@ -589,8 +613,14 @@ fn test_rejected_receipt_requires_valid_source_event_hash() {
 #[test]
 fn test_duplicate_orb_id_rejects() {
     let mut topology = m1_live_topology();
-    let first = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
-    let second = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let first = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
+    let second = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
 
     topology.record_consolidation_event(first).unwrap();
     let before = topology.clone();
@@ -603,7 +633,10 @@ fn test_duplicate_orb_id_rejects() {
 #[test]
 fn test_duplicate_rejected_consolidation_event_id_rejects() {
     let mut topology = m1_live_topology();
-    let event = form_memory_cluster(orb_request(&topology, 0.2), &ClusterFormationPolicy::default());
+    let event = form_memory_cluster(
+        orb_request(&topology, 0.2),
+        &ClusterFormationPolicy::default(),
+    );
 
     topology.record_consolidation_event(event.clone()).unwrap();
     let before = topology.clone();
@@ -734,7 +767,6 @@ fn test_compression_receipt_rejects_output_artifact_hash_mismatch() {
     assert_eq!(topology, before);
 }
 
-
 #[test]
 fn test_split_receipt_replays_with_reversible_parent_lineage() {
     let mut registry = replayed_cluster_registry();
@@ -761,11 +793,13 @@ fn test_split_receipt_replays_with_reversible_parent_lineage() {
     assert_eq!(registry.evolution_event_ids(), &[split.event_id]);
 }
 
-
 #[test]
 fn test_split_receipt_appends_to_topology_ledger_and_replays() {
     let mut topology = m1_live_topology();
-    let formation = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let formation = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     topology
         .record_consolidation_event(formation.clone())
         .unwrap();
@@ -782,7 +816,9 @@ fn test_split_receipt_appends_to_topology_ledger_and_replays() {
         topology.clusters(),
     );
 
-    topology.record_cluster_evolution_event(split.clone()).unwrap();
+    topology
+        .record_cluster_evolution_event(split.clone())
+        .unwrap();
     let replayed = TopologyReplay::replay_ledger(topology.ledger()).unwrap();
 
     assert_eq!(replayed, topology);
@@ -803,7 +839,10 @@ fn test_split_receipt_appends_to_topology_ledger_and_replays() {
 
 fn test_split_receipt_rejects_missing_metric_evidence_event() {
     let mut topology = m1_live_topology();
-    let formation = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let formation = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     topology.record_consolidation_event(formation).unwrap();
     let split = evolve_cluster(
         ClusterEvolutionRequest::split(
@@ -831,7 +870,10 @@ fn test_split_receipt_rejects_missing_metric_evidence_event() {
 #[test]
 fn test_split_receipt_rejects_metric_evidence_hash_mismatch() {
     let mut topology = m1_live_topology();
-    let formation = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let formation = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     topology.record_consolidation_event(formation).unwrap();
     let mut evidence = metric_ref(&topology, "sentinel:splinter_pressure:forged");
     evidence.event_hash = "e".repeat(64);
@@ -848,7 +890,6 @@ fn test_split_receipt_rejects_metric_evidence_hash_mismatch() {
 
     let error = topology.record_cluster_evolution_event(split).unwrap_err();
 
-
     assert!(error.to_string().contains("evidence event"));
     assert!(error.to_string().contains("hash mismatch"));
     assert_eq!(topology, before);
@@ -857,7 +898,10 @@ fn test_split_receipt_rejects_metric_evidence_hash_mismatch() {
 #[test]
 fn test_replay_rejects_mismatched_metric_evidence_event() {
     let mut topology = m1_live_topology();
-    let formation = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let formation = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     topology
         .record_consolidation_event(formation.clone())
         .unwrap();
@@ -1121,13 +1165,19 @@ fn orb_request(topology: &ReplayedTopology, cohesion_score: f64) -> ClusterForma
 
 fn replayed_cluster_registry() -> luna_cluster::ClusterRegistry {
     let topology = m1_live_topology();
-    let formation = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let formation = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     luna_cluster::replay_consolidation_events(&[formation]).unwrap()
 }
 
 fn replayed_two_cluster_registry() -> luna_cluster::ClusterRegistry {
     let topology = m1_live_topology();
-    let first = form_memory_cluster(orb_request(&topology, 0.91), &ClusterFormationPolicy::default());
+    let first = form_memory_cluster(
+        orb_request(&topology, 0.91),
+        &ClusterFormationPolicy::default(),
+    );
     let mut second_request = orb_request(&topology, 0.9);
     second_request.orb_id = "orb-2".to_string();
     let second = form_memory_cluster(second_request, &ClusterFormationPolicy::default());

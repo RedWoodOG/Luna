@@ -214,8 +214,6 @@ impl ClusterFormationRequest {
     }
 }
 
-
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoryCluster {
     pub orb_id: String,
@@ -283,7 +281,8 @@ impl ClusterRegistry {
 
     fn apply_accepted_evolution_event(&mut self, event: &ClusterEvolutionEvent) -> Result<()> {
         for child_id in &event.child_orb_ids {
-            if self.clusters.contains_key(child_id) || self.retired_clusters.contains_key(child_id) {
+            if self.clusters.contains_key(child_id) || self.retired_clusters.contains_key(child_id)
+            {
                 return Err(LunaError::new(format!(
                     "child cluster {} already exists during evolution replay",
                     child_id
@@ -414,7 +413,10 @@ pub fn replay_consolidation_events(events: &[ConsolidationEvent]) -> Result<Clus
     Ok(registry)
 }
 
-pub fn evolve_cluster(request: ClusterEvolutionRequest, registry: &ClusterRegistry) -> ClusterEvolutionEvent {
+pub fn evolve_cluster(
+    request: ClusterEvolutionRequest,
+    registry: &ClusterRegistry,
+) -> ClusterEvolutionEvent {
     let request = canonical_evolution_request(request);
     let parent_orb_refs = parent_refs_for_request(&request, registry);
     let rejection_reason = evolution_rejection_reason(&request, registry);
@@ -495,7 +497,10 @@ pub fn load_consolidation_events_jsonl(path: &Path) -> Result<Vec<ConsolidationE
     Ok(events)
 }
 
-fn rejection_reason(request: &ClusterFormationRequest, policy: &ClusterFormationPolicy) -> Option<String> {
+fn rejection_reason(
+    request: &ClusterFormationRequest,
+    policy: &ClusterFormationPolicy,
+) -> Option<String> {
     if request.cohesion_rule_id.trim().is_empty() {
         return Some("cohesion rule id is required for memory cluster formation".to_string());
     }
@@ -620,7 +625,9 @@ pub fn validate_consolidation_event(event: &ConsolidationEvent) -> Result<()> {
 
 pub fn validate_cluster_evolution_event(event: &ClusterEvolutionEvent) -> Result<()> {
     if event.schema_version != CLUSTER_EVOLUTION_SCHEMA_VERSION {
-        return Err(LunaError::new("unexpected cluster evolution schema version"));
+        return Err(LunaError::new(
+            "unexpected cluster evolution schema version",
+        ));
     }
     let operation = parse_cluster_evolution_operation(&event.operation)?;
     if event.event_id.trim().is_empty() {
@@ -692,7 +699,9 @@ pub fn validate_cluster_evolution_event(event: &ClusterEvolutionEvent) -> Result
         _ => {}
     }
     if !is_hex_hash(&event.replay_trace_hash) {
-        return Err(LunaError::new("invalid cluster evolution replay trace hash"));
+        return Err(LunaError::new(
+            "invalid cluster evolution replay trace hash",
+        ));
     }
     let request = ClusterEvolutionRequest {
         operation,
@@ -709,7 +718,9 @@ pub fn validate_cluster_evolution_event(event: &ClusterEvolutionEvent) -> Result
         &event.recorded_at,
     );
     if event.replay_trace_hash != expected_trace {
-        return Err(LunaError::new("cluster evolution replay trace hash mismatch"));
+        return Err(LunaError::new(
+            "cluster evolution replay trace hash mismatch",
+        ));
     }
     let expected_event_id = cluster_evolution_event_id(
         operation,
@@ -829,7 +840,9 @@ fn evolution_rejection_reason(
         }
     }
     for child_id in &request.child_orb_ids {
-        if registry.clusters.contains_key(child_id) || registry.retired_clusters.contains_key(child_id) {
+        if registry.clusters.contains_key(child_id)
+            || registry.retired_clusters.contains_key(child_id)
+        {
             return Some(format!("child cluster {child_id} already exists"));
         }
     }
@@ -987,7 +1000,11 @@ fn cluster_evolution_trace_hash(
     recorded_at: &DateTime<Utc>,
 ) -> String {
     let mut hasher = Sha256::new();
-    hash_field(&mut hasher, "schema_version", CLUSTER_EVOLUTION_SCHEMA_VERSION);
+    hash_field(
+        &mut hasher,
+        "schema_version",
+        CLUSTER_EVOLUTION_SCHEMA_VERSION,
+    );
     hash_field(
         &mut hasher,
         "operation",
@@ -1120,7 +1137,10 @@ mod tests {
         let replayed = replay_consolidation_events(&[event.clone()]).unwrap();
 
         assert_eq!(replayed.clusters().len(), 1);
-        assert_eq!(replayed.clusters()["orb-1"].accepted_event_id, event.event_id);
+        assert_eq!(
+            replayed.clusters()["orb-1"].accepted_event_id,
+            event.event_id
+        );
     }
 
     #[test]

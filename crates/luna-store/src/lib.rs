@@ -247,7 +247,7 @@ fn merge_assertion(assertions: &mut Vec<StructuredAssertion>, assertion: Structu
 mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
-    use luna_core::{TurnReading, Signal, SignalReliability};
+    use luna_core::{Signal, SignalReliability, TurnReading};
     use luna_events::{
         AssertionCorrected, ContradictionDetected, EpisodeCreated, EpisodeDecayed, EventEnvelope,
         EventSource,

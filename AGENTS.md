@@ -6,6 +6,7 @@ This file is short on purpose. The canonical sources are:
 - **Doctrine:** [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md)
 - **Memory structure contract:** [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
 - **Roadmap:** [`docs/LUNA_MEMORY_MILESTONE_ROADMAP.md`](docs/LUNA_MEMORY_MILESTONE_ROADMAP.md)
+- **Aura comparison build plan:** [`docs/LUNA_OVER_AURA_BUILD_PLAN.md`](docs/LUNA_OVER_AURA_BUILD_PLAN.md)
 - **Current next artifact:** [`docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md`](docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md)
 - **Acceptance test:** [`README.md`](README.md) (10-turn real-week -> 24h+ -> 3 questions)
 

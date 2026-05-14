@@ -1,6 +1,6 @@
 use luna_core::{
-    AssertionLifecycleStatus, TurnReading, Episode, RecallHit, RecallMode, RecallReason,
-    RecallSet, Result,
+    AssertionLifecycleStatus, Episode, RecallHit, RecallMode, RecallReason, RecallSet, Result,
+    TurnReading,
 };
 use std::time::Instant;
 

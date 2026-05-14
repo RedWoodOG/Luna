@@ -1,5 +1,9 @@
 use crate::{EntityMemoryGroup, MemoryClaim, MemoryState};
 use chrono::{DateTime, Utc};
+use luna_cluster::{
+    form_memory_cluster_at, ClusterFormationPolicy, ClusterFormationRequest, ConsolidationDecision,
+    SourceEventRef,
+};
 use luna_core::{
     AssertionConfidenceTier, AssertionLifecycleStatus, LunaError, MemoryNodeKind, MemoryProvenance,
     MemoryRelationKind, Result, TopologyBridgeCommitted,
@@ -8,10 +12,6 @@ use luna_events::{stable_stored_event_hash, LunaEvent, StoredEvent};
 use luna_ledger::{
     EventPayload, EventSource as LedgerEventSource, NodeCreated, NodeKind, RawEvent, RawEventDraft,
     TetherCreated, TetherKind, TopologyMutation,
-};
-use luna_cluster::{
-    form_memory_cluster_at, ConsolidationDecision, ClusterFormationPolicy, ClusterFormationRequest,
-    SourceEventRef,
 };
 use luna_replay::ReplayedTopology;
 use serde::{Deserialize, Serialize};
@@ -604,7 +604,9 @@ fn claim_node_ref(claim: &MemoryClaim) -> String {
 fn is_system_node(node_id: &str, node_index: &BTreeMap<&str, &luna_core::MemoryNode>) -> bool {
     node_index
         .get(node_id)
-        .map(|node| node.kind == MemoryNodeKind::SystemKernel || is_system_provenance(&node.provenance))
+        .map(|node| {
+            node.kind == MemoryNodeKind::SystemKernel || is_system_provenance(&node.provenance)
+        })
         .unwrap_or(false)
 }
 

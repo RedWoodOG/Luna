@@ -7,8 +7,8 @@
 
 use chrono::Utc;
 use luna_core::{
-    Episode, EpisodeProfile, RecallMode, Signal, SignalReliability,
-    StructuredAssertion, TurnReading,
+    Episode, EpisodeProfile, RecallMode, Signal, SignalReliability, StructuredAssertion,
+    TurnReading,
 };
 use luna_recall::{GeometricRecallEngine, KeywordRecallEngine, RecallEngine, VectorRecallEngine};
 use std::collections::{BTreeMap, HashSet};
@@ -20,10 +20,7 @@ fn sig(value: f32, reliability: SignalReliability) -> Option<Signal> {
     Some(Signal::new(value, 0.75, reliability).with_source_count(2))
 }
 
-fn make_ep(
-    assertions: Vec<StructuredAssertion>,
-    profile: EpisodeProfile,
-) -> Episode {
+fn make_ep(assertions: Vec<StructuredAssertion>, profile: EpisodeProfile) -> Episode {
     Episode {
         id: Uuid::new_v4(),
         created_at: Utc::now(),
@@ -344,7 +341,9 @@ fn evaluate(engine: &dyn RecallEngine, corpus: &Corpus) -> EngineMetrics {
         if gt.is_empty() {
             continue;
         }
-        let result = engine.recall(probe, &corpus.episodes, RecallMode::Factual).unwrap();
+        let result = engine
+            .recall(probe, &corpus.episodes, RecallMode::Factual)
+            .unwrap();
 
         let top: Vec<usize> = result
             .hits
@@ -357,7 +356,11 @@ fn evaluate(engine: &dyn RecallEngine, corpus: &Corpus) -> EngineMetrics {
         let rel = found.intersection(gt).count();
 
         total_r += rel as f32 / gt.len() as f32;
-        total_p += if top.is_empty() { 0.0 } else { rel as f32 / top.len() as f32 };
+        total_p += if top.is_empty() {
+            0.0
+        } else {
+            rel as f32 / top.len() as f32
+        };
 
         let mut mrr = 0.0;
         for (rank, idx) in top.iter().enumerate() {
@@ -389,17 +392,24 @@ fn three_way_recall_benchmark() {
     println!();
     println!("| Metric      | Keyword | Vector | Geometric |");
     println!("|-------------+---------+--------+-----------|");
-    println!("| Recall@5    |  {:.4} |  {:.4} |   {:.4}  |", kw.recall_at_5, vc.recall_at_5, gm.recall_at_5);
-    println!("| Precision@5 |  {:.4} |  {:.4} |   {:.4}  |", kw.precision_at_5, vc.precision_at_5, gm.precision_at_5);
-    println!("| MRR         |  {:.4} |  {:.4} |   {:.4}  |", kw.mrr, vc.mrr, gm.mrr);
+    println!(
+        "| Recall@5    |  {:.4} |  {:.4} |   {:.4}  |",
+        kw.recall_at_5, vc.recall_at_5, gm.recall_at_5
+    );
+    println!(
+        "| Precision@5 |  {:.4} |  {:.4} |   {:.4}  |",
+        kw.precision_at_5, vc.precision_at_5, gm.precision_at_5
+    );
+    println!(
+        "| MRR         |  {:.4} |  {:.4} |   {:.4}  |",
+        kw.mrr, vc.mrr, gm.mrr
+    );
     println!();
 
-    let beats_kw = gm.recall_at_5 > kw.recall_at_5
-        || gm.precision_at_5 > kw.precision_at_5
-        || gm.mrr > kw.mrr;
-    let beats_vc = gm.recall_at_5 > vc.recall_at_5
-        || gm.precision_at_5 > vc.precision_at_5
-        || gm.mrr > vc.mrr;
+    let beats_kw =
+        gm.recall_at_5 > kw.recall_at_5 || gm.precision_at_5 > kw.precision_at_5 || gm.mrr > kw.mrr;
+    let beats_vc =
+        gm.recall_at_5 > vc.recall_at_5 || gm.precision_at_5 > vc.precision_at_5 || gm.mrr > vc.mrr;
 
     println!("Geometric beats keyword: {}", beats_kw);
     println!("Geometric beats vector:  {}", beats_vc);
@@ -410,8 +420,7 @@ fn three_way_recall_benchmark() {
         panic!(
             "FAIL: geometric lost to keyword (R={:.4} P={:.4} M={:.4}) \
              and vector (R={:.4} P={:.4} M={:.4}).",
-            kw.recall_at_5, kw.precision_at_5, kw.mrr,
-            vc.recall_at_5, vc.precision_at_5, vc.mrr,
+            kw.recall_at_5, kw.precision_at_5, kw.mrr, vc.recall_at_5, vc.precision_at_5, vc.mrr,
         );
     }
 }
@@ -432,7 +441,13 @@ fn empty_episodes_all_return_empty() {
 #[test]
 fn no_signal_probe_geometric_still_may_hit_via_assertion_fit() {
     // If assertion_fit matches via query_intents, score can be > threshold
-    let p = probe(None, None, None, Vec::new(), vec!["identity.profession.query".to_string()]);
+    let p = probe(
+        None,
+        None,
+        None,
+        Vec::new(),
+        vec!["identity.profession.query".to_string()],
+    );
     let profile = EpisodeProfile {
         semantic: None,
         intent: None,
@@ -453,7 +468,9 @@ fn no_signal_probe_geometric_still_may_hit_via_assertion_fit() {
         vec![StructuredAssertion::inferred("identity", "profession", "pilot").with_source_count(2)],
         profile,
     );
-    let r = GeometricRecallEngine.recall(&p, &[ep], RecallMode::Factual).unwrap();
+    let r = GeometricRecallEngine
+        .recall(&p, &[ep], RecallMode::Factual)
+        .unwrap();
     // Should hit because assertion_fit matches
     assert_eq!(r.hits.len(), 1);
 }

@@ -56,6 +56,8 @@ They do not yet prove:
 - long-lived external topology/cluster storage beyond the persisted runtime-log
   ledger snapshots;
 - superiority over baseline RAG, graph retrieval, or prior Luna versions;
+- superiority over Aura TCF-style cognitive runtime claims until the
+  Luna-over-Aura build plan has implementation proof, not only design parity;
 - that every documented activation component is mechanically enforced;
 - preserved gate artifacts from CI; use `scripts/testing-readiness.ps1` when an
   archive-grade evidence packet is required.
@@ -91,9 +93,12 @@ next:
 9. [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
    - binding contract for event log -> intake -> typed graph -> lifecycle ->
      bounded working memory -> provenance -> replay audit.
-10. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
+10. [`docs/LUNA_OVER_AURA_BUILD_PLAN.md`](docs/LUNA_OVER_AURA_BUILD_PLAN.md)
+   - engineering plan for making Luna stronger than Aura-style TCF systems
+     without weakening the memory contract.
+11. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -
    engineering guardrails and enforcement status.
-11. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
+12. [`luna-memory/docs/06_ROADMAP.md`](luna-memory/docs/06_ROADMAP.md) -
    topology-engine roadmap, including the runtime-to-topology bridge.
 
 ## Destination
