@@ -39,6 +39,11 @@
       ],
       "min_correction_surprise_bps": 9000
     },
+    "runtime_replay_audit": {
+      "require_clean": true,
+      "min_dense_receipts": 3,
+      "max_dense_receipt_hash_mismatches": 0
+    },
     "answers": [
       {
         "turn_index": 4,

@@ -276,6 +276,10 @@ pub struct RuntimeReplayAuditChecks {
     pub min_topology_tethers: Option<usize>,
     #[serde(default)]
     pub min_topology_orbs: Option<usize>,
+    #[serde(default)]
+    pub min_dense_receipts: Option<usize>,
+    #[serde(default)]
+    pub max_dense_receipt_hash_mismatches: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -746,6 +750,18 @@ pub fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
             .checks
             .runtime_replay_audit
             .min_topology_orbs
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .runtime_replay_audit
+            .min_dense_receipts
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .runtime_replay_audit
+            .max_dense_receipt_hash_mismatches
             .map(|_| 1)
             .unwrap_or(0)
         + scenario
@@ -1228,6 +1244,22 @@ fn evaluate_runtime_replay_audit_checks(
             failures.push(format!(
                 "runtime replay audit saw {} topology orb(s), expected at least {min_orbs}",
                 report.replayed_counts.topology_orbs
+            ));
+        }
+    }
+    if let Some(min_dense_receipts) = checks.min_dense_receipts {
+        if report.replayed_counts.dense_receipts < min_dense_receipts {
+            failures.push(format!(
+                "runtime replay audit saw {} dense receipt(s), expected at least {min_dense_receipts}",
+                report.replayed_counts.dense_receipts
+            ));
+        }
+    }
+    if let Some(max_mismatches) = checks.max_dense_receipt_hash_mismatches {
+        if report.replayed_counts.dense_receipt_hash_mismatches > max_mismatches {
+            failures.push(format!(
+                "runtime replay audit saw {} dense receipt hash mismatch(es), expected at most {max_mismatches}",
+                report.replayed_counts.dense_receipt_hash_mismatches
             ));
         }
     }

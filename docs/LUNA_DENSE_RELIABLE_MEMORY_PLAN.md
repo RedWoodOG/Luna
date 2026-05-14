@@ -228,7 +228,7 @@ Status:
 
 - C2a `SurpriseUpdateReceipt` type and deterministic state hashing: LANDED.
 - C2b runtime turn emission: LANDED.
-- C2c replay/audit receipt verification: PLANNED.
+- C2c replay/audit receipt verification: LANDED.
 - C2d scenario proving repeated/novel/correction receipt behavior: LANDED.
 
 Evidence:
@@ -237,8 +237,11 @@ Evidence:
   event log.
 - `RuntimeSession::process_turn` emits one receipt for each processed
   assertion.
+- Runtime replay audit counts dense receipts, counts dense receipt hash
+  mismatches, and quarantines logs with mismatched dense receipt hashes.
 - `scenarios/runtime/dense_surprise_gate_baseline.json` proves novel,
-  reinforcement, and correction-pressure classifications with valid hashes.
+  reinforcement, correction-pressure classifications, and clean dense receipt
+  replay-audit counts.
 
 Deliverable:
 
@@ -369,31 +372,31 @@ Pass:
 
 ## Immediate Next Artifact
 
-Build `C2c: replay/audit verification for surprise/update receipts`.
+Build `C3: fixed associative matrix prototype`.
 
-This is the replay bridge from current Luna to compressive model memory. C2a
-created the stable receipt interface and deterministic state hash. C2b emits
-that receipt from runtime turns. C2c should replay stored turns and verify that
-the surprise/update receipts still match the state hashes and receipt hashes
-recorded in the event log.
+This is the first bounded learned hint surface behind the receipt contract. C2
+now records surprise/update receipts in the runtime event log and replay audit
+quarantines receipt hash divergence. C3 can add a deterministic fixed-size
+associative matrix for typed assertions without replacing event-log lineage.
 
-Do not redesign the dense-memory architecture while building C2c. The accepted
+Do not redesign the dense-memory architecture while building C3. The accepted
 shape is:
 
 ```text
-TurnObserved / AssertionExtracted / EpisodeCreated-or-Reinforced-or-Corrected
--> SurpriseUpdateReceipted
--> replay/audit verifies before/after state hashes
+typed assertion
+-> deterministic key/value encoding
+-> bounded matrix update
+-> update receipt with event/assertion lineage
+-> candidate retrieval stays a hint until lineage-backed
 ```
 
 The first implementation should be deterministic and boring:
 
 ```text
-stored runtime events
--> recomputed typed memory state before each assertion
--> recomputed surprise receipt
--> compare stored receipt hash and before/after state hashes
--> quarantine/report divergence
+current typed memory state
+-> fixed-size association state
+-> receipt-backed update
+-> scenario proves requested slice retrieval without unbounded storage growth
 ```
 
 Once that is inspectable and gated, the underlying model can become more

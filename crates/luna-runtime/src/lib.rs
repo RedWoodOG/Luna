@@ -503,6 +503,10 @@ pub struct RuntimeReplayAuditCounts {
     pub valid_topology_source_event_refs: usize,
     #[serde(default)]
     pub topology_orbs: usize,
+    #[serde(default)]
+    pub dense_receipts: usize,
+    #[serde(default)]
+    pub dense_receipt_hash_mismatches: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -591,7 +595,9 @@ pub fn audit_runtime_events_against_state(
     let replayed_snapshot_hash = runtime_replay_snapshot_hash(&replayed, &replayed_bridge)?;
     let live_counts = RuntimeReplayAuditCounts::from_parts(events, live, &live_bridge);
     let replayed_counts = RuntimeReplayAuditCounts::from_parts(events, &replayed, &replayed_bridge);
-    let quarantine_required = live_snapshot_hash != replayed_snapshot_hash;
+    let dense_receipts_diverged = replayed_counts.dense_receipt_hash_mismatches > 0;
+    let quarantine_required =
+        live_snapshot_hash != replayed_snapshot_hash || dense_receipts_diverged;
 
     Ok(RuntimeReplayAuditReport {
         status: if quarantine_required {
@@ -603,7 +609,12 @@ pub fn audit_runtime_events_against_state(
         hash_version: RUNTIME_REPLAY_AUDIT_HASH_VERSION.to_string(),
         live_snapshot_hash,
         replayed_snapshot_hash,
-        replay_error: None,
+        replay_error: dense_receipts_diverged.then(|| {
+            format!(
+                "runtime replay audit found {} dense receipt hash mismatch(es)",
+                replayed_counts.dense_receipt_hash_mismatches
+            )
+        }),
         live_counts,
         replayed_counts,
     })
@@ -741,8 +752,28 @@ impl RuntimeReplayAuditCounts {
             topology_source_event_refs: topology_source_event_ref_count(bridge),
             valid_topology_source_event_refs: valid_topology_source_event_ref_count(bridge),
             topology_orbs: latest_topology_orb_count(events).unwrap_or_default(),
+            dense_receipts: dense_receipt_count(events),
+            dense_receipt_hash_mismatches: dense_receipt_hash_mismatch_count(events),
         }
     }
+}
+
+fn dense_receipt_count(events: &[luna_events::StoredEvent]) -> usize {
+    events
+        .iter()
+        .filter(|event| matches!(event.payload, LunaEvent::DenseUpdateReceipted(_)))
+        .count()
+}
+
+fn dense_receipt_hash_mismatch_count(events: &[luna_events::StoredEvent]) -> usize {
+    events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::DenseUpdateReceipted(receipt) => Some(receipt),
+            _ => None,
+        })
+        .filter(|receipt| receipt.validate().is_err())
+        .count()
 }
 
 fn latest_topology_orb_count(events: &[luna_events::StoredEvent]) -> Option<usize> {
