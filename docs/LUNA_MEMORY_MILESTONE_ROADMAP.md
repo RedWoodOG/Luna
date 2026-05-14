@@ -121,13 +121,13 @@ Current dense-memory slice:
 | Slice | Status | Description |
 |-------|--------|-------------|
 | C2a | LANDED | `SurpriseUpdateReceipt` type plus deterministic framed state/receipt hashing. |
-| C2b | PLANNED | Emit surprise/update receipts from runtime turns. |
+| C2b | LANDED | Emit surprise/update receipts from runtime turns. |
 | C2c | PLANNED | Replay/audit surprise/update receipt state hashes. |
-| C2d | PLANNED | Scenario proves repeated facts reinforce, novel facts update, corrections create pressure. |
+| C2d | LANDED | Scenario proves repeated facts reinforce, novel facts update, corrections create pressure. |
 
 Planning lock:
 
-- Do not redesign dense memory before C2b-C2d land.
+- Do not redesign dense memory before C2c lands.
 - Dense memory grows from the existing runtime/event-log path first.
 - New learned substrates must plug into the receipt contract; they do not
   replace event-log lineage.

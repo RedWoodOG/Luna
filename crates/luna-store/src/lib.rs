@@ -170,6 +170,7 @@ pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
             LunaEvent::TurnObserved(_)
             | LunaEvent::MemoryIntakeDecided(_)
             | LunaEvent::AssertionExtracted(_)
+            | LunaEvent::DenseUpdateReceipted(_)
             | LunaEvent::TopologyBridgeCommitted(_) => {}
         }
     }

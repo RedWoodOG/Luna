@@ -7,6 +7,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use luna_core::{
     AssertionConfidenceTier, AssertionLifecycleStatus, ConversationTurn, MemoryRelationKind, Role,
+    UpdateKind,
 };
 use luna_events::{JsonlEventLog, LunaEvent, StoredEvent};
 use luna_replay::ReplayAuditor;
@@ -99,6 +100,8 @@ pub struct RuntimeScenarioChecks {
     pub runtime_replay_audit: RuntimeReplayAuditChecks,
     #[serde(default)]
     pub manuscript_one_read: ManuscriptOneReadChecks,
+    #[serde(default, alias = "dense")]
+    pub dense_updates: DenseUpdateChecks,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -273,6 +276,19 @@ pub struct RuntimeReplayAuditChecks {
     pub min_topology_tethers: Option<usize>,
     #[serde(default)]
     pub min_topology_orbs: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct DenseUpdateChecks {
+    #[serde(default)]
+    pub min_receipts: Option<usize>,
+    #[serde(default)]
+    pub require_valid_hashes: bool,
+    #[serde(default)]
+    pub must_include_kinds: Vec<UpdateKind>,
+    #[serde(default)]
+    pub min_correction_surprise_bps: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -618,6 +634,7 @@ pub fn evaluate_runtime_scenario_with_events(
         events,
         &mut failures,
     );
+    evaluate_dense_update_checks(&scenario.checks.dense_updates, events, &mut failures);
     failures.extend(
         evaluate_manuscript_one_read_protocol(
             &scenario.checks.manuscript_one_read,
@@ -729,6 +746,20 @@ pub fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
             .checks
             .runtime_replay_audit
             .min_topology_orbs
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .dense_updates
+            .min_receipts
+            .map(|_| 1)
+            .unwrap_or(0)
+        + usize::from(scenario.checks.dense_updates.require_valid_hashes)
+        + scenario.checks.dense_updates.must_include_kinds.len()
+        + scenario
+            .checks
+            .dense_updates
+            .min_correction_surprise_bps
             .map(|_| 1)
             .unwrap_or(0)
         + usize::from(scenario.checks.manuscript_one_read.require_source_read)
@@ -1050,6 +1081,83 @@ fn evaluate_topology_durable_commit_checks(
             ));
         }
     }
+}
+
+fn evaluate_dense_update_checks(
+    checks: &DenseUpdateChecks,
+    events: &[StoredEvent],
+    failures: &mut Vec<String>,
+) {
+    if checks == &DenseUpdateChecks::default() {
+        return;
+    }
+
+    let receipts = events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::DenseUpdateReceipted(receipt) => Some(receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(min_receipts) = checks.min_receipts {
+        if receipts.len() < min_receipts {
+            failures.push(format!(
+                "dense update expected at least {min_receipts} receipt(s), found {}",
+                receipts.len()
+            ));
+        }
+    }
+
+    for expected in &checks.must_include_kinds {
+        if !receipts
+            .iter()
+            .any(|receipt| receipt.update_kind == *expected)
+        {
+            failures.push(format!("dense update missing kind: {expected:?}"));
+        }
+    }
+
+    if checks.require_valid_hashes {
+        for receipt in &receipts {
+            if let Err(err) = receipt.validate() {
+                failures.push(format!("dense update receipt failed validation: {err}"));
+            }
+            for (label, hash) in [
+                ("input_event_hash", receipt.input_event_hash.as_str()),
+                ("prediction_hash", receipt.prediction_hash.as_str()),
+                ("state_hash_before", receipt.state_hash_before.as_str()),
+                ("state_hash_after", receipt.state_hash_after.as_str()),
+                ("receipt_hash", receipt.receipt_hash.as_str()),
+            ] {
+                if !valid_lower_hex_hash(hash) {
+                    failures.push(format!("dense update receipt has invalid {label}: {hash}"));
+                }
+            }
+            if receipt.lineage_hashes.is_empty() {
+                failures.push("dense update receipt has no lineage hashes".to_string());
+            }
+        }
+    }
+
+    if let Some(min_bps) = checks.min_correction_surprise_bps {
+        let threshold = (min_bps as f32 / 10_000.0).clamp(0.0, 1.0);
+        if !receipts.iter().any(|receipt| {
+            receipt.update_kind == UpdateKind::CorrectionPressure
+                && receipt.surprise_score >= threshold
+        }) {
+            failures.push(format!(
+                "dense update expected correction surprise >= {threshold:.4}"
+            ));
+        }
+    }
+}
+
+fn valid_lower_hex_hash(hash: &str) -> bool {
+    hash.len() == 64
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn evaluate_runtime_replay_audit_checks(

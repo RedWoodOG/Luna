@@ -227,9 +227,18 @@ Next build:
 Status:
 
 - C2a `SurpriseUpdateReceipt` type and deterministic state hashing: LANDED.
-- C2b runtime turn emission: PLANNED.
+- C2b runtime turn emission: LANDED.
 - C2c replay/audit receipt verification: PLANNED.
-- C2d scenario proving repeated/novel/correction receipt behavior: PLANNED.
+- C2d scenario proving repeated/novel/correction receipt behavior: LANDED.
+
+Evidence:
+
+- `LunaEvent::DenseUpdateReceipted` records surprise/update receipts in the
+  event log.
+- `RuntimeSession::process_turn` emits one receipt for each processed
+  assertion.
+- `scenarios/runtime/dense_surprise_gate_baseline.json` proves novel,
+  reinforcement, and correction-pressure classifications with valid hashes.
 
 Deliverable:
 
@@ -360,15 +369,15 @@ Pass:
 
 ## Immediate Next Artifact
 
-Build `C2b: runtime emission for surprise/update receipts`.
+Build `C2c: replay/audit verification for surprise/update receipts`.
 
-This is the first bridge from current Luna to compressive model memory. It does
-not require a neural dependency yet. C2a created the stable receipt interface
-and deterministic state hash. C2b should emit that receipt from runtime turns so
-a later Titans-style neural memory module, Infini-style associative matrix, or
-TTT-style trainable state can plug into the same proof contract.
+This is the replay bridge from current Luna to compressive model memory. C2a
+created the stable receipt interface and deterministic state hash. C2b emits
+that receipt from runtime turns. C2c should replay stored turns and verify that
+the surprise/update receipts still match the state hashes and receipt hashes
+recorded in the event log.
 
-Do not redesign the dense-memory architecture while building C2b. The accepted
+Do not redesign the dense-memory architecture while building C2c. The accepted
 shape is:
 
 ```text
@@ -380,11 +389,11 @@ TurnObserved / AssertionExtracted / EpisodeCreated-or-Reinforced-or-Corrected
 The first implementation should be deterministic and boring:
 
 ```text
-current typed memory state
--> prediction/redundancy check
--> surprise score
--> update receipt
--> replayed state hash
+stored runtime events
+-> recomputed typed memory state before each assertion
+-> recomputed surprise receipt
+-> compare stored receipt hash and before/after state hashes
+-> quarantine/report divergence
 ```
 
 Once that is inspectable and gated, the underlying model can become more
