@@ -1192,18 +1192,19 @@ fn project_entity_keys(value: &str) -> Vec<(String, String, String)> {
 
 fn project_subject_from_claim_value(value: &str) -> Option<String> {
     let lower = value.to_ascii_lowercase();
-    let subject_end = [" is ", " has ", " uses ", " needs ", " does "]
-        .iter()
-        .filter_map(|needle| lower.find(needle))
-        .min()?;
-    let subject = value[..subject_end]
-        .trim()
-        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != ' ');
-    if is_project_name(subject) {
-        Some(subject.to_string())
-    } else {
-        None
-    }
+    let subject_end = [
+        " is ",
+        " has ",
+        " uses ",
+        " needs ",
+        " does ",
+        " helps ",
+        " focuses ",
+    ]
+    .iter()
+    .filter_map(|needle| lower.find(needle))
+    .min()?;
+    clean_project_subject(&value[..subject_end])
 }
 
 fn character_entity_keys(value: &str) -> Vec<(String, String, String)> {
@@ -2018,6 +2019,13 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                     format!("{name} is {role}"),
                 ));
             }
+            if let Some(plan) = capture_person_project_plan(sentence, &lower_name) {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "project_plan",
+                    format!("{name} is preparing {plan}"),
+                ));
+            }
         }
 
         if !sentence_people.is_empty() {
@@ -2050,14 +2058,23 @@ fn capture_plural_profession_fallback(
 
 fn capture_project_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
     for sentence in split_sentences(text) {
-        let Some((name, description)) = capture_project_description(sentence) else {
-            continue;
-        };
-        assertions.push(StructuredAssertion::new(
-            "project",
-            "identity",
-            format!("{name} is {description}"),
-        ));
+        if let Some((name, new_name)) = capture_project_rename(sentence) {
+            assertions.push(StructuredAssertion::new(
+                "project",
+                "identity",
+                format!("{name} is now called {new_name}"),
+            ));
+        }
+        if let Some(value) = capture_project_purpose(sentence) {
+            assertions.push(StructuredAssertion::new("project", "purpose", value));
+        }
+        if let Some((name, description)) = capture_project_description(sentence) {
+            assertions.push(StructuredAssertion::new(
+                "project",
+                "identity",
+                format!("{name} is {description}"),
+            ));
+        }
     }
 }
 
@@ -2370,9 +2387,69 @@ fn capture_project_description(sentence: &str) -> Option<(String, String)> {
     }
 }
 
+fn capture_project_rename(sentence: &str) -> Option<(String, String)> {
+    let lower = sentence.to_ascii_lowercase();
+    let (name, alias) = if let Some(index) = lower.find(" is now called ") {
+        (
+            project_subject_candidate(&sentence[..index]),
+            sentence[index + " is now called ".len()..].trim(),
+        )
+    } else if let Some(index) = lower.find(" is called ") {
+        (
+            project_subject_candidate(&sentence[..index]),
+            sentence[index + " is called ".len()..].trim(),
+        )
+    } else {
+        return None;
+    };
+    let name = clean_project_subject(name)?;
+    let alias = clean_relation_target_label(alias);
+    (!alias.is_empty()).then_some((name, alias))
+}
+
+fn capture_project_purpose(sentence: &str) -> Option<String> {
+    let lower = sentence.to_ascii_lowercase();
+    if let Some(index) = lower.find(" helps ") {
+        let name = clean_project_subject(project_subject_candidate(&sentence[..index]))?;
+        let tail = clean_relation_target_label(&sentence[index + " helps ".len()..]);
+        if !tail.is_empty() {
+            return Some(format!("{name} helps {tail}"));
+        }
+    }
+    if let Some(index) = lower.find(" focuses on ") {
+        let subject = clean_project_subject(project_subject_candidate(&sentence[..index]))?;
+        let tail = clean_relation_target_label(&sentence[index + " focuses on ".len()..]);
+        if !tail.is_empty() {
+            return Some(format!("{subject} focuses on {tail}"));
+        }
+    }
+    None
+}
+
+fn clean_project_subject(value: &str) -> Option<String> {
+    let trimmed = value
+        .trim()
+        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != ' ' && ch != '\'')
+        .trim();
+    let has_possessive_context = trimmed.contains("'s ");
+    let owner = trimmed
+        .split_once("'s ")
+        .map(|(owner, _)| owner)
+        .unwrap_or(trimmed)
+        .trim();
+    if is_project_name(owner) || (has_possessive_context && is_single_titlecase_token(owner)) {
+        Some(owner.to_string())
+    } else {
+        None
+    }
+}
+
 fn project_subject_candidate(prefix: &str) -> &str {
     prefix
         .rsplit([',', ';'])
+        .next()
+        .unwrap_or(prefix)
+        .rsplit(':')
         .next()
         .unwrap_or(prefix)
         .split(" but ")
@@ -2575,6 +2652,23 @@ fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
     }
 }
 
+fn capture_person_project_plan(sentence: &str, lower_name: &str) -> Option<String> {
+    if is_query_sentence(sentence) {
+        return None;
+    }
+    let lower = sentence.to_ascii_lowercase();
+    let needle = format!("{lower_name} is preparing ");
+    let index = lower.find(&needle)?;
+    if !sentence[..index]
+        .trim_matches(|ch: char| !ch.is_ascii_alphabetic())
+        .is_empty()
+    {
+        return None;
+    }
+    let plan = clean_relation_target_label(&sentence[index + needle.len()..]);
+    (!plan.is_empty()).then_some(plan)
+}
+
 fn clean_location_label(value: &str) -> String {
     value
         .trim()
@@ -2687,6 +2781,16 @@ fn is_single_name(value: &str) -> bool {
     };
     first.is_ascii_uppercase()
         && chars.all(|ch| ch.is_ascii_lowercase())
+        && !matches!(value, "I" | "They" | "The" | "A" | "An" | "My" | "Lives")
+}
+
+fn is_single_titlecase_token(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_uppercase()
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit())
         && !matches!(value, "I" | "They" | "The" | "A" | "An" | "My" | "Lives")
 }
 
@@ -3469,6 +3573,7 @@ pub fn plan_conversation_response(user_text: &str, result: &RuntimeTurnResult) -
             let mut labels = Vec::new();
             for group in groups {
                 let mut values = supported_entity_values(group, result, &text);
+                values.extend(supported_related_project_values(group, result, &text));
                 if !values.is_empty() {
                     labels.push(group.label.clone());
                     remembered.append(&mut values);
@@ -3783,6 +3888,67 @@ fn supported_entity_values(
     values
 }
 
+fn supported_related_project_values(
+    group: &EntityMemoryGroup,
+    result: &RuntimeTurnResult,
+    query: &str,
+) -> Vec<String> {
+    if group.kind != "person" {
+        return Vec::new();
+    }
+    let lower_query = query.to_ascii_lowercase();
+    if !lower_query.contains("project") && !lower_query.contains("trail") {
+        return Vec::new();
+    }
+    let project_labels = group
+        .claims
+        .iter()
+        .flat_map(|claim| project_names_in_text(&claim.value, result))
+        .collect::<BTreeSet<_>>();
+    if project_labels.is_empty() {
+        return Vec::new();
+    }
+    let supported_keys = supported_assertion_keys(result);
+    let mut values = result
+        .memory_state
+        .claims
+        .iter()
+        .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+        .filter(|claim| supported_keys.contains(&claim.key))
+        .filter(|claim| claim.domain == "project")
+        .filter(|claim| {
+            project_labels
+                .iter()
+                .any(|label| claim.value.contains(label))
+        })
+        .filter(|claim| {
+            if contains_any(&lower_query, &["called", "name"]) {
+                claim.kind == "identity" && contains_ci(&claim.value, "called")
+            } else if contains_any(&lower_query, &["help", "helps", "do"]) {
+                claim.kind == "purpose"
+            } else {
+                false
+            }
+        })
+        .map(|claim| claim.value.clone())
+        .collect::<Vec<_>>();
+    values.sort();
+    values.dedup();
+    values.truncate(3);
+    values
+}
+
+fn project_names_in_text(text: &str, result: &RuntimeTurnResult) -> Vec<String> {
+    result
+        .memory_state
+        .entity_groups
+        .iter()
+        .filter(|group| group.kind == "project")
+        .filter(|group| contains_ci(text, &group.label))
+        .map(|group| group.label.clone())
+        .collect()
+}
+
 fn desired_entity_claim_kinds(query: &str) -> Vec<&'static str> {
     if contains_any(query, &["where", "live", "lives", "location", "moved"]) {
         vec!["location"]
@@ -3792,6 +3958,10 @@ fn desired_entity_claim_kinds(query: &str) -> Vec<&'static str> {
         vec!["interest"]
     } else if contains_any(query, &["age", "old"]) {
         vec!["age"]
+    } else if contains_any(query, &["pilot", "with"]) {
+        vec!["project_plan"]
+    } else if contains_any(query, &["called", "name"]) {
+        vec!["project_name"]
     } else {
         Vec::new()
     }

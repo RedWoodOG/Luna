@@ -1,0 +1,96 @@
+{
+  "name": "controlled_trial_project_memory_regression",
+  "turns": [
+    "Mara is the founder of Northstar Maps.",
+    "Northstar Maps helps hikers plan safe trail routes.",
+    "Mara is preparing a spring pilot with three local hiking clubs.",
+    "Correction: Northstar Maps is now called Cleartrail.",
+    "Cleartrail's pilot focuses on safer weekend route planning.",
+    "What is Mara's trail-planning project called now?",
+    "What does Mara's project help people do?",
+    "Who is Mara preparing the pilot with?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "person",
+          "kind": "role",
+          "value": "Mara is the founder of Northstar Maps",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "project_plan",
+          "value": "Mara is preparing a spring pilot with three local hiking clubs",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Northstar Maps is now called Cleartrail",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "purpose",
+          "value": "Northstar Maps helps hikers plan safe trail routes",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "purpose",
+          "value": "Cleartrail focuses on safer weekend route planning",
+          "lifecycle_status": "current"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10
+    },
+    "runtime_replay_audit": {
+      "require_clean": true
+    },
+    "answers": [
+      {
+        "turn_index": 6,
+        "must_contain": [
+          "Cleartrail"
+        ],
+        "must_not_contain": [
+          "Mara is the founder of Northstar Maps"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      },
+      {
+        "turn_index": 7,
+        "must_contain": [
+          "safe trail routes"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      },
+      {
+        "turn_index": 8,
+        "must_contain": [
+          "three local hiking clubs"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

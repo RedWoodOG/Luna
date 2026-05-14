@@ -1,6 +1,7 @@
 chained_correction_lifecycle.json
 correction_back_to_superseded_value.json
 correction_surprise_salience.json
+controlled_trial_project_memory_regression.json
 council_capture_vocabulary_expansion.json
 council5_runtime_topology_bridge.json
 identity_profession_correction.json
