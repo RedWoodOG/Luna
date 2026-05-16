@@ -1,0 +1,65 @@
+{
+  "name": "manuscript_one_read_lockout_proxy",
+  "turns": [
+    "MANUSCRIPT: Mara Vey is the captain of the Tidefall. The manuscript is closed.",
+    "MANUSCRIPT: John Cook is the baker of the Glass Ward after the source was closed.",
+    "The manuscript is closed. Who is the captain of the Tidefall?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "manuscript",
+          "kind": "character_identity",
+          "value": "Mara Vey is the captain of the Tidefall"
+        },
+        {
+          "domain": "manuscript",
+          "kind": "source_status",
+          "value": "manuscript source closed"
+        }
+      ],
+      "must_exclude": [
+        {
+          "domain": "manuscript",
+          "kind": "character_identity",
+          "value": "John Cook is the baker of the Glass Ward after the source was closed"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Mara Vey"
+      ],
+      "must_exclude_labels": [
+        "John Cook",
+        "Glass Ward"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "answers": [
+      {
+        "turn_index": 3,
+        "must_contain": [
+          "Mara Vey"
+        ],
+        "must_not_contain": [
+          "John Cook",
+          "Glass Ward"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

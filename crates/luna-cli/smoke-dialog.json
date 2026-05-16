@@ -1,0 +1,12 @@
+{
+  "seed": "Taylor lives in Vermont.",
+  "distract_turns": [
+    "Taylor is planning a quiet Sunday grocery run."
+  ],
+  "retrieve_before_correction": "Where does Taylor live?",
+  "correction": "Taylor moved to Maine.",
+  "retrieve_after_correction": "Where does Taylor live?",
+  "expect_before": "Vermont",
+  "expect_after": "Maine",
+  "expect_not_after": ["Vermont"]
+}

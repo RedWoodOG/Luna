@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.local/schemas/consolidation_event.schema.json",
+  "title": "Luna Consolidation Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "operation",
+    "orb_id",
+    "source_node_ids",
+    "source_tether_ids",
+    "source_event_refs",
+    "cohesion_rule_id",
+    "cohesion_score",
+    "decision",
+    "rejection_reason",
+    "replay_trace_hash",
+    "recorded_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "luna.consolidation_event.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^consolidation-[a-f0-9]{64}$"
+    },
+    "operation": {
+      "const": "cluster_formed"
+    },
+    "orb_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_node_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "source_tether_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "source_event_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_id", "event_hash"],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "event_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "cohesion_rule_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "cohesion_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "decision": {
+      "enum": ["accepted", "rejected"]
+    },
+    "rejection_reason": {
+      "type": ["string", "null"]
+    },
+    "replay_trace_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "luna.consolidation_event.v1",
+      "event_id": "consolidation-13742b22402c4da6b5327855edd889738b8f3a90729a5f9bd11059835856d62a",
+      "operation": "cluster_formed",
+      "orb_id": "orb-1",
+      "source_node_ids": ["node-1", "node-2"],
+      "source_tether_ids": ["tether-1"],
+      "source_event_refs": [
+        {
+          "event_id": "source-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "cohesion_rule_id": "rule-1",
+      "cohesion_score": 0.82,
+      "decision": "accepted",
+      "rejection_reason": null,
+      "replay_trace_hash": "d32dd9b6d8945f6c343755bdfe024bc1029a6230c51cae3b90d44e2efece804c",
+      "recorded_at": "2026-05-09T19:00:00Z"
+    },
+    {
+      "schema_version": "luna.consolidation_event.v1",
+      "event_id": "consolidation-df5a1cffc1b31c59a7368f42f17ff8d2017b9d9c343df7206f8f456cd7165173",
+      "operation": "cluster_formed",
+      "orb_id": "orb-1",
+      "source_node_ids": ["node-1", "node-2"],
+      "source_tether_ids": ["tether-1"],
+      "source_event_refs": [
+        {
+          "event_id": "source-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "cohesion_rule_id": "rule-1",
+      "cohesion_score": 0.2,
+      "decision": "rejected",
+      "rejection_reason": "cohesion score 0.200 below threshold 0.700",
+      "replay_trace_hash": "05568367e9ad627eca2c96d3226a134ce38a3e43f99d77dce089fc484bf9d0fe",
+      "recorded_at": "2026-05-09T19:00:00Z"
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "accepted"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_node_ids": {
+            "minItems": 2
+          },
+          "source_event_refs": {
+            "minItems": 1
+          },
+          "rejection_reason": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "accepted"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "rejection_reason": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "rejected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "rejection_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
+}

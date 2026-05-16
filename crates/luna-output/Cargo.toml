@@ -1,0 +1,13 @@
+[package]
+name = "luna-output"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+serde = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

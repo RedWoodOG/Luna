@@ -1,0 +1,26 @@
+{
+  "name": "bond_correction_receipt",
+  "turns": [
+    {
+      "content": "Maria is a colleague.",
+      "timestamp": "2026-05-15T10:00:00Z"
+    },
+    {
+      "content": "Maria is my friend.",
+      "timestamp": "2026-05-15T10:01:00Z"
+    }
+  ],
+  "checks": {
+    "bonds": {
+      "must_include": [
+        {
+          "source_entity": "luna",
+          "target_entity": "Maria",
+          "kind": "Friend",
+          "min_trust": 0.5,
+          "min_intimacy": 0.4
+        }
+      ]
+    }
+  }
+}

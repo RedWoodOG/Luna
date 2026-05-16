@@ -1,0 +1,14 @@
+[package]
+name = "luna-node"
+version.workspace = true
+edition.workspace = true
+description = "Typed memory nodes for Luna topology."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+luna-core = { path = "../luna-core" }
+luna-inspector = { path = "../luna-inspector" }
+luna-ledger = { path = "../luna-ledger" }
+serde.workspace = true

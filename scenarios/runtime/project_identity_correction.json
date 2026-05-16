@@ -1,0 +1,106 @@
+{
+  "name": "project_identity_correction",
+  "turns": [
+    "Atlas Loom is my planning engine.",
+    "Atlas Loom is my project workspace. Correction.",
+    "blue chair twelve river battery",
+    "What did I say about Atlas Loom?"
+  ],
+  "checks": {
+    "must_contain": [
+      "project:identity=Atlas Loom is my project workspace"
+    ],
+    "must_not_contain": [
+      "project:identity=Atlas Loom is my planning engine"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Atlas Loom is my project workspace",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Atlas Loom is my planning engine",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "project:Atlas_Loom",
+          "label": "Atlas Loom",
+          "kind": "project",
+          "claims": [
+            {
+              "domain": "project",
+              "kind": "identity",
+              "value": "Atlas Loom is my project workspace"
+            }
+          ]
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "project:Atlas_Loom",
+          "relation": "provenance_for",
+          "target_label": "Atlas Loom is my project workspace"
+        }
+      ],
+      "must_exclude": [
+        {
+          "source": "project:Atlas_Loom",
+          "relation": "provenance_for",
+          "target_label": "Atlas Loom is my planning engine"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Atlas Loom",
+        "Atlas Loom is my project workspace"
+      ],
+      "must_exclude_labels": [
+        "Atlas Loom is my planning engine"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "intake": {
+      "must_match_actions": [
+        "store_with_uncertainty",
+        "supersede_or_correct",
+        "ignore_noise",
+        "ignore_noise"
+      ]
+    },
+    "answers": [
+      {
+        "turn_index": 4,
+        "must_contain": [
+          "Atlas Loom is my project workspace"
+        ],
+        "must_not_contain": [
+          "Atlas Loom is my planning engine"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

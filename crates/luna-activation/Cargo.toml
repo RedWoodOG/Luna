@@ -1,0 +1,13 @@
+[package]
+name = "luna-activation"
+version.workspace = true
+edition.workspace = true
+description = "Luna memory activation formula — configurable scoring, recency, staleness, and graph propagation."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+chrono.workspace = true
+luna-core = { path = "../luna-core" }
+serde.workspace = true

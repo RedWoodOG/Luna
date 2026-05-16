@@ -1,0 +1,156 @@
+{
+  "name": "real_conversation_gate",
+  "turns": [
+    {
+      "content": "I am Joe.",
+      "timestamp": "2026-05-01T09:00:00Z"
+    },
+    {
+      "content": "I am a software developer.",
+      "timestamp": "2026-05-01T09:01:00Z"
+    },
+    {
+      "content": "Chris lives in Iowa. Chris is a basketball fan.",
+      "timestamp": "2026-05-01T09:02:00Z"
+    },
+    {
+      "content": "MKPE is my provenance engine.",
+      "timestamp": "2026-05-01T09:03:00Z"
+    },
+    {
+      "content": "blue chair twelve river battery",
+      "timestamp": "2026-05-01T09:04:00Z"
+    },
+    {
+      "content": "Actually Chris moved to Ohio.",
+      "timestamp": "2026-05-01T09:05:00Z"
+    },
+    {
+      "content": "I like football.",
+      "timestamp": "2026-05-01T09:06:00Z"
+    },
+    {
+      "content": "What do I do for a living?",
+      "timestamp": "2026-05-02T09:06:00Z"
+    },
+    {
+      "content": "What do you know about Chris?",
+      "timestamp": "2026-05-02T09:07:00Z"
+    },
+    {
+      "content": "What did I say about MKPE?",
+      "timestamp": "2026-05-02T09:08:00Z"
+    }
+  ],
+  "restart_after_turns": [7],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "identity",
+          "kind": "name",
+          "value": "Joe"
+        },
+        {
+          "domain": "identity",
+          "kind": "profession",
+          "value": "software developer"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Ohio",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "MKPE is my provenance engine"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "MKPE"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "time": {
+      "require_timestamps": true,
+      "min_any_gap_seconds": 86400
+    },
+    "runtime_replay_audit": {
+      "require_clean": true,
+      "require_source_event_hashes": true,
+      "min_stored_events": 20,
+      "min_topology_nodes": 3,
+      "min_topology_tethers": 1,
+      "min_topology_orbs": 1
+    },
+    "topology_bridge": {
+      "require_source_event_hashes": true,
+      "require_recall_reason_available": true,
+      "require_durable_commit": true,
+      "min_committed_nodes": 3,
+      "min_committed_tethers": 1
+    },
+    "answers": [
+      {
+        "turn_index": 8,
+        "must_contain": [
+          "software developer"
+        ],
+        "must_not_contain": [
+          "Francois",
+          "basketball fan"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      },
+      {
+        "turn_index": 9,
+        "must_contain": [
+          "Chris lives in Ohio"
+        ],
+        "must_not_contain": [
+          "Chris lives in Iowa",
+          "Francois"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      },
+      {
+        "turn_index": 10,
+        "must_contain": [
+          "MKPE is my provenance engine"
+        ],
+        "must_not_contain": [
+          "Atlas Loom",
+          "Chris lives"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

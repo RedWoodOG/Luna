@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://luna.local/schemas/compression_receipt.schema.json",
+  "title": "Luna Compression Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "operation",
+    "compression_id",
+    "input_event_refs",
+    "retained_event_refs",
+    "algorithm_id",
+    "input_set_hash",
+    "output_hash",
+    "output_artifact_ref",
+    "output_byte_len",
+    "decision",
+    "rejection_reason",
+    "proof_hash",
+    "recorded_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "luna.compression_receipt.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^compression-[a-f0-9]{64}$"
+    },
+    "operation": {
+      "const": "compression_receipted"
+    },
+    "compression_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "input_event_refs": {
+      "$comment": "JSON Schema enforces nonempty unique ref objects. Rust validation also enforces event_id-sorted refs and uniqueness by event_id.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/source_event_ref"
+      }
+    },
+    "retained_event_refs": {
+      "$comment": "JSON Schema enforces nonempty unique ref objects. Rust validation also enforces event_id-sorted refs and uniqueness by event_id.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/source_event_ref"
+      }
+    },
+    "algorithm_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "input_set_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "output_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "output_artifact_ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "output_byte_len": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decision": {
+      "enum": ["accepted", "rejected"]
+    },
+    "rejection_reason": {
+      "type": ["string", "null"]
+    },
+    "proof_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "source_event_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_hash"],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "event_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "luna.compression_receipt.v1",
+      "event_id": "compression-c722e4944cdf16e0910c6120cbee777331bb23a5d5d3e1731efb4c53ca6eeba1",
+      "operation": "compression_receipted",
+      "compression_id": "compression-1",
+      "input_event_refs": [
+        {
+          "event_id": "compression-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "event_id": "compression-event-2",
+          "event_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "retained_event_refs": [
+        {
+          "event_id": "compression-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "event_id": "compression-event-2",
+          "event_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "algorithm_id": "lossless-raw-ancestry-v1",
+      "input_set_hash": "7ec759a42e03aaa67fb3100564efe0a39bb0be29960a4c365a9d1b0c9db695d4",
+      "output_hash": "774124b7f8546e3408803cd74c79270e446dc84f34cdeb38ce77c9410918398f",
+      "output_artifact_ref": "artifact://compression-1",
+      "output_byte_len": 44,
+      "decision": "accepted",
+      "rejection_reason": null,
+      "proof_hash": "c3f0a73525c3d79419b1a4e359943cd1867e72fd0ba7130fe1b339912a5f766a",
+      "recorded_at": "2026-05-09T19:00:00.000000000Z"
+    },
+    {
+      "schema_version": "luna.compression_receipt.v1",
+      "event_id": "compression-446bf5fdf94628fd106aac4ff1acbf47353086f95a711f3a8e140efd8aaf438e",
+      "operation": "compression_receipted",
+      "compression_id": "compression-lossy",
+      "input_event_refs": [
+        {
+          "event_id": "compression-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "event_id": "compression-event-2",
+          "event_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "retained_event_refs": [
+        {
+          "event_id": "compression-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "algorithm_id": "lossless-raw-ancestry-v1",
+      "input_set_hash": "7ec759a42e03aaa67fb3100564efe0a39bb0be29960a4c365a9d1b0c9db695d4",
+      "output_hash": "d6b08c447af8910225fdb3e016443a2c000b1b193f2721fcb72328cd7e675418",
+      "output_artifact_ref": "artifact://compression-lossy",
+      "output_byte_len": 48,
+      "decision": "rejected",
+      "rejection_reason": "compression would lose raw event ancestry",
+      "proof_hash": "1101fd98f78ee5f1e70883d892999be4cee7226eaefdc8ee0ff7320ba9bf1821",
+      "recorded_at": "2026-05-09T19:00:00.000000000Z"
+    }
+  ],
+  "x-invalid-examples": [
+    {
+      "schema_version": "luna.compression_receipt.v1",
+      "event_id": "compression-ec0d4588fc4579d7832a7c691f954eee0ed782dc74623e4a7e99feb430225990",
+      "operation": "compression_receipted",
+      "compression_id": "compression-lossy",
+      "input_event_refs": [
+        {
+          "event_id": "compression-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "event_id": "compression-event-2",
+          "event_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "retained_event_refs": [
+        {
+          "event_id": "compression-event-1",
+          "event_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "algorithm_id": "lossless-raw-ancestry-v1",
+      "input_set_hash": "7ec759a42e03aaa67fb3100564efe0a39bb0be29960a4c365a9d1b0c9db695d4",
+      "output_hash": "f11a68e4b6a66fda0feb3d01102ad3a1f8d6449da38ec4971be1ee8f80b2e67f",
+      "output_artifact_ref": "artifact://compression/compression-lossy/output.json",
+      "output_byte_len": 47,
+      "decision": "rejected",
+      "rejection_reason": "",
+      "proof_hash": "899d96b3eadbb539a48c81c5b4cd640ac2ff4309e6328c992d3a849c0140b8f4",
+      "recorded_at": "2026-05-09T19:00:00.000000000Z"
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "accepted"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "input_event_refs": {
+            "minItems": 2
+          },
+          "retained_event_refs": {
+            "minItems": 2
+          },
+          "output_byte_len": {
+            "minimum": 1
+          },
+          "rejection_reason": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "rejected"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "rejection_reason": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  ]
+}

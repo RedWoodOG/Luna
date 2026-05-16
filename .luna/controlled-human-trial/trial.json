@@ -1,0 +1,30 @@
+{
+  "protocol_version": "1.0",
+  "trial_id": "cht-001",
+  "reviewer": "write-mind-team",
+  "created_at": "2026-05-15T00:00:00Z",
+  "source_prompt_boundary": "Luna answers only from its event-sourced memory. It does not reread or search external sources. All answers mark confirmed, inferred, and unknown.",
+  "turns": [
+    {"turn": 1, "user": "I'm working on a novel about a detective named Marcus Cole who operates in 1920s Chicago. He's a war veteran with a prosthetic leg."},
+    {"turn": 2, "user": "Can you remember the detective's name and where he works?"},
+    {"turn": 3, "user": "His partner is Sarah Chen, a forensic analyst who joined the force after her brother was killed."},
+    {"turn": 4, "user": "Marcus has a complicated relationship with the police chief - Chief O'Malley covered up a mistake Marcus made during a raid in 1923."},
+    {"turn": 5, "user": "Actually, I need to correct something - it wasn't 1923, it was 1924 when the raid happened. And Marcus didn't lose his leg in the war - he lost it in that raid."},
+    {"turn": 6, "user": "Can you tell me everything you remember about Marcus Cole?"},
+    {"turn": 7, "user": "The story takes place over one week in December 1926, during a brutal cold snap that freezes the Chicago River."}
+  ],
+  "questions": [
+    {"id": "q1", "question": "What is the detective's full name and what do you know about his leg?", "expected_behavior": "Should recall Marcus Cole, 1920s Chicago, lost leg in 1924 raid (not war)"},
+    {"id": "q2", "question": "Who is Sarah Chen and what's her relationship to Marcus?", "expected_behavior": "Should recall Sarah Chen, forensic analyst, partner, brother was killed"},
+    {"id": "q3", "question": "What year was the raid and what is Marcus's relationship with Chief O'Malley?", "expected_behavior": "Should recall 1924 (corrected from 1923), O'Malley covered up mistake"},
+    {"id": "q4", "question": "When does the story take place and what is significant about the weather?", "expected_behavior": "Should recall December 1926, cold snap, Chicago River froze"}
+  ],
+  "scoring": {
+    "q1": {"score": null, "misses": [], "notes": ""},
+    "q2": {"score": null, "misses": [], "notes": ""},
+    "q3": {"score": null, "misses": [], "notes": ""},
+    "q4": {"score": null, "misses": [], "notes": ""}
+  },
+  "regression_backlog": [],
+  "status": "ready_for_review_not_passed"
+}

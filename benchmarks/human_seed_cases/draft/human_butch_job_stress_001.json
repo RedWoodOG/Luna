@@ -1,0 +1,61 @@
+{
+  "category": "emotional_recall",
+  "expected": {
+    "must_not_claim": [
+      "I was fired",
+      "Ty replaced me",
+      "Butch explicitly threatened me",
+      "RBFCU blamed me",
+      "Ty lived in Corpus Christi"
+    ],
+    "must_recall": [
+      "Butch's calendar email",
+      "job was in jeopardy",
+      "Ty",
+      "RBFCU"
+    ]
+  },
+  "id": "human_butch_job_stress_001",
+  "proof_category": "human_seed_validation",
+  "proof_eligible": false,
+  "schema_version": 1,
+  "target_dimensions": [
+    "emotional_arousal",
+    "temporal_relevance",
+    "identity_relevance",
+    "goal_pressure"
+  ],
+  "timestamp_origin": "authorial_human_seed_draft",
+  "turns": [
+    {
+      "content": "On 2025-12-16, the day after my birthday, my boss's boss Butch emailed that my calendar looked empty and wanted to make sure I was getting things done and making the most of my time. It stressed me out because I felt like my job was in jeopardy. Then on 2026-01-29 Butch emailed about two new Texas hires, including one in Corpus Christi territory, which made me worry even more that I might be replaced.",
+      "role": "user",
+      "timestamp": "2026-01-29T15:00:00Z"
+    },
+    {
+      "content": "That sounds like the calendar email started a longer job-security worry, and the new-hire email intensified it.",
+      "role": "assistant",
+      "timestamp": "2026-01-29T15:05:00Z"
+    },
+    {
+      "content": "In April, Cathy sent Ty to work with me so I could train him. I showed him the RBFCU protocol, contacts, emails, branch check-in, cleaning process, and signature routine. He ignored the process, caused issues with branch managers, and RBFCU escalated it. I went back to the locations, followed the normal process, apologized for anything outside our normal behavior, and got the work done. On 2026-04-24 Butch emailed that the company had parted ways with Ty because it was not a good fit. I took it as a sign I was doing the right thing and knew my job.",
+      "role": "user",
+      "timestamp": "2026-04-24T16:00:00Z"
+    },
+    {
+      "content": "That reframed the fear: Ty looked threatening at first, but the RBFCU situation ended up confirming your process knowledge.",
+      "role": "assistant",
+      "timestamp": "2026-04-24T16:05:00Z"
+    },
+    {
+      "content": "Today is 2026-05-03 and thinking about going back to work tomorrow is bringing all of this up again.",
+      "role": "user",
+      "timestamp": "2026-05-03T11:00:00Z"
+    },
+    {
+      "content": "Why was thinking about work tomorrow bringing up old stress?",
+      "role": "user",
+      "timestamp": "2026-05-03T11:05:00Z"
+    }
+  ]
+}

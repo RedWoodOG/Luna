@@ -1,0 +1,150 @@
+{
+  "name": "attention_lattice_from_graph",
+  "turns": [
+    {
+      "content": "I am Joe.",
+      "timestamp": "2026-05-15T09:00:00Z"
+    },
+    {
+      "content": "I am a developer.",
+      "timestamp": "2026-05-15T09:01:00Z"
+    },
+    {
+      "content": "MKPE is my provenance engine.",
+      "timestamp": "2026-05-15T09:02:00Z"
+    },
+    {
+      "content": "I have a GF.",
+      "timestamp": "2026-05-15T09:03:00Z"
+    },
+    {
+      "content": "Chris wants to retire.",
+      "timestamp": "2026-05-15T09:04:00Z"
+    },
+    {
+      "content": "What do you remember about me?",
+      "timestamp": "2026-05-15T09:05:00Z"
+    }
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "identity",
+          "kind": "name",
+          "value": "Joe",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "identity",
+          "kind": "profession",
+          "value": "developer",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "MKPE is my provenance engine"
+        },
+        {
+          "domain": "relationship",
+          "kind": "partner_status",
+          "value": "I have a GF"
+        },
+        {
+          "domain": "person",
+          "kind": "goal",
+          "value": "Chris wants to retire"
+        }
+      ]
+    },
+    "lattice": {
+      "turns": [
+        {
+          "turn_index": 5,
+          "dimension": "identity",
+          "min_score": 0.1,
+          "reason_must_contain": "identity"
+        },
+        {
+          "turn_index": 5,
+          "dimension": "meaning",
+          "min_score": 0.1,
+          "reason_must_contain": "meaning"
+        },
+        {
+          "turn_index": 5,
+          "dimension": "trust",
+          "min_score": 0.1,
+          "reason_must_contain": "trust"
+        },
+        {
+          "turn_index": 5,
+          "dimension": "skill",
+          "min_score": 0.1,
+          "reason_must_contain": "skill"
+        },
+        {
+          "turn_index": 5,
+          "dimension": "context",
+          "min_score": 0.1,
+          "reason_must_contain": "context"
+        },
+        {
+          "turn_index": 5,
+          "dimension": "goal",
+          "min_score": 0.1,
+          "reason_must_contain": "goal"
+        },
+        {
+          "turn_index": 5,
+          "dimension": "attention",
+          "min_score": 0.05,
+          "reason_must_contain": "attention"
+        },
+        {
+          "turn_index": 6,
+          "dimension": "identity",
+          "min_score": 0.1,
+          "reason_must_contain": "identity"
+        },
+        {
+          "turn_index": 6,
+          "dimension": "meaning",
+          "min_score": 0.1,
+          "reason_must_contain": "meaning"
+        },
+        {
+          "turn_index": 6,
+          "dimension": "trust",
+          "min_score": 0.1,
+          "reason_must_contain": "trust"
+        },
+        {
+          "turn_index": 6,
+          "dimension": "skill",
+          "min_score": 0.1,
+          "reason_must_contain": "skill"
+        },
+        {
+          "turn_index": 6,
+          "dimension": "context",
+          "min_score": 0.1,
+          "reason_must_contain": "context"
+        },
+        {
+          "turn_index": 6,
+          "dimension": "goal",
+          "min_score": 0.1,
+          "reason_must_contain": "goal"
+        },
+        {
+          "turn_index": 6,
+          "dimension": "attention",
+          "min_score": 0.05,
+          "reason_must_contain": "attention"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "name": "identity_profession_correction",
+  "turns": [
+    "I work as a software developer.",
+    "I work as a product manager, correction.",
+    "blue chair twelve river battery",
+    "What did I say about product manager?"
+  ],
+  "checks": {
+    "must_contain": [
+      "identity:profession=product manager"
+    ],
+    "must_not_contain": [
+      "identity:profession=software developer"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "identity",
+          "kind": "profession",
+          "value": "product manager",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "identity",
+          "kind": "profession",
+          "value": "software developer",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "self",
+          "label": "you",
+          "kind": "self",
+          "claims": [
+            {
+              "domain": "identity",
+              "kind": "profession",
+              "value": "product manager"
+            }
+          ]
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "user:self",
+          "relation": "has_attribute",
+          "target_label": "product manager"
+        }
+      ],
+      "must_exclude": [
+        {
+          "source": "user:self",
+          "relation": "has_attribute",
+          "target_label": "software developer"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "product manager"
+      ],
+      "must_exclude_labels": [
+        "software developer"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "intake": {
+      "must_match_actions": [
+        "store_with_uncertainty",
+        "supersede_or_correct",
+        "ignore_noise",
+        "ignore_noise"
+      ]
+    },
+    "answers": [
+      {
+        "turn_index": 4,
+        "must_contain": [
+          "product manager"
+        ],
+        "must_not_contain": [
+          "software developer"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

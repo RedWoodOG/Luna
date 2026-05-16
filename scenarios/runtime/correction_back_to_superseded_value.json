@@ -1,0 +1,90 @@
+{
+  "name": "correction_back_to_superseded_value",
+  "turns": [
+    "Chris lives in Iowa.",
+    "Actually Chris moved to Ohio.",
+    "Correction: Chris moved to Iowa.",
+    "What do you know about Chris?"
+  ],
+  "checks": {
+    "must_contain": [
+      "person:location=Chris lives in Iowa"
+    ],
+    "must_not_contain": [
+      "person:location=Chris lives in Ohio"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Iowa",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Ohio",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "person:Chris",
+          "relation": "located_in",
+          "target_label": "Iowa"
+        }
+      ],
+      "must_exclude": [
+        {
+          "source": "person:Chris",
+          "relation": "located_in",
+          "target_label": "Ohio"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Chris",
+        "Iowa"
+      ],
+      "must_exclude_labels": [
+        "Ohio"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "intake": {
+      "must_match_actions": [
+        "store_with_uncertainty",
+        "supersede_or_correct",
+        "supersede_or_correct",
+        "mark_unknown"
+      ]
+    },
+    "answers": [
+      {
+        "turn_index": 4,
+        "must_contain": [
+          "Chris lives in Iowa"
+        ],
+        "must_not_contain": [
+          "Chris lives in Ohio"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

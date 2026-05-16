@@ -1,0 +1,27 @@
+[package]
+name = "luna-runtime"
+version.workspace = true
+edition.workspace = true
+description = "Live memory runtime for Luna."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+luna-core = { path = "../luna-core" }
+luna-activation = { path = "../luna-activation" }
+luna-events = { path = "../luna-events" }
+luna-extract = { path = "../luna-extract" }
+luna-ledger = { path = "../luna-ledger" }
+luna-cluster = { path = "../luna-cluster" }
+luna-recall = { path = "../luna-recall" }
+luna-replay = { path = "../luna-replay" }
+luna-store = { path = "../luna-store" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+luna-output = { path = "../luna-output" }
+tempfile = "3"

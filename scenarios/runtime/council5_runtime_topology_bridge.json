@@ -1,0 +1,112 @@
+{
+  "name": "council5_runtime_topology_bridge",
+  "turns": [
+    "MKPE is my provenance engine.",
+    "Francois lives in Washington.",
+    "blue chair twelve river battery",
+    "What did I say about MKPE?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "MKPE is my provenance engine",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Francois lives in Washington",
+          "lifecycle_status": "current"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "project:MKPE",
+          "label": "MKPE",
+          "kind": "project",
+          "claims": [
+            {
+              "domain": "project",
+              "kind": "identity",
+              "value": "MKPE is my provenance engine"
+            }
+          ]
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "MKPE"
+      ],
+      "must_exclude_labels": [
+        "Francois",
+        "Washington"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "answers": [
+      {
+        "turn_index": 4,
+        "must_contain": [
+          "MKPE is my provenance engine"
+        ],
+        "must_not_contain": [
+          "Francois",
+          "Washington"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ],
+    "topology_bridge": {
+      "nodes": [
+        {
+          "runtime_entity_ref": "project:MKPE",
+          "topology_ref": "node:project:MKPE",
+          "label": "MKPE",
+          "claim_assertion_keys": [
+            "project:identity=MKPE_is_my_provenance_engine"
+          ],
+          "require_source_event_hash": true
+        }
+      ],
+      "tethers": [
+        {
+          "source_ref": "project:MKPE",
+          "target_ref": "project:identity:MKPE_is_my_provenance_engine",
+          "relation": "provenance_for",
+          "require_source_event_hash": true
+        }
+      ],
+      "require_source_event_hashes": true,
+      "require_recall_reason_available": true,
+      "forbid_root_orb_user_fact_leakage": true,
+      "require_durable_commit": true,
+      "min_committed_nodes": 2,
+      "min_committed_tethers": 1
+    },
+    "runtime_replay_audit": {
+      "require_clean": true,
+      "require_source_event_hashes": true,
+      "min_stored_events": 1,
+      "min_topology_nodes": 1,
+      "min_topology_tethers": 1,
+      "min_topology_orbs": 1
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "name": "intake_correction_supersession",
+  "turns": [
+    "Chris lives in Iowa.",
+    "blue chair twelve river battery",
+    "he moved again.",
+    "Actually Chris moved to Ohio.",
+    "What do you know about Chris?"
+  ],
+  "checks": {
+    "must_contain": [
+      "person:location=Chris lives in Ohio"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Ohio",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Iowa",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "person:Chris",
+          "label": "Chris",
+          "kind": "person",
+          "claims": [
+            {
+              "domain": "person",
+              "kind": "location",
+              "value": "Chris lives in Ohio"
+            }
+          ]
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "person:Chris",
+          "relation": "located_in",
+          "target_label": "Ohio"
+        }
+      ],
+      "must_exclude": [
+        {
+          "source": "person:Chris",
+          "relation": "located_in",
+          "target_label": "Iowa"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Chris",
+        "Ohio"
+      ],
+      "must_exclude_labels": [
+        "Iowa"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "intake": {
+      "must_include_actions": [
+        "store_with_uncertainty",
+        "ignore_noise",
+        "ask_for_anchor",
+        "supersede_or_correct"
+      ],
+      "must_match_actions": [
+        "store_with_uncertainty",
+        "ignore_noise",
+        "ask_for_anchor",
+        "supersede_or_correct",
+        "mark_unknown"
+      ]
+    }
+  }
+}

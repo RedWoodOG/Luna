@@ -1,0 +1,37 @@
+{
+  "name": "bond_formation_from_assertions",
+  "turns": [
+    {
+      "content": "Chris is my friend.",
+      "timestamp": "2026-05-15T09:00:00Z"
+    },
+    {
+      "content": "Maria is a colleague.",
+      "timestamp": "2026-05-15T09:01:00Z"
+    },
+    {
+      "content": "What do you know about Chris and Maria?",
+      "timestamp": "2026-05-15T09:02:00Z"
+    }
+  ],
+  "checks": {
+    "bonds": {
+      "must_include": [
+        {
+          "source_entity": "luna",
+          "target_entity": "Chris",
+          "kind": "Friend",
+          "min_trust": 0.5,
+          "min_intimacy": 0.4
+        },
+        {
+          "source_entity": "luna",
+          "target_entity": "Maria",
+          "kind": "Colleague",
+          "min_trust": 0.3,
+          "min_intimacy": 0.1
+        }
+      ]
+    }
+  }
+}

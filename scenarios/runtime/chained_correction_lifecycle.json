@@ -1,0 +1,104 @@
+{
+  "name": "chained_correction_lifecycle",
+  "turns": [
+    "Chris lives in Iowa.",
+    "Actually Chris moved to Ohio.",
+    "Correction: Chris moved to Michigan.",
+    "What do you know about Chris?"
+  ],
+  "checks": {
+    "must_contain": [
+      "person:location=Chris lives in Michigan"
+    ],
+    "must_not_contain": [
+      "person:location=Chris lives in Iowa",
+      "person:location=Chris lives in Ohio"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Michigan",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Iowa",
+          "lifecycle_status": "superseded"
+        },
+        {
+          "domain": "person",
+          "kind": "location",
+          "value": "Chris lives in Ohio",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "person:Chris",
+          "relation": "located_in",
+          "target_label": "Michigan"
+        }
+      ],
+      "must_exclude": [
+        {
+          "source": "person:Chris",
+          "relation": "located_in",
+          "target_label": "Iowa"
+        },
+        {
+          "source": "person:Chris",
+          "relation": "located_in",
+          "target_label": "Ohio"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Chris",
+        "Michigan"
+      ],
+      "must_exclude_labels": [
+        "Iowa",
+        "Ohio"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "intake": {
+      "must_match_actions": [
+        "store_with_uncertainty",
+        "supersede_or_correct",
+        "supersede_or_correct",
+        "mark_unknown"
+      ]
+    },
+    "answers": [
+      {
+        "turn_index": 4,
+        "must_contain": [
+          "Chris lives in Michigan"
+        ],
+        "must_not_contain": [
+          "Chris lives in Iowa",
+          "Chris lives in Ohio"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}

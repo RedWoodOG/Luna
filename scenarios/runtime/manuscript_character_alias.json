@@ -1,0 +1,84 @@
+{
+  "name": "manuscript_character_alias",
+  "turns": [
+    "MANUSCRIPT: Mara Vey is the captain of the Tidefall. The dockworkers call Mara Vey the Glass Finch.",
+    "I made soup and checked the weather. This is not part of the manuscript.",
+    "The manuscript is closed. Who is the Glass Finch?"
+  ],
+  "checks": {
+    "claims": {
+      "must_include": [
+        {
+          "domain": "manuscript",
+          "kind": "character_identity",
+          "value": "Mara Vey is the captain of the Tidefall"
+        },
+        {
+          "domain": "manuscript",
+          "kind": "character_alias",
+          "value": "Mara Vey is called the Glass Finch"
+        }
+      ],
+      "must_exclude": [
+        {
+          "domain": "identity",
+          "kind": "name",
+          "value": "Mara Vey"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "character:Mara_Vey",
+          "label": "Mara Vey",
+          "kind": "character"
+        }
+      ]
+    },
+    "relations": {
+      "must_include": [
+        {
+          "source": "character:Mara_Vey",
+          "relation": "alias_of",
+          "target_label": "the Glass Finch"
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Mara Vey",
+        "the Glass Finch"
+      ],
+      "must_exclude_labels": [
+        "soup",
+        "weather"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "answers": [
+      {
+        "turn_index": 3,
+        "must_contain": [
+          "Mara Vey"
+        ],
+        "must_not_contain": [
+          "soup",
+          "weather"
+        ],
+        "must_include_confidence": [
+          "unconfirmed"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}
