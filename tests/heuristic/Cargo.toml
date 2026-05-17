@@ -1,0 +1,11 @@
+[package]
+name = "luna-heuristic-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+regex = "1.10"
+
+[[test]]
+name = "heuristic_tests"
+path = "test_heuristics.rs"

@@ -2111,6 +2111,7 @@ fn entity_sieve_assertions(text: &str) -> Vec<StructuredAssertion> {
     capture_self_facts(text, &mut assertions);
     capture_person_facts(text, &mut assertions);
     capture_project_facts(text, &mut assertions);
+    capture_project_deadline(text, &mut assertions);
     capture_manuscript_facts(text, &mut assertions);
     dedupe_assertions(assertions)
 }
@@ -2303,7 +2304,15 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                     format!("{name} takes public transportation"),
                 ));
             }
-            if let Some(role) = capture_person_role(sentence, &lower_name) {
+            if let Some(role) = capture_person_role(sentence, &lower_name)
+            {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "role",
+                    format!("{name} is {role}"),
+                ));
+            }
+            if let Some(alias) = capture_person_alias(sentence, &lower_name) {
                 assertions.push(StructuredAssertion::new(
                     "person",
                     "role",
@@ -2864,6 +2873,43 @@ fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
         Some(clean_relation_target_label(role))
     } else {
         None
+    }
+}
+
+
+fn capture_person_alias(sentence: &str, lower_name: &str) -> Option<String> {
+    if is_query_sentence(sentence) { return None; }
+    let lower = sentence.to_ascii_lowercase();
+    for marker in &[" is called ", " goes by ", " prefers "] {
+        let phrase = format!("{lower_name}{marker}");
+        if let Some(index) = lower.find(&phrase) {
+            let alias = sentence[index + phrase.len()..]
+                .split([',', '.', '!', '?', ';']).next().unwrap_or("")
+                .trim().trim_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | '!' | '?'))
+                .trim_end_matches(" now").trim_end_matches(" today").trim_end_matches(" currently");
+            if !alias.is_empty() && alias.len() < 50 {
+                return Some(clean_relation_target_label(alias));
+            }
+        }
+    }
+    None
+}
+
+fn capture_project_deadline(text: &str, assertions: &mut Vec<StructuredAssertion>) {
+    const DAYS: &[&str] = &["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+    let time_re = regex::Regex::new(r"\d{1,2}(:\d{2})?\s*(am|pm)|noon|midnight").unwrap();
+    for sentence in split_sentences(text) {
+        if is_query_sentence(sentence) { continue; }
+        let sl = sentence.to_ascii_lowercase();
+        let day = DAYS.iter().find(|d| sl.contains(**d));
+        let time = time_re.find(&sl).map(|m| m.as_str());
+        if day.is_some() || time.is_some() {
+            let markers = ["meeting","appointment","call","review","deadline","due","scheduled"];
+            let event = markers.iter().find(|m| sl.contains(**m)).map(|m| m.to_string())
+                .unwrap_or_else(|| "event".to_string());
+            assertions.push(StructuredAssertion::new("project", "deadline",
+                format!("{event} {} {}", day.unwrap_or(&"unspecified"), time.unwrap_or("unspecified"))));
+        }
     }
 }
 
@@ -4631,20 +4677,16 @@ fn mentions_partner_label(text: &str) -> bool {
 }
 
 fn has_correction_cue(text: &str) -> bool {
-    contains_any(
-        text,
-        &[
-            "actually ",
-            "correction",
-            "correcting",
-            "i was wrong",
-            "not anymore",
-            "instead",
-            "now ",
-            "moved to",
-            "moved again",
-        ],
-    )
+    let lower = text.to_ascii_lowercase();
+    let cleaned = lower.trim_end_matches(|c: char| matches!(c, '.' | ',' | '!' | '?' | ';' | ':'));
+    contains_any(cleaned, &[
+        "actually","no, ","no ","i mean","i meant","sorry","wait,","wait ",
+        "rather,","or rather","let me rephrase","that is,","in other words",
+        "what i meant","correction","correcting","i was wrong","that's wrong",
+        "scratch that","never mind","not ","no longer","not anymore","instead",
+        "moved to","moved again","changed to","should be ","it's actually",
+        "it was actually",
+    ])
 }
 
 fn is_noise_turn(text: &str) -> bool {

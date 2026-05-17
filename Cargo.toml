@@ -10,7 +10,7 @@ members = [
   "crates/luna-metrics",
   "crates/luna-bench",
   "crates/luna-cli",
-  "crates/luna-runtime",
+  "tests/heuristic",
 ]
 [workspace.package]
 version = "0.1.0"
