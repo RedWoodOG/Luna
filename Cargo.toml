@@ -9,14 +9,13 @@ members = [
   "crates/luna-store",
   "crates/luna-metrics",
   "crates/luna-bench",
-  "crates/luna-cli"
+  "crates/luna-cli",
+  "crates/luna-runtime",
 ]
-
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "UNLICENSED"
-
 [workspace.dependencies]
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde", "clock"] }
@@ -24,3 +23,5 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["serde", "v4"] }
+sha2 = "0.10"
+regex = "1.10"

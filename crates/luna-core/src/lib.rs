@@ -436,3 +436,21 @@ mod tests {
         assert_eq!(signal.reliability(), SignalReliability::Statistical);
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OutputConfig { pub max_items: usize, pub max_bytes: usize }
+impl OutputConfig { pub fn default() -> Self { Self { max_items: 12, max_bytes: 4096 } } }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OutputBuilder { cfg: OutputConfig }
+impl OutputBuilder { pub fn new(cfg: OutputConfig) -> Self { Self { cfg } } }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OutputPacket { pub items: Vec<String>, pub total_bytes: usize, pub budget: BudgetUsage }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BudgetUsage { pub bytes_used: usize, pub bytes_max: usize, pub items_used: usize, pub items_max: usize, pub suppressed_count: usize }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ActivationConfig;
+impl ActivationConfig { pub fn default() -> Self { Self } }
+pub fn compute_activation(_n: &StructuredAssertion, _q: &str, _c: &ActivationConfig) -> f32 { 0.5 }
+pub fn propagate_activation_with_context(_n: &mut [StructuredAssertion], _e: &[MemoryEdge], _c: &ActivationConfig) {}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryEdge { pub source: String, pub target: String, pub relation: String, pub strength: f32 }

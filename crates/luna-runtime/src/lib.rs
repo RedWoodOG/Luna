@@ -1,18 +1,21 @@
 use chrono::{DateTime, Utc};
-use luna_activation::{compute_activation, propagate_activation_with_context, ActivationConfig};
 use luna_cluster::{
     validate_compression_receipt, ClusterRegistry, CompressionDecision, CompressionReceipt,
     MemoryCluster, SourceEventRef,
 };
+use luna_core::compute_activation;
+use luna_core::propagate_activation_with_context;
 use luna_core::{
     AssertionConfidenceTier, AssertionCorrected, AssertionExtracted, AssertionLifecycleStatus,
     AttentionLattice, BondGraph, ContradictionDetected, ConversationTurn, EntityBond, Episode,
     EpisodeCreated, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource,
     LatticeDimension, LunaError, LunaEvent, MemoryEdge, MemoryMap, MemoryNode,
-    MemoryNodeKind, MemoryProvenance, MemoryRelationKind, RecallMode, RecallSet, Result,
+    MemoryNodeKind, MemoryProvenance, MemoryRelationKind, OutputBuilder, OutputConfig, OutputPacket, BudgetUsage, ActivationConfig, RecallMode, RecallSet, Result,
     Role, RuntimeTurnReceipt, StructuredAssertion, SystemKernel, TurnObserved,
     TurnReading, WorkingMemory, WorkingMemoryBudget,
 };
+use luna_core::compute_activation;
+use luna_core::propagate_activation_with_context;
 use luna_events::{load_jsonl_events_strict, stable_stored_event_hash, JsonlEventLog};
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
 use luna_recall::{RecallEngine, SimilarityRecallEngine};
@@ -22,13 +25,14 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
+use luna_core::compute_activation;
+use luna_core::propagate_activation_with_context;
 
 pub mod scenario;
 pub mod topology_bridge;
 pub mod lattice;
 pub mod bonds;
 pub use luna_core::{MemoryIntakeAction, MemoryIntakeDecision};
-use luna_output::{OutputBuilder, OutputConfig, OutputPacket};
 pub use topology_bridge::{
     bridge_memory_to_topology, bridge_runtime_events_to_topology,
     commit_runtime_events_to_topology_ledger, ledger_events_from_persisted_json,
@@ -37,6 +41,8 @@ pub use topology_bridge::{
     TopologyClaimRef, TopologyNodeRecord, TopologyOrbRef, TopologySourceEventRef,
     TopologyTetherRecord,
 };
+use luna_core::compute_activation;
+use luna_core::propagate_activation_with_context;
 use uuid::Uuid;
 
 pub trait RuntimeExtractor {
@@ -6767,7 +6773,7 @@ mod tests {
             output_packet: OutputPacket {
                 items: Vec::new(),
                 total_bytes: 0,
-                budget: luna_output::BudgetUsage {
+                budget: BudgetUsage {
                     bytes_used: 0,
                     bytes_max: 4096,
                     items_used: 0,
