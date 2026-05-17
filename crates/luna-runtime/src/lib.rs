@@ -1,21 +1,18 @@
 use chrono::{DateTime, Utc};
+use luna_activation::{compute_activation, propagate_activation_with_context, ActivationConfig};
 use luna_cluster::{
     validate_compression_receipt, ClusterRegistry, CompressionDecision, CompressionReceipt,
     MemoryCluster, SourceEventRef,
 };
-use luna_core::compute_activation;
-use luna_core::propagate_activation_with_context;
 use luna_core::{
     AssertionConfidenceTier, AssertionCorrected, AssertionExtracted, AssertionLifecycleStatus,
     AttentionLattice, BondGraph, ContradictionDetected, ConversationTurn, EntityBond, Episode,
     EpisodeCreated, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource,
     LatticeDimension, LunaError, LunaEvent, MemoryEdge, MemoryMap, MemoryNode,
-    MemoryNodeKind, MemoryProvenance, MemoryRelationKind, OutputBuilder, OutputConfig, OutputPacket, BudgetUsage, ActivationConfig, RecallMode, RecallSet, Result,
+    MemoryNodeKind, MemoryProvenance, MemoryRelationKind, RecallMode, RecallSet, Result,
     Role, RuntimeTurnReceipt, StructuredAssertion, SystemKernel, TurnObserved,
     TurnReading, WorkingMemory, WorkingMemoryBudget,
 };
-use luna_core::compute_activation;
-use luna_core::propagate_activation_with_context;
 use luna_events::{load_jsonl_events_strict, stable_stored_event_hash, JsonlEventLog};
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
 use luna_recall::{RecallEngine, SimilarityRecallEngine};
@@ -25,14 +22,13 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
-use luna_core::compute_activation;
-use luna_core::propagate_activation_with_context;
 
 pub mod scenario;
 pub mod topology_bridge;
 pub mod lattice;
 pub mod bonds;
 pub use luna_core::{MemoryIntakeAction, MemoryIntakeDecision};
+use luna_output::{OutputBuilder, OutputConfig, OutputPacket};
 pub use topology_bridge::{
     bridge_memory_to_topology, bridge_runtime_events_to_topology,
     commit_runtime_events_to_topology_ledger, ledger_events_from_persisted_json,
@@ -41,8 +37,6 @@ pub use topology_bridge::{
     TopologyClaimRef, TopologyNodeRecord, TopologyOrbRef, TopologySourceEventRef,
     TopologyTetherRecord,
 };
-use luna_core::compute_activation;
-use luna_core::propagate_activation_with_context;
 use uuid::Uuid;
 
 pub trait RuntimeExtractor {
@@ -2111,7 +2105,6 @@ fn entity_sieve_assertions(text: &str) -> Vec<StructuredAssertion> {
     capture_self_facts(text, &mut assertions);
     capture_person_facts(text, &mut assertions);
     capture_project_facts(text, &mut assertions);
-    capture_project_deadline(text, &mut assertions);
     capture_manuscript_facts(text, &mut assertions);
     dedupe_assertions(assertions)
 }
@@ -2304,15 +2297,7 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                     format!("{name} takes public transportation"),
                 ));
             }
-            if let Some(role) = capture_person_role(sentence, &lower_name)
-            {
-                assertions.push(StructuredAssertion::new(
-                    "person",
-                    "role",
-                    format!("{name} is {role}"),
-                ));
-            }
-            if let Some(alias) = capture_person_alias(sentence, &lower_name) {
+            if let Some(role) = capture_person_role(sentence, &lower_name) {
                 assertions.push(StructuredAssertion::new(
                     "person",
                     "role",
@@ -2873,43 +2858,6 @@ fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
         Some(clean_relation_target_label(role))
     } else {
         None
-    }
-}
-
-
-fn capture_person_alias(sentence: &str, lower_name: &str) -> Option<String> {
-    if is_query_sentence(sentence) { return None; }
-    let lower = sentence.to_ascii_lowercase();
-    for marker in &[" is called ", " goes by ", " prefers "] {
-        let phrase = format!("{lower_name}{marker}");
-        if let Some(index) = lower.find(&phrase) {
-            let alias = sentence[index + phrase.len()..]
-                .split([',', '.', '!', '?', ';']).next().unwrap_or("")
-                .trim().trim_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | '!' | '?'))
-                .trim_end_matches(" now").trim_end_matches(" today").trim_end_matches(" currently");
-            if !alias.is_empty() && alias.len() < 50 {
-                return Some(clean_relation_target_label(alias));
-            }
-        }
-    }
-    None
-}
-
-fn capture_project_deadline(text: &str, assertions: &mut Vec<StructuredAssertion>) {
-    const DAYS: &[&str] = &["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
-    let time_re = regex::Regex::new(r"\d{1,2}(:\d{2})?\s*(am|pm)|noon|midnight").unwrap();
-    for sentence in split_sentences(text) {
-        if is_query_sentence(sentence) { continue; }
-        let sl = sentence.to_ascii_lowercase();
-        let day = DAYS.iter().find(|d| sl.contains(**d));
-        let time = time_re.find(&sl).map(|m| m.as_str());
-        if day.is_some() || time.is_some() {
-            let markers = ["meeting","appointment","call","review","deadline","due","scheduled"];
-            let event = markers.iter().find(|m| sl.contains(**m)).map(|m| m.to_string())
-                .unwrap_or_else(|| "event".to_string());
-            assertions.push(StructuredAssertion::new("project", "deadline",
-                format!("{event} {} {}", day.unwrap_or(&"unspecified"), time.unwrap_or("unspecified"))));
-        }
     }
 }
 
@@ -4677,16 +4625,20 @@ fn mentions_partner_label(text: &str) -> bool {
 }
 
 fn has_correction_cue(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    let cleaned = lower.trim_end_matches(|c: char| matches!(c, '.' | ',' | '!' | '?' | ';' | ':'));
-    contains_any(cleaned, &[
-        "actually","no, ","no ","i mean","i meant","sorry","wait,","wait ",
-        "rather,","or rather","let me rephrase","that is,","in other words",
-        "what i meant","correction","correcting","i was wrong","that's wrong",
-        "scratch that","never mind","not ","no longer","not anymore","instead",
-        "moved to","moved again","changed to","should be ","it's actually",
-        "it was actually",
-    ])
+    contains_any(
+        text,
+        &[
+            "actually ",
+            "correction",
+            "correcting",
+            "i was wrong",
+            "not anymore",
+            "instead",
+            "now ",
+            "moved to",
+            "moved again",
+        ],
+    )
 }
 
 fn is_noise_turn(text: &str) -> bool {
@@ -6815,7 +6767,7 @@ mod tests {
             output_packet: OutputPacket {
                 items: Vec::new(),
                 total_bytes: 0,
-                budget: BudgetUsage {
+                budget: luna_output::BudgetUsage {
                     bytes_used: 0,
                     bytes_max: 4096,
                     items_used: 0,

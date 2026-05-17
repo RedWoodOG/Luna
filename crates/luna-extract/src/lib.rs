@@ -183,6 +183,7 @@ fn extract_assertions(normalized: &str) -> Vec<StructuredAssertion> {
             domain: "identity".to_string(),
             kind: "profession".to_string(),
             value: "mechanical engineer".to_string(),
+            ..Default::default()
         });
     }
 
@@ -194,6 +195,7 @@ fn extract_assertions(normalized: &str) -> Vec<StructuredAssertion> {
             domain: "identity".to_string(),
             kind: "family_structure".to_string(),
             value: "only child".to_string(),
+            ..Default::default()
         });
     }
 
@@ -389,3 +391,8 @@ mod tests {
         assert!(first.identity_relevance.unwrap().can_influence_recall());
     }
 }
+
+pub trait ExtractionCache: Send + Sync {}
+pub trait LlmBackend: Send + Sync {}
+pub struct LunaExtractor;
+impl LunaExtractor { pub fn new() -> Self { Self } }

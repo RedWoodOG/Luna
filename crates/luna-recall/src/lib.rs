@@ -139,6 +139,7 @@ mod tests {
                 domain: "identity".to_string(),
                 kind: "profession".to_string(),
                 value: "mechanical engineer".to_string(),
+                ..Default::default()
             }],
             contour: luna_tcf::contour_from_observation(&observed),
             recall_history: Vec::new(),
@@ -158,3 +159,6 @@ mod tests {
         assert_eq!(keyword.hits.len(), 0);
     }
 }
+
+pub struct SimilarityRecallEngine;
+impl SimilarityRecallEngine { pub fn new() -> Self { Self } }

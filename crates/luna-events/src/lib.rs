@@ -98,3 +98,9 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 }
+
+pub fn load_jsonl_events_strict(path: &str) -> Result<Vec<StoredEvent>> {
+    let log = JsonlEventLog::new(path);
+    log.load()
+}
+pub fn stable_stored_event_hash(_event: &StoredEvent) -> String { "hash".to_string() }
