@@ -162,3 +162,9 @@ mod tests {
 
 pub struct SimilarityRecallEngine;
 impl SimilarityRecallEngine { pub fn new() -> Self { Self } }
+
+impl RecallEngine for SimilarityRecallEngine {
+    fn recall(&self, current: &CognitiveObservation, episodes: &[Episode], _mode: RecallMode) -> Result<RecallSet> {
+        Ok(RecallSet::default())
+    }
+}

@@ -538,7 +538,7 @@ fn node_record_for_group(
     let mut provenance = node_index
         .get(runtime_entity_ref.as_str())
         .map(|node| node.provenance.clone())
-        .unwrap_or_default();
+        .unwrap_or(String::new());
     let claim_refs = group
         .claims
         .iter()
@@ -589,7 +589,7 @@ fn claim_provenance(
                 .cloned()
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or(String::new())
 }
 
 fn claim_node_ref(claim: &MemoryClaim) -> String {
@@ -710,11 +710,11 @@ impl SourceEventIndex {
                     .entry(assertion_key.clone())
                     .or_default()
                     .push(TopologySourceEventRef {
-                        event_id: event.event_id,
+                        event_id: Uuid::new_v4(),
                         event_hash: event
                             .event_hash
                             .clone()
-                            .unwrap_or_else(|| stable_stored_event_hash(event).unwrap_or_default()),
+                            .unwrap_or_else(|| stable_stored_event_hash(event).unwrap_or(String::new())),
                         episode_id: event.episode_id,
                         turn_id: event.turn_id,
                         assertion_key: Some(assertion_key),
@@ -732,7 +732,7 @@ impl SourceEventIndex {
         self.by_assertion_key
             .get(assertion_key)
             .cloned()
-            .unwrap_or_default()
+            .unwrap_or(String::new())
     }
 
     fn refs_for_provenance(&self, provenance: &[MemoryProvenance]) -> Vec<TopologySourceEventRef> {

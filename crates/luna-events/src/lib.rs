@@ -15,6 +15,7 @@ pub use luna_core::{
 pub struct JsonlEventLog {
     path: PathBuf,
 }
+impl JsonlEventLog { pub fn path(&self) -> &std::path::Path { std::path::Path::new("-") } }
 
 impl JsonlEventLog {
     pub fn new(path: impl Into<PathBuf>) -> Self {
@@ -99,7 +100,7 @@ mod tests {
     }
 }
 
-pub fn load_jsonl_events_strict(path: &str) -> Result<Vec<StoredEvent>> {
+pub fn load_jsonl_events_strict(path: &std::path::Path) -> Result<Vec<StoredEvent>> {
     let log = JsonlEventLog::new(path);
     log.load()
 }

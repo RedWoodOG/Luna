@@ -392,7 +392,7 @@ mod tests {
     }
 }
 
-pub trait ExtractionCache: Send + Sync {}
-pub trait LlmBackend: Send + Sync {}
-pub struct LunaExtractor;
-impl LunaExtractor { pub fn new() -> Self { Self } }
+pub trait LlmBackend: Clone + Send + Sync + 'static {}
+pub trait ExtractionCache: Clone + Send + Sync + 'static {}
+pub struct LunaExtractor<B = (), C = ()> { _b: std::marker::PhantomData<B>, _c: std::marker::PhantomData<C> }
+impl<B: LlmBackend, C: ExtractionCache> LunaExtractor<B, C> { pub fn new() -> Self { Self { _b: std::marker::PhantomData, _c: std::marker::PhantomData } } }

@@ -881,7 +881,7 @@ fn evaluate_turn_receipts(
                 index + 1
             ));
         }
-        if result.turn_receipt.output_item_count != result.output_packet.items.len() {
+        if result.turn_receipt.output_item_count != result.output_packet.items.len() as u32 {
             failures.push(format!(
                 "turn {} receipt output item count does not match output packet",
                 index + 1

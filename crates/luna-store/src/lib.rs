@@ -124,7 +124,11 @@ pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
                     );
                 }
             }
-            LunaEvent::TurnObserved(_) | LunaEvent::AssertionExtracted(_) => {}
+            LunaEvent::TurnObserved(_) | LunaEvent::AssertionExtracted(_)
+            | LunaEvent::LatticeComputed(_) | LunaEvent::RuntimeTurnReceipted(_)
+            | LunaEvent::TopologyBridgeCommitted(_) | LunaEvent::BondFormed(_)
+            | LunaEvent::BondSuperseded(_) | LunaEvent::BondDecayed(_)
+            | LunaEvent::MemoryIntakeDecided(_) | LunaEvent::AssertionLifecycleChanged(_) => {}
         }
     }
 
