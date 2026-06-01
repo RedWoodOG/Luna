@@ -24,6 +24,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub mod disclosure_extract;
 pub mod scenario;
 pub mod topology_bridge;
 pub use luna_core::{MemoryIntakeAction, MemoryIntakeDecision};
@@ -631,6 +632,7 @@ fn trace_step_from_events(
     )
 }
 
+#[allow(clippy::too_many_arguments)] // trace builder needs the full turn context
 fn turn_trace_steps(
     turn_id: Uuid,
     persisted_events: &[luna_events::StoredEvent],
