@@ -59,6 +59,36 @@ Inherence is an Accord vessel that recovers a containment pod`.
    matched entity, not the attribute the question asked for. This is a recall-
    layer refinement, separate from extraction.
 
+## Update (commit `35053da`): coref + concept + recall precision
+
+Three follow-on improvements landed on top of the first intake pass:
+
+1. **Pronoun coreference** — "He/She/It is/was X" attributes to the most recent
+   proper subject ("…is Jax. He is human" → **"Jax is human"**), so the species
+   fact is now captured.
+2. **Concept extraction** — "A/An &lt;lowercase concept&gt; is &lt;predicate&gt;"
+   → `concept:definition` claims, e.g. **"tether is not resonance, not
+   communication, and not harmony"**.
+3. **Recall precision** — general-memory recall now ranks activated claims by
+   query-term overlap (with an unfiltered fallback), so concept queries return
+   the concept instead of unrelated character facts.
+
+Result on the same locked benchmark:
+
+| Metric | Baseline | Intake v1 | Intake v2 |
+|---|---|---|---|
+| claims | 0 | 7 | **12** |
+| questions activating memory | 0 | 10 | **11** |
+| both tether acid-test questions (q11/q12) | unanswered | unanswered | **answered from the concept** |
+| species ("Jax is human") | absent | absent | **captured (coref)** |
+
+Genuinely-correct answers rose from ~3–4 to ~6–7 (Inherence-as-vessel,
+Viserys-father, tether-not, tether-definition, Jax-is-human, Crimson-Fold,
+alias). Remaining imprecision: entity queries still surface multiple
+entity-mentioning facts (recall returns several activated claims, not a single
+targeted answer); relation/role questions about non-subject entities (Q6, Q8–Q10)
+remain uncaptured.
+
 ## Boundary
 
 This is a measurement of an opt-in extraction layer, not a passed trial. It is
