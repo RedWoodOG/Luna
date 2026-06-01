@@ -25,6 +25,7 @@ use std::{
 };
 
 pub mod disclosure_extract;
+pub mod narrative_extract;
 pub mod scenario;
 pub mod topology_bridge;
 pub use luna_core::{MemoryIntakeAction, MemoryIntakeDecision};
@@ -3140,7 +3141,50 @@ fn entity_sieve_assertions(text: &str) -> Vec<StructuredAssertion> {
     capture_person_facts(text, &mut assertions);
     capture_project_facts(text, &mut assertions);
     capture_manuscript_facts(text, &mut assertions);
+
+    // Optional heuristic intake layer (default OFF). When enabled, compose the
+    // ported AURA-derived first-person disclosure extractor and the Luna
+    // third-person narrative extractor. Disclosure domains are remapped onto
+    // Luna's self/identity domain so they remain answerable by recall.
+    if intake_heuristics_enabled() {
+        for a in disclosure_extract::disclosure_assertions(text) {
+            let (domain, kind) = map_disclosure_domain(&a.domain, &a.kind);
+            assertions.push(StructuredAssertion::inferred(domain, kind, a.value));
+        }
+        assertions.extend(narrative_extract::narrative_assertions(text));
+    }
+
     dedupe_assertions(assertions)
+}
+
+/// Runtime flag gating the imported heuristic intake layer (disclosure +
+/// narrative). Default OFF: the deterministic gate and existing scenarios run
+/// the original extractor unchanged. Set `LUNA_INTAKE_HEURISTICS=1` to enable.
+fn intake_heuristics_enabled() -> bool {
+    std::env::var("LUNA_INTAKE_HEURISTICS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+/// Map a disclosure extractor (domain, kind) onto Luna's self/identity taxonomy
+/// so first-person facts are stored where recall can answer them.
+fn map_disclosure_domain(domain: &str, kind: &str) -> (&'static str, &'static str) {
+    match (domain, kind) {
+        ("identity", "name") => ("identity", "name"),
+        ("skill", "profession") => ("identity", "profession"),
+        ("skill", "technical") => ("identity", "technical"),
+        ("skill", _) => ("identity", "skill"),
+        ("location", _) => ("identity", "location"),
+        ("preference", _) => ("identity", "preference"),
+        ("goal", _) => ("identity", "goal"),
+        ("social_bond", _) => ("identity", "relationship"),
+        ("possession", _) => ("identity", "possession"),
+        ("activity", _) => ("identity", "activity"),
+        ("constraint", _) => ("identity", "constraint"),
+        ("emotional_state", _) => ("identity", "emotion"),
+        ("date", _) => ("identity", "date"),
+        _ => ("identity", "fact"),
+    }
 }
 
 fn apply_manuscript_one_read_lockout(
