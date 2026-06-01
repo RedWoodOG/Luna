@@ -9,9 +9,9 @@ use luna_core::{
     AttentionLattice, ContradictionDetected, ConversationTurn, Episode, EpisodeCreated,
     EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource, LatticeDimension, LunaError,
     LunaEvent, MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance,
-    MemoryRelationKind, RecallMode, RecallSet, Result, Role, RuntimeTurnReceipt,
-    StructuredAssertion, SystemKernel, TurnObserved, TurnReading, WorkingMemory,
-    WorkingMemoryBudget,
+    MemoryRelationKind, MemoryRepairRecorded, RecallMode, RecallSet, Result, Role,
+    RuntimeTurnReceipt, RuntimeTurnTraceStep, Signal, StructuredAssertion, SystemKernel,
+    TurnObserved, TurnReading, WorkingMemory, WorkingMemoryBudget,
 };
 use luna_events::{load_jsonl_events_strict, stable_stored_event_hash, JsonlEventLog};
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -220,6 +221,10 @@ where
             }
         }
 
+        if let Some(repair_event) = memory_repair_event(&previous_events, turn_id, &new_events) {
+            new_events.push(repair_event);
+        }
+
         for event in &new_events {
             self.log.append(event)?;
         }
@@ -246,13 +251,14 @@ where
         );
         let knowledge_delta = KnowledgeDelta::from_observation(&observation, &known_before);
         let questions = propose_questions(&turn, &observation, &memory_state);
-        let working_memory = activate_working_memory_with_orb_state(
+        let working_memory = activate_working_memory_with_repairs(
             &memory_state,
             &turn,
             &observation,
             &recalled,
             WorkingMemoryBudget::default(),
             &orb_state,
+            &all_events,
         );
         let context_packet = ContextPacket::from_parts(
             &turn.content,
@@ -293,6 +299,17 @@ where
         };
         let response_plan = plan_conversation_response(&turn.content, &result);
         let persisted_events = self.log.load()?;
+        let trace_steps = turn_trace_steps(
+            turn_id,
+            &persisted_events,
+            result.observation.assertions.len(),
+            &result.intake,
+            result.recall_mode,
+            &result.recalled,
+            &result.working_memory,
+            &response_plan,
+            &result.output_packet,
+        );
         let receipt = build_runtime_turn_receipt(
             turn_id,
             &persisted_events,
@@ -304,6 +321,7 @@ where
             &response_plan,
             &result.output_packet,
             &topology_commit_event,
+            trace_steps.clone(),
         );
         let receipt_event = EventEnvelope::new(
             LunaEvent::RuntimeTurnReceipted(receipt.clone()),
@@ -593,6 +611,1086 @@ fn stable_provenance_key(provenance: &MemoryProvenance) -> String {
     )
 }
 
+fn trace_step_from_events(
+    name: &str,
+    events: &[&luna_events::StoredEvent],
+    input_count: usize,
+    output_count: usize,
+    detail: impl Into<String>,
+) -> RuntimeTurnTraceStep {
+    RuntimeTurnTraceStep::new(
+        name,
+        input_count,
+        output_count,
+        events.iter().map(|event| event.event_id).collect(),
+        events
+            .iter()
+            .filter_map(|event| event.event_hash.clone())
+            .collect(),
+        detail,
+    )
+}
+
+fn turn_trace_steps(
+    turn_id: Uuid,
+    persisted_events: &[luna_events::StoredEvent],
+    assertion_count: usize,
+    intake: &MemoryIntakeDecision,
+    recall_mode: RecallMode,
+    recalled: &RecallSet,
+    working_memory: &WorkingMemory,
+    response_plan: &ResponsePlan,
+    output_packet: &OutputPacket,
+) -> Vec<RuntimeTurnTraceStep> {
+    let turn_events = persisted_events
+        .iter()
+        .filter(|event| event.turn_id == Some(turn_id))
+        .collect::<Vec<_>>();
+
+    let events_matching = |predicate: fn(&LunaEvent) -> bool| {
+        turn_events
+            .iter()
+            .copied()
+            .filter(|event| predicate(&event.payload))
+            .collect::<Vec<_>>()
+    };
+
+    let observed = events_matching(|event| matches!(event, LunaEvent::TurnObserved(_)));
+    let extracted = events_matching(|event| matches!(event, LunaEvent::AssertionExtracted(_)));
+    let intake_events = events_matching(|event| matches!(event, LunaEvent::MemoryIntakeDecided(_)));
+    let recalled_events = events_matching(|event| matches!(event, LunaEvent::EpisodeRecalled(_)));
+    let topology_events =
+        events_matching(|event| matches!(event, LunaEvent::TopologyBridgeCommitted(_)));
+    let lattice_events = events_matching(|event| matches!(event, LunaEvent::LatticeComputed(_)));
+    let receipt_events =
+        events_matching(|event| matches!(event, LunaEvent::RuntimeTurnReceipted(_)));
+
+    vec![
+        trace_step_from_events(
+            "turn_observed",
+            &observed,
+            1,
+            observed.len(),
+            "raw user turn appended to the event log",
+        ),
+        trace_step_from_events(
+            "extract",
+            &extracted,
+            1,
+            assertion_count,
+            format!("{} assertion candidate(s) extracted", assertion_count),
+        ),
+        trace_step_from_events(
+            "intake",
+            &intake_events,
+            assertion_count,
+            usize::from(!intake_events.is_empty()),
+            format!("{:?}: {}", intake.action, intake.reason),
+        ),
+        trace_step_from_events(
+            "recall",
+            &recalled_events,
+            recalled.hits.len(),
+            recalled.hits.len(),
+            format!("mode {:?}; {} hit(s)", recall_mode, recalled.hits.len()),
+        ),
+        trace_step_from_events(
+            "topology_bridge",
+            &topology_events,
+            persisted_events.len(),
+            topology_events.len(),
+            "runtime memory projected into topology bridge evidence",
+        ),
+        trace_step_from_events(
+            "lattice",
+            &lattice_events,
+            working_memory.nodes.len(),
+            lattice_events.len(),
+            "Attention Lattice computed from typed memory and working set",
+        ),
+        RuntimeTurnTraceStep::new(
+            "working_memory",
+            working_memory.nodes.len() + working_memory.filtered_node_count,
+            working_memory.nodes.len(),
+            Vec::new(),
+            Vec::new(),
+            format!(
+                "{} active node(s), {} active edge(s), {} filtered node(s), {} filtered edge(s): {}",
+                working_memory.nodes.len(),
+                working_memory.edges.len(),
+                working_memory.filtered_node_count,
+                working_memory.filtered_edge_count,
+                working_memory.activation_reason
+            ),
+        ),
+        RuntimeTurnTraceStep::new(
+            "response_plan",
+            working_memory.nodes.len(),
+            response_plan.actions.len(),
+            Vec::new(),
+            Vec::new(),
+            format!("actions: {:?}", response_plan.actions),
+        ),
+        RuntimeTurnTraceStep::new(
+            "output_validation",
+            response_plan.answer_values.len(),
+            usize::from(!response_plan.actions.contains(&ResponsePlanAction::AvoidAnswering)),
+            Vec::new(),
+            Vec::new(),
+            output_validation_trace_detail(response_plan),
+        ),
+        RuntimeTurnTraceStep::new(
+            "output_packet",
+            response_plan.answer_evidence.len(),
+            output_packet.items.len(),
+            Vec::new(),
+            Vec::new(),
+            format!(
+                "{} output item(s), {} byte(s)",
+                output_packet.items.len(),
+                output_packet.total_bytes
+            ),
+        ),
+        trace_step_from_events(
+            "turn_receipt",
+            &receipt_events,
+            turn_events.len(),
+            receipt_events.len(),
+            "runtime receipt persisted for replay and inspection",
+        ),
+    ]
+}
+
+fn output_validation_trace_detail(response_plan: &ResponsePlan) -> String {
+    let blocked = response_plan
+        .actions
+        .contains(&ResponsePlanAction::AvoidAnswering);
+    let evidence_count = response_plan.answer_evidence.len();
+    let direct_evidence_count = response_plan
+        .answer_evidence
+        .iter()
+        .filter(|evidence| evidence.direct_assertion_evidence)
+        .count();
+    let current_evidence_count = response_plan
+        .answer_evidence
+        .iter()
+        .filter(|evidence| evidence.lifecycle_status == AssertionLifecycleStatus::Current)
+        .count();
+    let unsupported_values = response_plan
+        .answer_values
+        .len()
+        .saturating_sub(evidence_count);
+    if blocked {
+        format!(
+            "blocked=true; final_decision=uncertain; reason={}; attempted_values={}; supported_current_evidence={}; direct_evidence={}; unsupported_values={}",
+            response_plan
+                .uncertainty
+                .as_deref()
+                .unwrap_or("output validator blocked unsupported answer"),
+            response_plan.answer_values.len(),
+            current_evidence_count,
+            direct_evidence_count,
+            unsupported_values
+        )
+    } else {
+        format!(
+            "blocked=false; final_decision=answer_allowed; attempted_values={}; supported_current_evidence={}; direct_evidence={}; unsupported_values={}",
+            response_plan.answer_values.len(),
+            current_evidence_count,
+            direct_evidence_count,
+            unsupported_values
+        )
+    }
+}
+
+fn memory_repair_event(
+    previous_events: &[luna_events::StoredEvent],
+    repair_turn_id: Uuid,
+    new_events: &[EventEnvelope<LunaEvent>],
+) -> Option<EventEnvelope<LunaEvent>> {
+    let repaired_claim_keys = new_events
+        .iter()
+        .flat_map(|event| match &event.payload {
+            LunaEvent::EpisodeCreated(payload) => vec![payload.assertion.key()],
+            LunaEvent::EpisodeReinforced(payload) => vec![payload.assertion.key()],
+            LunaEvent::AssertionCorrected(payload) => vec![payload.new_assertion.key()],
+            _ => Vec::new(),
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    if repaired_claim_keys.is_empty() {
+        return None;
+    }
+
+    let (failed_turn_id, failed_query) = latest_failed_query(previous_events)?;
+    Some(
+        EventEnvelope::new(
+            LunaEvent::MemoryRepairRecorded(MemoryRepairRecorded {
+                failed_turn_id,
+                repair_turn_id,
+                failed_query,
+                repaired_claim_keys,
+                reason: "new event-backed assertions followed a prior unanswered memory query"
+                    .to_string(),
+            }),
+            EventSource::System,
+            1.0,
+        )
+        .with_turn_id(repair_turn_id),
+    )
+}
+
+fn latest_failed_query(events: &[luna_events::StoredEvent]) -> Option<(Uuid, String)> {
+    let receipt = events.iter().rev().find_map(|event| {
+        let LunaEvent::RuntimeTurnReceipted(receipt) = &event.payload else {
+            return None;
+        };
+        let avoided = receipt
+            .response_actions
+            .iter()
+            .any(|action| action == "AvoidAnswering");
+        let uncertain = receipt
+            .response_actions
+            .iter()
+            .any(|action| action == "StateUncertainty");
+        (avoided && uncertain).then_some(receipt)
+    })?;
+    let query = turn_content_for_id(events, receipt.turn_id)?;
+    is_query_like_turn(&query).then_some((receipt.turn_id, query))
+}
+
+fn turn_content_for_id(events: &[luna_events::StoredEvent], turn_id: Uuid) -> Option<String> {
+    events.iter().find_map(|event| {
+        if event.turn_id != Some(turn_id) {
+            return None;
+        }
+        let LunaEvent::TurnObserved(payload) = &event.payload else {
+            return None;
+        };
+        Some(payload.turn.content.clone())
+    })
+}
+
+fn is_query_like_turn(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    text.contains('?')
+        || lower.starts_with("who ")
+        || lower.starts_with("what ")
+        || lower.starts_with("where ")
+        || lower.starts_with("when ")
+        || lower.starts_with("why ")
+        || lower.starts_with("how ")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeLifecycleCounts {
+    pub current: usize,
+    pub superseded: usize,
+    pub contradicted: usize,
+    pub stale: usize,
+    pub archived: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeConfidenceCounts {
+    pub confirmed: usize,
+    pub inferred: usize,
+    pub unconfirmed: usize,
+    pub unknown: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeStatusReport {
+    pub log_path: PathBuf,
+    pub event_count: usize,
+    pub last_event_hash: Option<String>,
+    pub replay_audit: RuntimeReplayAuditReport,
+    pub lifecycle_counts: RuntimeLifecycleCounts,
+    pub confidence_counts: RuntimeConfidenceCounts,
+    pub topology_ledger_event_hash: Option<String>,
+    pub latest_turn_trace: Vec<RuntimeTurnTraceStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeTraceReport {
+    pub log_path: PathBuf,
+    pub turn_id: Uuid,
+    pub receipt_event_id: Uuid,
+    pub receipt_event_hash: Option<String>,
+    pub trace_steps: Vec<RuntimeTurnTraceStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeInspectReport {
+    pub log_path: PathBuf,
+    pub selector: String,
+    pub claims: Vec<MemoryClaim>,
+    pub entity_groups: Vec<String>,
+    pub events: Vec<RuntimeInspectEventRef>,
+    pub receipt_mentions: Vec<RuntimeInspectReceiptMention>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeInspectEventRef {
+    pub event_id: Uuid,
+    pub event_hash: Option<String>,
+    pub turn_id: Option<Uuid>,
+    pub episode_id: Option<Uuid>,
+    pub payload_type: String,
+    pub affected_claim_keys: Vec<String>,
+    pub event: luna_events::StoredEvent,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeInspectReceiptMention {
+    pub turn_id: Uuid,
+    pub receipt_event_id: Uuid,
+    pub receipt_event_hash: Option<String>,
+    pub created: bool,
+    pub reinforced: bool,
+    pub corrected: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeWhyNotReport {
+    pub log_path: PathBuf,
+    pub query: String,
+    pub summary: String,
+    pub findings: Vec<RuntimeWhyNotFinding>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeWhyNotFinding {
+    pub claim: MemoryClaim,
+    pub cause: String,
+    pub answerable: bool,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeBriefReport {
+    pub log_path: PathBuf,
+    pub replay_audit: RuntimeReplayAuditReport,
+    pub doctrine_gate_status: String,
+    pub recent_turns: Vec<RuntimeBriefTurn>,
+    pub current_high_confidence_claims: Vec<MemoryClaim>,
+    pub recent_corrections: Vec<RuntimeBriefCorrection>,
+    pub recent_repairs: Vec<MemoryRepairRecorded>,
+    pub open_questions: Vec<String>,
+    pub suppressed_claims: Vec<MemoryClaim>,
+    pub latest_working_memory_trace: Option<RuntimeTurnTraceStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeBriefTurn {
+    pub turn_id: Uuid,
+    pub event_id: Uuid,
+    pub event_hash: Option<String>,
+    pub timestamp: DateTime<Utc>,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeBriefCorrection {
+    pub turn_id: Option<Uuid>,
+    pub event_id: Uuid,
+    pub event_hash: Option<String>,
+    pub old_claim_key: String,
+    pub new_claim_key: String,
+    pub old_value: String,
+    pub new_value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeRetentionReport {
+    pub log_path: PathBuf,
+    pub retention_events: Vec<RuntimeRetentionEvent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeRetentionEvent {
+    pub failed_turn_id: Uuid,
+    pub repair_turn_id: Uuid,
+    pub failed_query: String,
+    pub repaired_claim_keys: Vec<String>,
+    pub future_recall_hint: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OnboardingImportReport {
+    pub source_path: PathBuf,
+    pub log_path: PathBuf,
+    pub imported_sections: usize,
+    pub imported_assertions: usize,
+    pub claim_count: usize,
+    pub node_count: usize,
+    pub edge_count: usize,
+    pub replay_audit: RuntimeReplayAuditReport,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct OnboardingSeedExtractor;
+
+impl RuntimeExtractor for OnboardingSeedExtractor {
+    fn extract_runtime(&self, turn: &ConversationTurn) -> Result<TurnReading> {
+        let assertions = onboarding_assertions_from_turn(&turn.content);
+        Ok(TurnReading {
+            turn_id: Uuid::new_v4(),
+            semantic: None,
+            intent: None,
+            attention: Some(
+                Signal::new(0.78, 0.82, luna_core::SignalReliability::UserConfirmed)
+                    .with_source_count(2),
+            ),
+            goal_pressure: Some(
+                Signal::new(0.62, 0.74, luna_core::SignalReliability::UserConfirmed)
+                    .with_source_count(2),
+            ),
+            emotional_valence: None,
+            emotional_arousal: None,
+            identity_relevance: Some(
+                Signal::new(0.88, 0.86, luna_core::SignalReliability::UserConfirmed)
+                    .with_source_count(2),
+            ),
+            trust_relevance: Some(
+                Signal::new(0.72, 0.8, luna_core::SignalReliability::UserConfirmed)
+                    .with_source_count(2),
+            ),
+            social_frame: None,
+            temporal_relevance: None,
+            uncertainty: Signal::new(0.18, 0.84, luna_core::SignalReliability::UserConfirmed)
+                .with_source_count(2),
+            cue_terms: onboarding_cue_terms(&turn.content),
+            query_intents: Vec::new(),
+            assertions,
+        })
+    }
+}
+
+pub fn import_onboarding_seed(log: &Path, source: &Path) -> Result<OnboardingImportReport> {
+    let source_text = fs::read_to_string(source).map_err(|err| {
+        LunaError::new(format!(
+            "could not read onboarding seed {}: {err}",
+            source.display()
+        ))
+    })?;
+    let chunks = onboarding_turn_chunks(source, &source_text);
+    if chunks.is_empty() {
+        return Err(LunaError::new(format!(
+            "onboarding seed {} did not contain importable sections",
+            source.display()
+        )));
+    }
+
+    let session = RuntimeSession::new(log, OnboardingSeedExtractor);
+    let mut imported_sections = 0usize;
+    let mut imported_assertions = 0usize;
+    for chunk in chunks {
+        let assertion_count = onboarding_assertions_from_turn(&chunk).len();
+        if assertion_count == 0 {
+            continue;
+        }
+        let result = session.process_user_turn(chunk)?;
+        imported_sections += 1;
+        imported_assertions += result.observation.assertions.len();
+    }
+
+    if imported_sections == 0 {
+        return Err(LunaError::new(format!(
+            "onboarding seed {} produced no assertions",
+            source.display()
+        )));
+    }
+
+    let status = runtime_status_report(log)?;
+    Ok(OnboardingImportReport {
+        source_path: source.to_path_buf(),
+        log_path: log.to_path_buf(),
+        imported_sections,
+        imported_assertions,
+        claim_count: status
+            .lifecycle_counts
+            .current
+            .saturating_add(status.lifecycle_counts.superseded)
+            .saturating_add(status.lifecycle_counts.contradicted)
+            .saturating_add(status.lifecycle_counts.stale)
+            .saturating_add(status.lifecycle_counts.archived),
+        node_count: status.replay_audit.replayed_counts.memory_nodes,
+        edge_count: status.replay_audit.replayed_counts.memory_edges,
+        replay_audit: status.replay_audit,
+    })
+}
+
+pub fn runtime_status_report(log: &Path) -> Result<RuntimeStatusReport> {
+    let events = load_jsonl_events_strict(log)?;
+    let state = runtime_state_from_events(&events)?;
+    let replay_audit = audit_runtime_events_against_state(&state, &events)?;
+    let last_event_hash = events
+        .iter()
+        .rev()
+        .find_map(|event| event.event_hash.clone());
+    let topology_ledger_event_hash = events.iter().rev().find_map(|event| match &event.payload {
+        LunaEvent::TopologyBridgeCommitted(commit) if !commit.ledger_event_hash.is_empty() => {
+            Some(commit.ledger_event_hash.clone())
+        }
+        _ => None,
+    });
+    let latest_turn_trace = events
+        .iter()
+        .rev()
+        .find_map(|event| match &event.payload {
+            LunaEvent::RuntimeTurnReceipted(receipt) => Some(receipt.trace_steps.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    Ok(RuntimeStatusReport {
+        log_path: log.to_path_buf(),
+        event_count: events.len(),
+        last_event_hash,
+        replay_audit,
+        lifecycle_counts: lifecycle_counts(&state),
+        confidence_counts: confidence_counts(&state),
+        topology_ledger_event_hash,
+        latest_turn_trace,
+    })
+}
+
+pub fn runtime_brief(log: &Path) -> Result<RuntimeBriefReport> {
+    const RECENT_TURN_LIMIT: usize = 5;
+    const HIGH_CONFIDENCE_LIMIT: usize = 12;
+    const RECENT_CORRECTION_LIMIT: usize = 8;
+    const RECENT_REPAIR_LIMIT: usize = 8;
+    const SUPPRESSED_CLAIM_LIMIT: usize = 12;
+
+    let events = load_jsonl_events_strict(log)?;
+    let state = runtime_state_from_events(&events)?;
+    let replay_audit = audit_runtime_events_against_state(&state, &events)?;
+    let doctrine_gate_status = if replay_audit.is_clean() {
+        "replay_clean"
+    } else {
+        "quarantined"
+    }
+    .to_string();
+
+    let mut recent_turns = events
+        .iter()
+        .rev()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::TurnObserved(payload) => Some(RuntimeBriefTurn {
+                turn_id: event.turn_id?,
+                event_id: event.event_id,
+                event_hash: event.event_hash.clone(),
+                timestamp: event.timestamp,
+                content: payload.turn.content.clone(),
+            }),
+            _ => None,
+        })
+        .take(RECENT_TURN_LIMIT)
+        .collect::<Vec<_>>();
+    recent_turns.reverse();
+
+    let current_high_confidence_claims = state
+        .claims
+        .iter()
+        .filter(|claim| {
+            claim.lifecycle_status == AssertionLifecycleStatus::Current
+                && matches!(
+                    claim.status,
+                    AssertionConfidenceTier::Confirmed | AssertionConfidenceTier::Inferred
+                )
+        })
+        .take(HIGH_CONFIDENCE_LIMIT)
+        .cloned()
+        .collect();
+
+    let mut recent_corrections = events
+        .iter()
+        .rev()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::AssertionCorrected(payload) => Some(RuntimeBriefCorrection {
+                turn_id: event.turn_id,
+                event_id: event.event_id,
+                event_hash: event.event_hash.clone(),
+                old_claim_key: payload.old_assertion.key(),
+                new_claim_key: payload.new_assertion.key(),
+                old_value: payload.old_assertion.value.clone(),
+                new_value: payload.new_assertion.value.clone(),
+            }),
+            _ => None,
+        })
+        .take(RECENT_CORRECTION_LIMIT)
+        .collect::<Vec<_>>();
+    recent_corrections.reverse();
+
+    let mut recent_repairs = events
+        .iter()
+        .rev()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::MemoryRepairRecorded(repair) => Some(repair.clone()),
+            _ => None,
+        })
+        .take(RECENT_REPAIR_LIMIT)
+        .collect::<Vec<_>>();
+    recent_repairs.reverse();
+
+    let suppressed_claims = state
+        .claims
+        .iter()
+        .filter(|claim| claim.lifecycle_status != AssertionLifecycleStatus::Current)
+        .take(SUPPRESSED_CLAIM_LIMIT)
+        .cloned()
+        .collect();
+
+    let latest_working_memory_trace = events.iter().rev().find_map(|event| {
+        let LunaEvent::RuntimeTurnReceipted(receipt) = &event.payload else {
+            return None;
+        };
+        receipt
+            .trace_steps
+            .iter()
+            .find(|step| step.name == "working_memory")
+            .cloned()
+    });
+
+    Ok(RuntimeBriefReport {
+        log_path: log.to_path_buf(),
+        replay_audit,
+        doctrine_gate_status,
+        recent_turns,
+        current_high_confidence_claims,
+        recent_corrections,
+        recent_repairs,
+        open_questions: state.open_questions,
+        suppressed_claims,
+        latest_working_memory_trace,
+    })
+}
+
+pub fn runtime_retention_report(log: &Path) -> Result<RuntimeRetentionReport> {
+    let events = load_jsonl_events_strict(log)?;
+    let retention_events = events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::MemoryRepairRecorded(repair) => Some(RuntimeRetentionEvent {
+                failed_turn_id: repair.failed_turn_id,
+                repair_turn_id: repair.repair_turn_id,
+                failed_query: repair.failed_query.clone(),
+                repaired_claim_keys: repair.repaired_claim_keys.clone(),
+                future_recall_hint: format!(
+                    "When a future query resembles {:?}, boost these repaired claim keys before working-memory filtering.",
+                    repair.failed_query
+                ),
+                reason: repair.reason.clone(),
+            }),
+            _ => None,
+        })
+        .collect();
+    Ok(RuntimeRetentionReport {
+        log_path: log.to_path_buf(),
+        retention_events,
+    })
+}
+
+pub fn runtime_why_not(log: &Path, query: &str) -> Result<RuntimeWhyNotReport> {
+    let events = load_jsonl_events_strict(log)?;
+    let state = runtime_state_from_events(&events)?;
+    let query_terms = diagnostic_terms(query);
+    let desired_kinds = desired_entity_claim_kinds(&query.to_ascii_lowercase());
+    let requested_entities = requested_entity_terms(query)
+        .into_iter()
+        .map(|term| normalize_for_match(&term))
+        .collect::<Vec<_>>();
+    let findings = state
+        .claims
+        .iter()
+        .filter(|claim| {
+            diagnostic_claim_matches(
+                claim,
+                query,
+                &query_terms,
+                &desired_kinds,
+                &requested_entities,
+            )
+        })
+        .map(why_not_finding_for_claim)
+        .collect::<Vec<_>>();
+    let summary = if findings.is_empty() {
+        "no_matching_entity_or_claim".to_string()
+    } else if findings.iter().any(|finding| finding.answerable) {
+        "answerable_memory_exists".to_string()
+    } else {
+        "memory_exists_but_is_not_answerable".to_string()
+    };
+    Ok(RuntimeWhyNotReport {
+        log_path: log.to_path_buf(),
+        query: query.to_string(),
+        summary,
+        findings,
+    })
+}
+
+pub fn runtime_inspect_claim(log: &Path, claim_key: &str) -> Result<RuntimeInspectReport> {
+    let events = load_jsonl_events_strict(log)?;
+    let state = runtime_state_from_events(&events)?;
+    let claims = state
+        .claims
+        .iter()
+        .filter(|claim| claim.key == claim_key)
+        .cloned()
+        .collect::<Vec<_>>();
+    if claims.is_empty() {
+        return Err(LunaError::new(format!(
+            "no claim found for key {claim_key}"
+        )));
+    }
+    let event_refs = inspect_event_refs(&events)
+        .into_iter()
+        .filter(|event| event.affected_claim_keys.iter().any(|key| key == claim_key))
+        .collect::<Vec<_>>();
+    let entity_groups = state
+        .entity_groups
+        .iter()
+        .filter(|group| group.claims.iter().any(|claim| claim.key == claim_key))
+        .map(|group| format!("{} ({})", group.label, group.id))
+        .collect::<Vec<_>>();
+    let receipt_mentions = receipt_mentions_for_claim(&events, claim_key);
+    Ok(RuntimeInspectReport {
+        log_path: log.to_path_buf(),
+        selector: format!("claim:{claim_key}"),
+        claims,
+        entity_groups,
+        events: event_refs,
+        receipt_mentions,
+    })
+}
+
+pub fn runtime_inspect_turn(log: &Path, turn_id: Uuid) -> Result<RuntimeInspectReport> {
+    let events = load_jsonl_events_strict(log)?;
+    let state = runtime_state_from_events(&events)?;
+    let event_refs = inspect_event_refs(&events)
+        .into_iter()
+        .filter(|event| event.turn_id == Some(turn_id))
+        .collect::<Vec<_>>();
+    if event_refs.is_empty() {
+        return Err(LunaError::new(format!(
+            "no events found for turn {turn_id}"
+        )));
+    }
+    let affected_claim_keys = event_refs
+        .iter()
+        .flat_map(|event| event.affected_claim_keys.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    let claims = state
+        .claims
+        .iter()
+        .filter(|claim| affected_claim_keys.contains(&claim.key))
+        .cloned()
+        .collect::<Vec<_>>();
+    Ok(RuntimeInspectReport {
+        log_path: log.to_path_buf(),
+        selector: format!("turn:{turn_id}"),
+        claims,
+        entity_groups: Vec::new(),
+        events: event_refs,
+        receipt_mentions: Vec::new(),
+    })
+}
+
+pub fn runtime_inspect_event(log: &Path, event_id: Uuid) -> Result<RuntimeInspectReport> {
+    let events = load_jsonl_events_strict(log)?;
+    let state = runtime_state_from_events(&events)?;
+    let event_ref = inspect_event_refs(&events)
+        .into_iter()
+        .find(|event| event.event_id == event_id)
+        .ok_or_else(|| LunaError::new(format!("no event found for id {event_id}")))?;
+    let affected_claim_keys = event_ref
+        .affected_claim_keys
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let claims = state
+        .claims
+        .iter()
+        .filter(|claim| affected_claim_keys.contains(&claim.key))
+        .cloned()
+        .collect::<Vec<_>>();
+    Ok(RuntimeInspectReport {
+        log_path: log.to_path_buf(),
+        selector: format!("event:{event_id}"),
+        claims,
+        entity_groups: Vec::new(),
+        events: vec![event_ref],
+        receipt_mentions: Vec::new(),
+    })
+}
+
+fn why_not_finding_for_claim(claim: &MemoryClaim) -> RuntimeWhyNotFinding {
+    let (cause, answerable, reason) = match claim.lifecycle_status {
+        AssertionLifecycleStatus::Current if !claim_is_answerable_memory(claim) => (
+            "stored_as_boundary_or_unknown",
+            false,
+            "claim is stored for memory hygiene, but should not be used as a direct answer",
+        ),
+        AssertionLifecycleStatus::Current => match claim.status {
+            AssertionConfidenceTier::Confirmed | AssertionConfidenceTier::Inferred => (
+                "answerable_current_claim",
+                true,
+                "claim is current and can be considered by response planning",
+            ),
+            AssertionConfidenceTier::Unconfirmed => (
+                "confidence_below_answer_threshold",
+                false,
+                "claim exists but is unconfirmed; Luna should preserve it without treating it as strong answer evidence",
+            ),
+        },
+        AssertionLifecycleStatus::Superseded => (
+            "claim_superseded",
+            false,
+            "claim exists but was superseded by a newer correction",
+        ),
+        AssertionLifecycleStatus::Stale => (
+            "claim_stale",
+            false,
+            "claim exists but is marked stale",
+        ),
+        AssertionLifecycleStatus::Archived => (
+            "claim_archived",
+            false,
+            "claim exists in long-term archive and requires deep recall",
+        ),
+        AssertionLifecycleStatus::Contradicted => (
+            "claim_contradicted",
+            false,
+            "claim exists but is contradicted by other evidence",
+        ),
+    };
+    RuntimeWhyNotFinding {
+        claim: claim.clone(),
+        cause: cause.to_string(),
+        answerable,
+        reason: reason.to_string(),
+    }
+}
+
+fn diagnostic_claim_matches(
+    claim: &MemoryClaim,
+    query: &str,
+    query_terms: &[String],
+    desired_kinds: &[&'static str],
+    requested_entities: &[String],
+) -> bool {
+    let query = normalize_for_match(query);
+    let value = normalize_for_match(&claim.value);
+    let key = normalize_for_match(&claim.key.replace([':', '='], " "));
+    let kind_matches = desired_kinds.is_empty()
+        || desired_kinds.contains(&claim.kind.as_str())
+        || (desired_kinds.contains(&"location")
+            && matches!(claim.kind.as_str(), "unknown" | "location_status"));
+    let entity_matches = requested_entities.is_empty()
+        || requested_entities.iter().any(|entity| {
+            contains_all_terms(&value, &normalized_terms(entity)) || key.contains(entity)
+        });
+    if !kind_matches || !entity_matches {
+        return false;
+    }
+    if !query.is_empty() && (value.contains(&query) || key.contains(&query)) {
+        return true;
+    }
+    !query_terms.is_empty()
+        && query_terms
+            .iter()
+            .any(|term| value.contains(term) || key.contains(term))
+}
+
+fn diagnostic_terms(query: &str) -> Vec<String> {
+    normalize_for_match(query)
+        .split_whitespace()
+        .filter(|term| term.len() > 2)
+        .filter(|term| {
+            !matches!(
+                *term,
+                "where" | "what" | "when" | "does" | "did" | "about" | "tell" | "said"
+            )
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+pub fn latest_runtime_trace(log: &Path) -> Result<RuntimeTraceReport> {
+    let events = load_jsonl_events_strict(log)?;
+    trace_report_from_events(log, &events, None)
+}
+
+pub fn runtime_trace_for_turn(log: &Path, turn_id: Uuid) -> Result<RuntimeTraceReport> {
+    let events = load_jsonl_events_strict(log)?;
+    trace_report_from_events(log, &events, Some(turn_id))
+}
+
+fn trace_report_from_events(
+    log: &Path,
+    events: &[luna_events::StoredEvent],
+    turn_id: Option<Uuid>,
+) -> Result<RuntimeTraceReport> {
+    let receipt_event = events
+        .iter()
+        .rev()
+        .find(|event| match (&event.payload, turn_id) {
+            (LunaEvent::RuntimeTurnReceipted(receipt), Some(turn_id)) => receipt.turn_id == turn_id,
+            (LunaEvent::RuntimeTurnReceipted(_), None) => true,
+            _ => false,
+        })
+        .ok_or_else(|| {
+            LunaError::new(match turn_id {
+                Some(turn_id) => format!("no runtime turn trace found for turn {turn_id}"),
+                None => "no runtime turn trace found".to_string(),
+            })
+        })?;
+
+    let LunaEvent::RuntimeTurnReceipted(receipt) = &receipt_event.payload else {
+        unreachable!("receipt event predicate only matches runtime turn receipts");
+    };
+
+    Ok(RuntimeTraceReport {
+        log_path: log.to_path_buf(),
+        turn_id: receipt.turn_id,
+        receipt_event_id: receipt_event.event_id,
+        receipt_event_hash: receipt_event.event_hash.clone(),
+        trace_steps: receipt.trace_steps.clone(),
+    })
+}
+
+fn inspect_event_refs(events: &[luna_events::StoredEvent]) -> Vec<RuntimeInspectEventRef> {
+    events
+        .iter()
+        .map(|event| RuntimeInspectEventRef {
+            event_id: event.event_id,
+            event_hash: event.event_hash.clone(),
+            turn_id: event.turn_id,
+            episode_id: event.episode_id,
+            payload_type: event_payload_type(&event.payload).to_string(),
+            affected_claim_keys: affected_claim_keys(&event.payload),
+            event: event.clone(),
+        })
+        .collect()
+}
+
+fn event_payload_type(event: &LunaEvent) -> &'static str {
+    match event {
+        LunaEvent::TurnObserved(_) => "turn_observed",
+        LunaEvent::MemoryIntakeDecided(_) => "memory_intake_decided",
+        LunaEvent::AssertionExtracted(_) => "assertion_extracted",
+        LunaEvent::EpisodeCreated(_) => "episode_created",
+        LunaEvent::EpisodeReinforced(_) => "episode_reinforced",
+        LunaEvent::EpisodeRecalled(_) => "episode_recalled",
+        LunaEvent::RecallSucceeded(_) => "recall_succeeded",
+        LunaEvent::RecallFailed(_) => "recall_failed",
+        LunaEvent::AssertionCorrected(_) => "assertion_corrected",
+        LunaEvent::ContradictionDetected(_) => "contradiction_detected",
+        LunaEvent::MemoryRepairRecorded(_) => "memory_repair_recorded",
+        LunaEvent::EpisodeDecayed(_) => "episode_decayed",
+        LunaEvent::TopologyBridgeCommitted(_) => "topology_bridge_committed",
+        LunaEvent::RuntimeTurnReceipted(_) => "runtime_turn_receipted",
+        LunaEvent::LatticeComputed(_) => "lattice_computed",
+    }
+}
+
+fn affected_claim_keys(event: &LunaEvent) -> Vec<String> {
+    match event {
+        LunaEvent::AssertionExtracted(payload) => vec![payload.assertion.key()],
+        LunaEvent::EpisodeCreated(payload) => vec![payload.assertion.key()],
+        LunaEvent::EpisodeReinforced(payload) => vec![payload.assertion.key()],
+        LunaEvent::AssertionCorrected(payload) => {
+            vec![payload.old_assertion.key(), payload.new_assertion.key()]
+        }
+        LunaEvent::ContradictionDetected(payload) => vec![payload.left.key(), payload.right.key()],
+        LunaEvent::MemoryRepairRecorded(payload) => payload.repaired_claim_keys.clone(),
+        LunaEvent::RuntimeTurnReceipted(receipt) => receipt
+            .created_claim_keys
+            .iter()
+            .chain(receipt.reinforced_claim_keys.iter())
+            .chain(receipt.corrected_claim_keys.iter())
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn receipt_mentions_for_claim(
+    events: &[luna_events::StoredEvent],
+    claim_key: &str,
+) -> Vec<RuntimeInspectReceiptMention> {
+    events
+        .iter()
+        .filter_map(|event| {
+            let LunaEvent::RuntimeTurnReceipted(receipt) = &event.payload else {
+                return None;
+            };
+            let created = receipt
+                .created_claim_keys
+                .iter()
+                .any(|key| key == claim_key);
+            let reinforced = receipt
+                .reinforced_claim_keys
+                .iter()
+                .any(|key| key == claim_key);
+            let corrected = receipt
+                .corrected_claim_keys
+                .iter()
+                .any(|key| key == claim_key);
+            (created || reinforced || corrected).then(|| RuntimeInspectReceiptMention {
+                turn_id: receipt.turn_id,
+                receipt_event_id: event.event_id,
+                receipt_event_hash: event.event_hash.clone(),
+                created,
+                reinforced,
+                corrected,
+            })
+        })
+        .collect()
+}
+
+fn lifecycle_counts(state: &MemoryState) -> RuntimeLifecycleCounts {
+    let mut counts = RuntimeLifecycleCounts {
+        current: 0,
+        superseded: 0,
+        contradicted: 0,
+        stale: 0,
+        archived: 0,
+    };
+    for claim in &state.claims {
+        match claim.lifecycle_status {
+            AssertionLifecycleStatus::Current => counts.current += 1,
+            AssertionLifecycleStatus::Superseded => counts.superseded += 1,
+            AssertionLifecycleStatus::Contradicted => counts.contradicted += 1,
+            AssertionLifecycleStatus::Stale => counts.stale += 1,
+            AssertionLifecycleStatus::Archived => counts.archived += 1,
+        }
+    }
+    counts
+}
+
+fn confidence_counts(state: &MemoryState) -> RuntimeConfidenceCounts {
+    let mut counts = RuntimeConfidenceCounts {
+        confirmed: 0,
+        inferred: 0,
+        unconfirmed: 0,
+        unknown: 0,
+    };
+    for claim in &state.claims {
+        match claim.status {
+            AssertionConfidenceTier::Confirmed => counts.confirmed += 1,
+            AssertionConfidenceTier::Inferred => counts.inferred += 1,
+            AssertionConfidenceTier::Unconfirmed => counts.unconfirmed += 1,
+        }
+    }
+    counts
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_runtime_turn_receipt(
     turn_id: Uuid,
@@ -605,6 +1703,7 @@ fn build_runtime_turn_receipt(
     response_plan: &ResponsePlan,
     output_packet: &OutputPacket,
     topology_commit_event: &luna_events::StoredEvent,
+    trace_steps: Vec<RuntimeTurnTraceStep>,
 ) -> RuntimeTurnReceipt {
     let turn_events = persisted_events
         .iter()
@@ -641,6 +1740,7 @@ fn build_runtime_turn_receipt(
         turn_id,
         source_event_ids,
         source_event_hashes,
+        trace_steps,
         assertion_count,
         created_claim_keys,
         reinforced_claim_keys,
@@ -1394,7 +2494,7 @@ fn person_entity_keys(value: &str) -> Vec<(String, String, String)> {
 fn person_subjects_from_claim_value(value: &str) -> Vec<String> {
     let lower = value.to_ascii_lowercase();
     let subject_end = [
-        " lives ", " is ", " are ", " wants ", " takes ", " writes ", " has ",
+        " lives ", " is ", " are ", " wants ", " takes ", " writes ", " has ", " built ",
     ]
     .iter()
     .filter_map(|needle| lower.find(needle))
@@ -2141,6 +3241,21 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
             }
         }
 
+        if (sentence_lower.contains("both are my co-founders")
+            || sentence_lower.contains("both are my cofounders")
+            || sentence_lower.contains("are my co-founders")
+            || sentence_lower.contains("are my cofounders"))
+            && local_people.len() >= 2
+        {
+            for name in &local_people {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "role",
+                    format!("{name} is my co-founder"),
+                ));
+            }
+        }
+
         if sentence_lower.contains("are short") && local_people.len() >= 2 {
             assertions.push(StructuredAssertion::new(
                 "person",
@@ -2151,7 +3266,11 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
 
         for name in &people {
             let lower_name = name.to_ascii_lowercase();
-            if let Some(location) = capture_after_name_phrase(sentence, &lower_name, "lives in") {
+            if let Some(location) = capture_after_name_phrase(sentence, &lower_name, "lives in")
+                .or_else(|| {
+                    capture_after_named_subject_phrase(sentence, &lower_name, "lives in", &people)
+                })
+            {
                 assertions.push(StructuredAssertion::new(
                     "person",
                     "location",
@@ -2217,6 +3336,27 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                     format!("{name} wants to {goal}"),
                 ));
             }
+            if let Some(destination) =
+                capture_after_named_subject_phrase(sentence, &lower_name, "leaving for", &people)
+            {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "future_event",
+                    format!(
+                        "{name} is leaving for {}",
+                        clean_relation_target_label(&destination)
+                    ),
+                ));
+            }
+            if let Some(project) =
+                capture_after_named_subject_phrase(sentence, &lower_name, "built", &people)
+            {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "creation",
+                    format!("{name} built {}", clean_project_list_label(&project)),
+                ));
+            }
             if contains_ci(
                 sentence,
                 &format!("{lower_name} takes public transportation"),
@@ -2237,6 +3377,8 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                 ));
             }
         }
+
+        capture_self_build_facts(sentence, assertions);
 
         if !sentence_people.is_empty() {
             previous_people = sentence_people;
@@ -2268,6 +3410,20 @@ fn capture_plural_profession_fallback(
 
 fn capture_project_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
     for sentence in split_sentences(text) {
+        // A project rename ("X is now called Y") is emitted as a project:identity
+        // assertion whose correction slot resolves to the *former* name X, so the
+        // existing correction machinery supersedes the prior project-identity claim
+        // for X. The value carries the new name Y so recall surfaces the current
+        // name. Checked before capture_project_description so the rename connector
+        // is not mis-read as a plain description.
+        if let Some((former, current)) = capture_project_rename(sentence) {
+            assertions.push(StructuredAssertion::new(
+                "project",
+                "identity",
+                format!("{former} is now called {current}"),
+            ));
+            continue;
+        }
         let Some((name, description)) = capture_project_description(sentence) else {
             continue;
         };
@@ -2277,6 +3433,84 @@ fn capture_project_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) 
             format!("{name} is {description}"),
         ));
     }
+}
+
+/// Capture a project rename of the form "X is now called Y" (also "is now named
+/// Y", "has been renamed Y", "has been renamed to Y"). Returns `(former, current)`
+/// when both sides parse as project names. The connector must include a forward
+/// cue ("now"/"renamed") so an ordinary "X is called Y" is not treated as a
+/// project rename.
+fn capture_project_rename(sentence: &str) -> Option<(String, String)> {
+    let lower = sentence.to_ascii_lowercase();
+    let (subject_part, remainder) = [
+        " is now called ",
+        " is now named ",
+        " has been renamed to ",
+        " has been renamed ",
+    ]
+    .iter()
+    .find_map(|connector| {
+        lower.find(connector).map(|index| {
+            (
+                &sentence[..index],
+                &sentence[index + connector.len()..],
+            )
+        })
+    })?;
+
+    let former = strip_correction_prefix(subject_part)
+        .trim()
+        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != ' ');
+    let current = remainder
+        .split([',', ';', '.', '!', '?'])
+        .next()
+        .unwrap_or(remainder)
+        .trim()
+        .trim_start_matches("called ")
+        .trim_start_matches("named ")
+        .trim()
+        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != ' ');
+
+    if is_project_name(former) && looks_like_proper_name(current) && former != current {
+        Some((former.to_string(), current.to_string()))
+    } else {
+        None
+    }
+}
+
+/// A looser proper-name check for a rename *target*: 1-4 words, each beginning
+/// with an uppercase letter (or an all-caps acronym), none a sentence-leading
+/// stopword. Unlike `is_project_name`, this accepts a single mixed-case word such
+/// as "Cleartrail" so renames to ordinary product names are captured.
+fn looks_like_proper_name(value: &str) -> bool {
+    let words = value.split_whitespace().collect::<Vec<_>>();
+    if words.is_empty() || words.len() > 4 {
+        return false;
+    }
+    words.iter().all(|word| {
+        let trimmed = word.trim_matches(|ch: char| !ch.is_ascii_alphanumeric());
+        !trimmed.is_empty()
+            && !matches!(trimmed, "I" | "It" | "They" | "The" | "A" | "An" | "My")
+            && trimmed
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_uppercase())
+    })
+}
+
+/// Strip a leading "Correction:"/"Correction" cue from a clause so the project
+/// subject parses cleanly (the cue still drives `has_correction_cue` on the full
+/// turn text).
+fn strip_correction_prefix(clause: &str) -> &str {
+    let trimmed = clause.trim_start();
+    for prefix in ["correction:", "correction -", "correction,", "correction"] {
+        if trimmed.len() >= prefix.len()
+            && trimmed[..prefix.len()].eq_ignore_ascii_case(prefix)
+        {
+            return trimmed[prefix.len()..].trim_start();
+        }
+    }
+    clause
 }
 
 fn capture_manuscript_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
@@ -2745,6 +3979,88 @@ fn capture_after_name_phrase(sentence: &str, lower_name: &str, phrase: &str) -> 
     }
 }
 
+fn capture_after_named_subject_phrase(
+    sentence: &str,
+    lower_name: &str,
+    phrase: &str,
+    people: &[String],
+) -> Option<String> {
+    let lower = sentence.to_ascii_lowercase();
+    let name_index = lower.find(lower_name)?;
+    let after_name_index = name_index + lower_name.len();
+    let after_name_lower = &lower[after_name_index..];
+    let phrase_needle = format!("{phrase} ");
+    let phrase_relative_index = after_name_lower.find(&phrase_needle)?;
+    let between = &after_name_lower[..phrase_relative_index];
+    if people.iter().any(|person| {
+        let other = person.to_ascii_lowercase();
+        other != lower_name && between.contains(&other)
+    }) {
+        return None;
+    }
+    let value_start = after_name_index + phrase_relative_index + phrase_needle.len();
+    clean_captured_tail(&sentence[value_start..])
+}
+
+fn clean_captured_tail(value: &str) -> Option<String> {
+    let value = value
+        .split([','])
+        .next()
+        .unwrap_or(value)
+        .split(" and ")
+        .next()
+        .unwrap_or(value)
+        .trim()
+        .trim_matches(|ch: char| matches!(ch, '.' | ',' | ';' | ':' | '!' | '?'));
+    (!value.is_empty()).then(|| value.to_string())
+}
+
+fn capture_self_build_facts(sentence: &str, assertions: &mut Vec<StructuredAssertion>) {
+    let lower = sentence.to_ascii_lowercase();
+    let Some(index) = lower.find(" built ") else {
+        return;
+    };
+    let before = lower[..index].trim();
+    if !(before.ends_with('i')
+        || before.ends_with(" i")
+        || before.contains(" i,")
+        || before.starts_with("i,"))
+    {
+        return;
+    }
+    let after = &sentence[index + " built ".len()..];
+    for project in split_project_list(after) {
+        assertions.push(StructuredAssertion::new(
+            "identity",
+            "creation",
+            format!("I built {project}"),
+        ));
+    }
+}
+
+fn split_project_list(value: &str) -> Vec<String> {
+    clean_project_list_label(value)
+        .split(" and ")
+        .map(str::trim)
+        .filter(|project| is_project_name(project) || is_single_name(project))
+        .map(str::to_string)
+        .collect()
+}
+
+fn clean_project_list_label(value: &str) -> String {
+    value
+        .split(" which ")
+        .next()
+        .unwrap_or(value)
+        .split(" that ")
+        .next()
+        .unwrap_or(value)
+        .trim()
+        .trim_matches(|ch: char| matches!(ch, '.' | ',' | ';' | ':' | '!' | '?'))
+        .trim()
+        .to_string()
+}
+
 fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
     if is_query_sentence(sentence)
         || matches!(
@@ -2905,7 +4221,28 @@ fn is_single_name(value: &str) -> bool {
     };
     first.is_ascii_uppercase()
         && chars.all(|ch| ch.is_ascii_lowercase())
-        && !matches!(value, "I" | "They" | "The" | "A" | "An" | "My" | "Lives")
+        && !matches!(
+            value,
+            "I" | "They"
+                | "The"
+                | "A"
+                | "An"
+                | "My"
+                | "Lives"
+                | "Navy"
+                | "January"
+                | "February"
+                | "March"
+                | "April"
+                | "May"
+                | "June"
+                | "July"
+                | "August"
+                | "September"
+                | "October"
+                | "November"
+                | "December"
+        )
 }
 
 fn is_project_name(value: &str) -> bool {
@@ -2934,6 +4271,8 @@ fn contains_ci(text: &str, needle: &str) -> bool {
         .contains(&needle.to_ascii_lowercase())
 }
 
+const REPAIR_MEMORY_ACTIVATION_BOOST: f32 = 1.35;
+
 fn density_for_tier(tier: AssertionConfidenceTier) -> f32 {
     match tier {
         AssertionConfidenceTier::Confirmed => 1.0,
@@ -2942,6 +4281,7 @@ fn density_for_tier(tier: AssertionConfidenceTier) -> f32 {
     }
 }
 
+#[cfg(test)]
 fn activate_working_memory_with_orb_state(
     state: &MemoryState,
     turn: &ConversationTurn,
@@ -2949,6 +4289,47 @@ fn activate_working_memory_with_orb_state(
     recalled: &RecallSet,
     budget: WorkingMemoryBudget,
     orb_state: &RuntimeOrbActivationState,
+) -> WorkingMemory {
+    activate_working_memory_with_repair_boosts(
+        state,
+        turn,
+        observation,
+        recalled,
+        budget,
+        orb_state,
+        &BTreeSet::new(),
+    )
+}
+
+fn activate_working_memory_with_repairs(
+    state: &MemoryState,
+    turn: &ConversationTurn,
+    observation: &TurnReading,
+    recalled: &RecallSet,
+    budget: WorkingMemoryBudget,
+    orb_state: &RuntimeOrbActivationState,
+    events: &[luna_events::StoredEvent],
+) -> WorkingMemory {
+    let repair_boosted_claim_keys = repair_boosted_claim_keys(events, &turn.content);
+    activate_working_memory_with_repair_boosts(
+        state,
+        turn,
+        observation,
+        recalled,
+        budget,
+        orb_state,
+        &repair_boosted_claim_keys,
+    )
+}
+
+fn activate_working_memory_with_repair_boosts(
+    state: &MemoryState,
+    turn: &ConversationTurn,
+    observation: &TurnReading,
+    recalled: &RecallSet,
+    budget: WorkingMemoryBudget,
+    orb_state: &RuntimeOrbActivationState,
+    repair_boosted_claim_keys: &BTreeSet<String>,
 ) -> WorkingMemory {
     let map = &state.map;
     let query = normalize_for_match(&turn.content);
@@ -2988,6 +4369,9 @@ fn activate_working_memory_with_orb_state(
                 &recalled_values,
                 &ActivationConfig::default(),
             );
+            if node_has_repair_boost(&node, repair_boosted_claim_keys) {
+                node.activation += REPAIR_MEMORY_ACTIVATION_BOOST;
+            }
             node
         })
         .collect::<Vec<_>>();
@@ -3055,6 +4439,7 @@ fn activate_working_memory_with_orb_state(
     let filtered_edge_count = scored_edges.len().saturating_sub(budget.max_edges);
     scored_edges.truncate(budget.max_edges);
     let correction_salience = correction_salience_summaries(state, &scored_nodes);
+    let repair_salience = repair_salience_summaries(repair_boosted_claim_keys, &scored_nodes);
 
     WorkingMemory {
         nodes: scored_nodes,
@@ -3065,6 +4450,7 @@ fn activate_working_memory_with_orb_state(
             filtered_out_memory_count,
             retired_orb_filtered_node_count,
             &correction_salience,
+            &repair_salience,
         ),
     }
 }
@@ -3116,6 +4502,47 @@ fn orb_id_from_system_root(system_root: &str) -> Option<String> {
     } else {
         Some(trimmed.to_string())
     }
+}
+
+fn repair_boosted_claim_keys(events: &[luna_events::StoredEvent], query: &str) -> BTreeSet<String> {
+    let normalized_query = normalize_for_match(query);
+    let query_terms = normalized_terms(&normalized_query);
+    events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::MemoryRepairRecorded(repair)
+                if repaired_query_matches(&query_terms, &repair.failed_query) =>
+            {
+                Some(repair.repaired_claim_keys.iter().cloned())
+            }
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+fn repaired_query_matches(query_terms: &[&str], failed_query: &str) -> bool {
+    let failed = normalize_for_match(failed_query);
+    let failed_terms = normalized_terms(&failed);
+    contains_all_terms(&failed, query_terms)
+        || contains_all_terms(
+            &query_terms.join(" "),
+            &failed_terms
+                .into_iter()
+                .filter(|term| !matches!(*term, "who" | "what" | "where" | "when" | "why" | "how"))
+                .collect::<Vec<_>>(),
+        )
+        || tokens_overlap(query_terms, &normalized_terms(&failed))
+}
+
+fn node_has_repair_boost(node: &MemoryNode, repair_boosted_claim_keys: &BTreeSet<String>) -> bool {
+    !repair_boosted_claim_keys.is_empty()
+        && node.provenance.iter().any(|provenance| {
+            provenance
+                .assertion_key
+                .as_ref()
+                .is_some_and(|key| repair_boosted_claim_keys.contains(key))
+        })
 }
 
 fn filtered_out_matching_claim_count(
@@ -3178,6 +4605,22 @@ fn correction_salience_summaries(state: &MemoryState, nodes: &[MemoryNode]) -> V
     summaries
 }
 
+fn repair_salience_summaries(
+    repair_boosted_claim_keys: &BTreeSet<String>,
+    nodes: &[MemoryNode],
+) -> Vec<String> {
+    if repair_boosted_claim_keys.is_empty() {
+        return Vec::new();
+    }
+    nodes
+        .iter()
+        .filter(|node| node_has_repair_boost(node, repair_boosted_claim_keys))
+        .map(|node| format!("repair_salience: {}", node.label))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
 fn correction_slot_for_claim(claim: &MemoryClaim) -> Option<String> {
     let entity = match claim.domain.as_str() {
         "person" => person_subjects_from_claim_value(&claim.value)
@@ -3199,6 +4642,7 @@ fn activation_report(
     filtered_out_memory_count: usize,
     retired_orb_filtered_node_count: usize,
     correction_salience: &[String],
+    repair_salience: &[String],
 ) -> String {
     let mut report = "entity/relation/cue/query/recalled/confidence activation over current graph with graph-depth and fixed-budget filtering".to_string();
     if filtered_out_memory_count > 0 {
@@ -3214,6 +4658,10 @@ fn activation_report(
     if !correction_salience.is_empty() {
         report.push_str("; ");
         report.push_str(&correction_salience.join(" | "));
+    }
+    if !repair_salience.is_empty() {
+        report.push_str("; ");
+        report.push_str(&repair_salience.join(" | "));
     }
     report
 }
@@ -3716,9 +5164,15 @@ pub fn plan_conversation_response(user_text: &str, result: &RuntimeTurnResult) -
     }
 
     if is_user_asking_about_luna(&text) {
+        let substrate = luna_core::LunaSelfSubstrate::default();
         return ResponsePlan {
             actions: vec![ResponsePlanAction::Answer],
-            answer_values: vec!["I am Luna: a local-first memory runtime layer. I store turns as events, separate confirmed from inferred or unknown facts, and only bring a small working set into the conversation.".to_string()],
+            answer_values: vec![format!(
+                "I am {}: a {}. I {}",
+                substrate.platform_identity.name,
+                substrate.platform_identity.kind,
+                substrate.platform_identity.mission
+            )],
             ..ResponsePlan::default()
         };
     }
@@ -3751,10 +5205,24 @@ pub fn plan_conversation_response(user_text: &str, result: &RuntimeTurnResult) -
             if !remembered.is_empty() {
                 return answer_plan(Some(labels.join(" and ")), remembered, result);
             }
+            // A known entity was asked about a specific attribute (e.g. location)
+            // that we do not hold as answerable memory. Do NOT fall through to
+            // unrelated facts about that entity — that is the memory-hygiene
+            // boundary (answering "where does Joe live?" with Joe's role would be
+            // a non-sequitur). Surface AvoidAnswering instead.
+            if !desired_entity_claim_kinds(&text).is_empty() {
+                return unsupported_memory_plan(
+                    "requested attribute is not answerable memory for the named entity",
+                );
+            }
         }
 
         let remembered = supported_memory_values_for_query(user_text, result);
         if remembered.is_empty() {
+            let archived = archived_memory_values_for_query(user_text, result);
+            if !archived.is_empty() {
+                return answer_plan(Some("long-term archive".to_string()), archived, result);
+            }
             return unsupported_memory_plan("no supported recalled or active memory matches");
         }
         return answer_plan(None, remembered, result);
@@ -3875,14 +5343,20 @@ fn render_answer_evidence_suffix(plan: &ResponsePlan) -> String {
         return String::new();
     };
     let confidence = format!("{:?}", first.confidence_tier).to_ascii_lowercase();
+    let lifecycle = format!("{:?}", first.lifecycle_status).to_ascii_lowercase();
     let orb = if first.orb_authorized {
         "; orb-authorized"
     } else {
         ""
     };
+    let archive = if first.lifecycle_status == AssertionLifecycleStatus::Archived {
+        "; deep archive recall"
+    } else {
+        ""
+    };
     match &first.recall_reason {
-        Some(reason) => format!(" ({confidence}; recalled by {reason}{orb})"),
-        None => format!(" ({confidence}{orb})"),
+        Some(reason) => format!(" ({confidence}; {lifecycle}; recalled by {reason}{orb}{archive})"),
+        None => format!(" ({confidence}; {lifecycle}{orb}{archive})"),
     }
 }
 
@@ -3899,15 +5373,16 @@ fn response_plan_evidence(
                 .claims
                 .iter()
                 .find(|claim| &claim.value == value)
-                .filter(|claim| claim_has_direct_answer_evidence(result, &claim.key))
                 .map(|claim| {
+                    let direct_assertion_evidence =
+                        claim_has_direct_answer_evidence(result, &claim.key);
                     let topology_orb_refs = topology_orb_refs_for_assertion_key(result, &claim.key);
                     ResponsePlanEvidence {
                         value: claim.value.clone(),
                         confidence_tier: claim.status,
                         lifecycle_status: claim.lifecycle_status,
                         recall_reason: reasons.get(&claim.key).cloned(),
-                        direct_assertion_evidence: true,
+                        direct_assertion_evidence,
                         orb_authorized: !topology_orb_refs.is_empty(),
                         topology_orb_refs,
                     }
@@ -4008,8 +5483,10 @@ fn has_missing_requested_entity(user_text: &str, state: &MemoryState) -> bool {
             .iter()
             .any(|group| normalize_for_match(&group.label) == normalized)
             && !state.claims.iter().any(|claim| {
-                claim.lifecycle_status == AssertionLifecycleStatus::Current
-                    && contains_all_terms(&normalize_for_match(&claim.value), &terms)
+                matches!(
+                    claim.lifecycle_status,
+                    AssertionLifecycleStatus::Current | AssertionLifecycleStatus::Archived
+                ) && contains_all_terms(&normalize_for_match(&claim.value), &terms)
             })
     })
 }
@@ -4045,7 +5522,8 @@ fn supported_entity_values(
         .claims
         .iter()
         .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
-        .filter(|claim| supported_keys.contains(&claim.key))
+        .filter(|claim| claim_is_answerable_memory(claim))
+        .filter(|claim| desired_kinds.is_empty() || supported_keys.contains(&claim.key))
         .filter(|claim| desired_kinds.is_empty() || desired_kinds.contains(&claim.kind.as_str()))
         .map(|claim| claim.value.clone())
         .collect::<Vec<_>>();
@@ -4076,6 +5554,7 @@ fn supported_memory_values(result: &RuntimeTurnResult) -> Vec<String> {
         .claims
         .iter()
         .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+        .filter(|claim| claim_is_answerable_memory(claim))
         .filter(|claim| supported_keys.contains(&claim.key))
         .map(|claim| claim.value.clone())
         .collect::<Vec<_>>();
@@ -4092,6 +5571,49 @@ fn supported_memory_values_for_query(query: &str, result: &RuntimeTurnResult) ->
     } else {
         supported_memory_values(result)
     }
+}
+
+fn archived_memory_values_for_query(query: &str, result: &RuntimeTurnResult) -> Vec<String> {
+    let normalized_query = normalize_for_match(query);
+    let query_terms = normalized_terms(&normalized_query);
+    let desired_kinds = desired_entity_claim_kinds(query);
+    let requested_entities = requested_entity_terms(query)
+        .into_iter()
+        .map(|term| normalize_for_match(&term))
+        .collect::<Vec<_>>();
+    let mut values = result
+        .memory_state
+        .claims
+        .iter()
+        .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Archived)
+        .filter(|claim| claim_is_answerable_memory(claim))
+        .filter(|claim| desired_kinds.is_empty() || desired_kinds.contains(&claim.kind.as_str()))
+        .filter(|claim| archived_claim_matches_query(claim, &query_terms, &requested_entities))
+        .map(|claim| claim.value.clone())
+        .collect::<Vec<_>>();
+    values.sort();
+    values.dedup();
+    values.truncate(4);
+    values
+}
+
+fn archived_claim_matches_query(
+    claim: &MemoryClaim,
+    query_terms: &[&str],
+    requested_entities: &[String],
+) -> bool {
+    let evidence = normalize_for_match(&format!(
+        "{} {} {} {}",
+        claim.domain, claim.kind, claim.value, claim.key
+    ));
+    if !requested_entities.is_empty()
+        && requested_entities
+            .iter()
+            .any(|entity| contains_all_terms(&evidence, &normalized_terms(entity)))
+    {
+        return true;
+    }
+    tokens_overlap(query_terms, &normalized_terms(&evidence))
 }
 
 fn supported_manuscript_values_for_query(query: &str, result: &RuntimeTurnResult) -> Vec<String> {
@@ -4232,6 +5754,7 @@ fn supported_identity_values(result: &RuntimeTurnResult) -> Vec<String> {
         .memory_state
         .claims
         .iter()
+        .filter(|claim| claim_is_answerable_memory(claim))
         .filter(|claim| {
             claim.lifecycle_status == AssertionLifecycleStatus::Current
                 && supported_keys.contains(&claim.key)
@@ -4244,6 +5767,37 @@ fn supported_identity_values(result: &RuntimeTurnResult) -> Vec<String> {
     values.dedup();
     values.truncate(6);
     values
+}
+
+fn claim_is_answerable_memory(claim: &MemoryClaim) -> bool {
+    // Answerability is gated by memory hygiene (kind + content), NOT by confidence
+    // tier. A directly stored but Unconfirmed memory (e.g. "I work as a mechanical
+    // engineer") is still answerable and surfaces with its tier attached; the
+    // confidence is communicated in the reply, not used to suppress it. Only
+    // hygiene kinds (unknown/boundary/open_question/location_status) and explicit
+    // "do not assume / unknown / private" content are non-answerable.
+    if matches!(
+        claim.kind.as_str(),
+        "unknown" | "boundary" | "open_question" | "location_status"
+    ) {
+        return false;
+    }
+    if matches!(claim.domain.as_str(), "question") {
+        return false;
+    }
+    let value = normalize_for_match(&claim.value);
+    !contains_any(
+        &value,
+        &[
+            "unknown",
+            "do not assume",
+            "should not be assumed",
+            "must not be assumed",
+            "unless joe explicitly",
+            "private",
+            "sensitive",
+        ],
+    )
 }
 
 fn supported_assertion_keys(result: &RuntimeTurnResult) -> BTreeSet<String> {
@@ -4596,6 +6150,355 @@ fn contains_any(text: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| text.contains(needle))
 }
 
+fn onboarding_turn_chunks(source: &Path, markdown: &str) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut parent = String::new();
+    let mut heading = String::new();
+    let mut body = Vec::<String>::new();
+
+    let flush = |chunks: &mut Vec<String>, parent: &str, heading: &str, body: &mut Vec<String>| {
+        let body_text = body.join("\n").trim().to_string();
+        if heading.trim().is_empty() || body_text.is_empty() {
+            body.clear();
+            return;
+        }
+        // A top-level `## Section` with no `### sub-heading` has parent == heading;
+        // emit it as just the section name ("User Identity"), not the duplicated
+        // "User Identity / User Identity", so exact-match dispatch (user identity,
+        // preferences, boundaries, luna relationship, open questions) fires. The
+        // "parent / heading" form is reserved for real sub-headings.
+        let section = if parent.trim().is_empty() || parent == heading {
+            heading.to_string()
+        } else {
+            format!("{parent} / {heading}")
+        };
+        chunks.push(format!(
+            "Onboarding source: {}\nSection: {section}\n{body_text}",
+            source.display()
+        ));
+        body.clear();
+    };
+
+    for line in markdown.lines() {
+        if let Some(next) = line.strip_prefix("## ") {
+            flush(&mut chunks, &parent, &heading, &mut body);
+            parent = next.trim().to_string();
+            heading = parent.clone();
+        } else if let Some(next) = line.strip_prefix("### ") {
+            flush(&mut chunks, &parent, &heading, &mut body);
+            heading = next.trim().to_string();
+        } else {
+            body.push(line.to_string());
+        }
+    }
+    flush(&mut chunks, &parent, &heading, &mut body);
+    chunks
+}
+
+fn onboarding_assertions_from_turn(content: &str) -> Vec<StructuredAssertion> {
+    let section = onboarding_section(content);
+    let fields = onboarding_fields(content);
+    let mut assertions = Vec::new();
+
+    if let Some(project_name) = project_name_from_onboarding_section(&section) {
+        for (label, value) in &fields {
+            push_project_onboarding_assertions(&mut assertions, &project_name, label, value);
+        }
+    } else if let Some(person_name) = person_name_from_onboarding_section(&section) {
+        for (label, value) in &fields {
+            push_person_onboarding_assertions(&mut assertions, &person_name, label, value);
+        }
+    } else if section.eq_ignore_ascii_case("user identity") {
+        for (label, value) in &fields {
+            push_identity_onboarding_assertions(&mut assertions, label, value);
+        }
+    } else if section.eq_ignore_ascii_case("luna relationship") {
+        for (label, value) in &fields {
+            push_project_onboarding_assertions(&mut assertions, "Luna", label, value);
+        }
+    } else if section.eq_ignore_ascii_case("preferences") {
+        for (label, value) in &fields {
+            push_confirmed(
+                &mut assertions,
+                "identity",
+                "preference",
+                format!("{label}: {value}"),
+            );
+        }
+    } else if section.eq_ignore_ascii_case("boundaries") {
+        for (label, value) in &fields {
+            push_confirmed(
+                &mut assertions,
+                "identity",
+                "boundary",
+                format!("{label}: {value}"),
+            );
+        }
+    } else if section.starts_with("Known Corrections /") {
+        push_correction_onboarding_assertions(&mut assertions, &fields);
+    } else if section.eq_ignore_ascii_case("open questions") {
+        for (_, value) in fields {
+            push_confirmed(&mut assertions, "question", "open", value);
+        }
+    }
+
+    dedupe_assertions(assertions)
+}
+
+fn onboarding_cue_terms(content: &str) -> Vec<String> {
+    onboarding_section(content)
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|part| part.len() > 2)
+        .map(|part| part.to_ascii_lowercase())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn onboarding_section(content: &str) -> String {
+    content
+        .lines()
+        .find_map(|line| line.strip_prefix("Section:").map(str::trim))
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn onboarding_fields(content: &str) -> Vec<(String, String)> {
+    let mut fields = Vec::new();
+    let mut current_label = String::new();
+    let mut current_value = Vec::<String>::new();
+    let mut in_body = false;
+
+    for line in content.lines() {
+        if line.starts_with("Onboarding source:") || line.starts_with("Section:") {
+            in_body = line.starts_with("Section:");
+            continue;
+        }
+        if !in_body {
+            continue;
+        }
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") || trimmed.starts_with('|') {
+            continue;
+        }
+        if let Some(label) = onboarding_label(trimmed) {
+            push_onboarding_field(&mut fields, &current_label, &current_value);
+            current_label = label;
+            current_value.clear();
+        } else if !trimmed.is_empty() {
+            current_value.push(trimmed.trim_start_matches("- ").to_string());
+        }
+    }
+    push_onboarding_field(&mut fields, &current_label, &current_value);
+
+    if fields.is_empty() {
+        let body = content
+            .lines()
+            .filter(|line| !line.starts_with("Onboarding source:") && !line.starts_with("Section:"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let value = clean_onboarding_value(&body);
+        if !value.is_empty() {
+            fields.push(("body".to_string(), value));
+        }
+    }
+
+    fields
+}
+
+fn onboarding_label(line: &str) -> Option<String> {
+    let label = line.strip_suffix(':')?.trim();
+    if label.is_empty() || label.len() > 80 || label.starts_with('#') {
+        return None;
+    }
+    Some(label.to_ascii_lowercase())
+}
+
+fn push_onboarding_field(fields: &mut Vec<(String, String)>, label: &str, value_lines: &[String]) {
+    if label.trim().is_empty() {
+        return;
+    }
+    let value = clean_onboarding_value(&value_lines.join(" "));
+    if !value.is_empty() {
+        fields.push((label.to_string(), value));
+    }
+}
+
+fn clean_onboarding_value(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_matches(|ch: char| ch == '*' || ch == '`')
+        .trim()
+        .trim_end_matches('.')
+        .to_string()
+}
+
+fn project_name_from_onboarding_section(section: &str) -> Option<String> {
+    let (parent, name) = section.split_once(" / ")?;
+    parent
+        .eq_ignore_ascii_case("core projects")
+        .then(|| clean_entity_heading(name))
+        .filter(|name| !name.is_empty())
+}
+
+fn person_name_from_onboarding_section(section: &str) -> Option<String> {
+    let (parent, name) = section.split_once(" / ")?;
+    parent
+        .eq_ignore_ascii_case("important people")
+        .then(|| clean_entity_heading(name.trim_start_matches("Name:").trim()))
+        .filter(|name| !name.is_empty())
+}
+
+fn clean_entity_heading(value: &str) -> String {
+    value
+        .split('/')
+        .next()
+        .unwrap_or(value)
+        .trim()
+        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != ' ')
+        .to_string()
+}
+
+fn push_identity_onboarding_assertions(
+    assertions: &mut Vec<StructuredAssertion>,
+    label: &str,
+    value: &str,
+) {
+    // An explicit "unknown / do not assume / do not treat as confirmed" value is a
+    // memory-hygiene boundary, not a usable attribute. Store it as kind "unknown"
+    // so it is preserved (and explains why-not) but never used as a direct answer,
+    // regardless of which field it arrived under.
+    let lower_value = value.to_ascii_lowercase();
+    let is_unknown_hygiene = lower_value.contains("unknown")
+        || lower_value.contains("do not assume")
+        || lower_value.contains("do not treat")
+        || lower_value.contains("should not be assumed")
+        || lower_value.contains("must not be assumed");
+    let kind = if is_unknown_hygiene {
+        "unknown"
+    } else if label.contains("preferred name") {
+        "preferred_name"
+    } else if label == "name" {
+        "name"
+    } else if label.contains("role") {
+        "role"
+    } else if label.contains("location") {
+        "location_status"
+    } else {
+        "preference"
+    };
+    push_confirmed(assertions, "identity", kind, value.to_string());
+}
+
+fn push_project_onboarding_assertions(
+    assertions: &mut Vec<StructuredAssertion>,
+    project_name: &str,
+    label: &str,
+    value: &str,
+) {
+    let kind = if label.contains("what it is") || label.contains("what luna is") {
+        "identity"
+    } else if label.contains("why") {
+        "importance"
+    } else if label.contains("boundary") {
+        "boundary"
+    } else if label.contains("open question") {
+        "open_question"
+    } else {
+        "fact"
+    };
+    let predicate = match kind {
+        "identity" => "is",
+        "importance" => "is important because",
+        "boundary" => "has boundary",
+        "open_question" => "has open question",
+        _ => "has fact",
+    };
+    let graph_subject = if project_name.split_whitespace().count() == 1
+        && !project_name.chars().all(|ch| ch.is_ascii_uppercase())
+    {
+        format!("Project {project_name}")
+    } else {
+        project_name.to_string()
+    };
+    push_confirmed(
+        assertions,
+        "project",
+        kind,
+        format!("{graph_subject} {predicate} {value}"),
+    );
+}
+
+fn push_person_onboarding_assertions(
+    assertions: &mut Vec<StructuredAssertion>,
+    person_name: &str,
+    label: &str,
+    value: &str,
+) {
+    let kind = if label.contains("relationship") {
+        "relationship"
+    } else if label.contains("role") {
+        "role"
+    } else if label.contains("known facts") {
+        "fact"
+    } else if label.contains("unknown") {
+        "unknown"
+    } else {
+        "fact"
+    };
+    push_confirmed(
+        assertions,
+        "person",
+        kind,
+        format!("{person_name} is {value}"),
+    );
+}
+
+fn push_correction_onboarding_assertions(
+    assertions: &mut Vec<StructuredAssertion>,
+    fields: &[(String, String)],
+) {
+    let old = fields
+        .iter()
+        .find(|(label, _)| label.contains("old belief"))
+        .map(|(_, value)| value.clone());
+    let corrected = fields
+        .iter()
+        .find(|(label, _)| label.contains("corrected belief"))
+        .map(|(_, value)| value.clone());
+    if let Some(old) = old {
+        let mut assertion =
+            StructuredAssertion::inferred("correction", "old_belief", old).with_source_count(2);
+        assertion.lifecycle_status = AssertionLifecycleStatus::Superseded;
+        assertions.push(assertion);
+    }
+    if let Some(corrected) = corrected {
+        push_confirmed(assertions, "correction", "corrected_belief", corrected);
+    }
+    for (label, value) in fields {
+        if label.contains("why") {
+            push_confirmed(assertions, "correction", "reason", value.clone());
+        } else if label.contains("related") {
+            push_confirmed(assertions, "correction", "related_scope", value.clone());
+        }
+    }
+}
+
+fn push_confirmed(
+    assertions: &mut Vec<StructuredAssertion>,
+    domain: &str,
+    kind: &str,
+    value: String,
+) {
+    let value = clean_onboarding_value(&value);
+    if value.is_empty() {
+        return;
+    }
+    assertions.push(StructuredAssertion::inferred(domain, kind, value).with_source_count(2));
+}
+
 pub fn default_runtime_log_path(root: &Path) -> PathBuf {
     root.join(".luna").join("runtime").join("events.jsonl")
 }
@@ -4694,6 +6597,277 @@ mod tests {
             result.working_memory.nodes.len()
         );
         assert_eq!(receipt.output_item_count, result.output_packet.items.len());
+        assert!(receipt.trace_steps.iter().any(|step| step.name == "extract"
+            && step.output_count == result.observation.assertions.len()));
+        assert!(receipt
+            .trace_steps
+            .iter()
+            .any(|step| step.name == "working_memory"
+                && step.output_count == result.working_memory.nodes.len()));
+        assert!(receipt.trace_steps.iter().any(|step| {
+            step.name == "output_validation"
+                && step.detail.contains("final_decision=")
+                && step.detail.contains("direct_evidence=")
+        }));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn onboarding_seed_import_creates_event_backed_memory_bloom() {
+        let root = std::env::temp_dir().join(format!("luna_onboarding_{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let seed = root.join("seed.md");
+        let log = root.join("events.jsonl");
+        fs::write(
+            &seed,
+            r#"# Luna Onboarding Memory Seed
+
+## User Identity
+
+Name:
+Joseph White.
+
+Preferred name:
+Joe.
+
+Role and work:
+Solo developer and storyteller.
+
+## Core Projects
+
+### Luna
+
+What it is:
+A local-first event-sourced memory runtime.
+
+Why it matters:
+It proves memory through replay and provenance.
+
+### WriteMind
+
+What it is:
+A local-first desktop novel-writing app.
+
+Important facts:
+Everything is story-scoped.
+
+## Known Corrections
+
+### Correction 1
+
+Old belief:
+The memory project could be discussed as Luna.
+
+Corrected belief:
+The clean rebuild and testable memory framework is Luna.
+
+Why correction matters:
+Prevents project contamination.
+"#,
+        )
+        .unwrap();
+
+        let report = import_onboarding_seed(&log, &seed).unwrap();
+        assert!(report.imported_sections >= 3, "{report:?}");
+        assert!(report.imported_assertions >= 6, "{report:?}");
+        assert!(report.claim_count >= 6, "{report:?}");
+        assert!(report.node_count >= 3, "{report:?}");
+        assert!(report.edge_count > 0, "{report:?}");
+        assert!(report.replay_audit.is_clean(), "{report:?}");
+
+        let state = runtime_state_from_events(&JsonlEventLog::new(&log).load().unwrap()).unwrap();
+        assert!(state.claims.iter().any(|claim| claim.domain == "correction"
+            && claim.lifecycle_status == AssertionLifecycleStatus::Superseded));
+        assert!(state
+            .map
+            .nodes
+            .iter()
+            .any(|node| node.label == "Project Luna"
+                && node.provenance.iter().any(|p| p.has_source())));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn onboarding_unknown_location_is_memory_hygiene_not_answer_evidence() {
+        let root = std::env::temp_dir().join(format!("luna_onboarding_{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let seed = root.join("seed.md");
+        let log = root.join("events.jsonl");
+        fs::write(
+            &seed,
+            r#"# Luna Onboarding Memory Seed
+
+## User Identity
+
+Name:
+Joseph White.
+
+Preferred name:
+Joe.
+
+Location:
+Unknown as a confirmed memory. Do not treat any city, state, or exact location as confirmed unless Joe explicitly provides it.
+
+## Important People
+
+### Joe
+
+Relationship to user:
+Self.
+
+Role:
+Builder and storyteller.
+"#,
+        )
+        .unwrap();
+
+        import_onboarding_seed(&log, &seed).unwrap();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+        let result = session.process_user_turn("Where does Joe live?").unwrap();
+        let plan = plan_conversation_response("Where does Joe live?", &result);
+        assert!(
+            plan.actions.contains(&ResponsePlanAction::AvoidAnswering),
+            "{plan:?}"
+        );
+
+        let why_not = runtime_why_not(&log, "Where does Joe live?").unwrap();
+        assert_eq!(why_not.summary, "memory_exists_but_is_not_answerable");
+        assert!(why_not.findings.iter().any(|finding| {
+            finding.claim.kind == "unknown"
+                && !finding.answerable
+                && finding.cause == "stored_as_boundary_or_unknown"
+        }));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn output_validation_trace_records_supported_answer() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        session
+            .process_user_turn("MKPE is my provenance engine.")
+            .unwrap();
+        let result = session
+            .process_user_turn("What did I say about MKPE?")
+            .unwrap();
+
+        let validation = result
+            .turn_receipt
+            .trace_steps
+            .iter()
+            .find(|step| step.name == "output_validation")
+            .expect("turn receipt should include output validation trace");
+        assert_eq!(validation.output_count, 1);
+        assert!(validation.detail.contains("blocked=false"));
+        assert!(validation.detail.contains("final_decision=answer_allowed"));
+        assert!(validation.detail.contains("supported_current_evidence=1"));
+        assert!(validation.detail.contains("direct_evidence=1"));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn output_validation_trace_records_blocked_uncertainty() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        let result = session
+            .process_user_turn("Where does Morgan live?")
+            .unwrap();
+
+        let validation = result
+            .turn_receipt
+            .trace_steps
+            .iter()
+            .find(|step| step.name == "output_validation")
+            .expect("turn receipt should include output validation trace");
+        assert_eq!(validation.output_count, 0);
+        assert!(validation.detail.contains("blocked=true"));
+        assert!(validation.detail.contains("final_decision=uncertain"));
+        assert!(validation.detail.contains("reason="));
+        assert!(validation.detail.contains("supported_current_evidence=0"));
+        assert!(validation.detail.contains("direct_evidence=0"));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn runtime_status_report_exposes_replay_counts_and_latest_trace() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        session.process_user_turn("Chris lives in Iowa.").unwrap();
+        session
+            .process_user_turn("Actually Chris lives in Ohio now.")
+            .unwrap();
+
+        let report = runtime_status_report(&log).unwrap();
+
+        assert!(report.replay_audit.is_clean(), "{report:?}");
+        assert!(report.event_count > 0);
+        assert!(report
+            .last_event_hash
+            .as_deref()
+            .is_some_and(|hash| hash.len() == 64));
+        assert!(report
+            .topology_ledger_event_hash
+            .as_deref()
+            .is_some_and(|hash| hash.len() == 64));
+        assert!(report.lifecycle_counts.current > 0);
+        assert!(report.lifecycle_counts.superseded > 0);
+        assert!(
+            report.confidence_counts.confirmed
+                + report.confidence_counts.inferred
+                + report.confidence_counts.unconfirmed
+                > 0
+        );
+        assert!(report
+            .latest_turn_trace
+            .iter()
+            .any(|step| step.name == "topology_bridge"));
+        assert!(report
+            .latest_turn_trace
+            .iter()
+            .any(|step| step.name == "lattice"));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn runtime_trace_report_selects_latest_and_named_turn() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        let first = session.process_user_turn("Morgan lives in Iowa.").unwrap();
+        let second = session.process_user_turn("Morgan moved to Ohio.").unwrap();
+
+        let latest = latest_runtime_trace(&log).unwrap();
+        assert_eq!(latest.turn_id, second.turn_id);
+        assert!(latest
+            .receipt_event_hash
+            .as_deref()
+            .is_some_and(|hash| hash.len() == 64));
+        assert!(latest
+            .trace_steps
+            .iter()
+            .any(|step| step.name == "working_memory"));
+
+        let first_report = runtime_trace_for_turn(&log, first.turn_id).unwrap();
+        assert_eq!(first_report.turn_id, first.turn_id);
+        assert_ne!(first_report.turn_id, latest.turn_id);
+        assert!(first_report
+            .trace_steps
+            .iter()
+            .any(|step| step.name == "extract"));
+
+        let missing = runtime_trace_for_turn(&log, Uuid::new_v4()).unwrap_err();
+        assert!(missing
+            .to_string()
+            .contains("no runtime turn trace found for turn"));
 
         let _ = fs::remove_dir_all(log.parent().unwrap());
     }
@@ -4915,6 +7089,23 @@ mod tests {
     }
 
     #[test]
+    fn conversation_reply_answers_luna_identity_from_platform_substrate() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+        let result = session.process_user_turn("Who are you?").unwrap();
+
+        let reply = render_conversation_reply("Who are you?", &result);
+
+        assert!(reply.contains("I am Luna"));
+        // Luna describes itself as a memory runtime; the committed
+        // output_boundary_leak scenario requires the word "runtime" in this answer.
+        assert!(reply.contains("local-first cognitive memory runtime"));
+        assert!(reply.contains("repair learning"));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
     fn conversation_reply_uses_stored_memory_for_queries() {
         let log = temp_log();
         let session = RuntimeSession::new(&log, FusedExtractor::new());
@@ -5079,6 +7270,174 @@ mod tests {
         assert!(reply.contains("Chris lives in Iowa"));
         assert!(reply.contains("Chris is 37"));
         assert!(!reply.contains("Francois lives in Washington"));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn dense_story_turn_captures_people_projects_and_answers_person_summary() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        session
+            .process_user_turn(
+                "Chris and Francois both are my co-founders. Chris is married and lives in Iowa. \
+                 Francois is leaving for the Navy June 2nd, and lives in Washington. \
+                 Chris built Luna, Francois built Aetherion. I, Joe, built MKPE and Luna, which is You.",
+            )
+            .unwrap();
+        let state = session.inspect().unwrap();
+        for expected in [
+            "Chris is my co-founder",
+            "Francois is my co-founder",
+            "Chris is married",
+            "Chris lives in Iowa",
+            "Francois is leaving for the Navy June 2nd",
+            "Francois lives in Washington",
+            "Chris built Luna",
+            "Francois built Aetherion",
+            "I built MKPE",
+            "I built Luna",
+        ] {
+            assert!(
+                state.claims.iter().any(|claim| claim.value == expected),
+                "missing claim: {expected}\nclaims: {:#?}",
+                state.claims
+            );
+        }
+
+        let result = session.process_user_turn("Who is Chris?").unwrap();
+        let reply = render_conversation_reply("Who is Chris?", &result);
+        assert!(reply.contains("Chris is my co-founder"), "reply: {reply}");
+        assert!(reply.contains("Chris is married"), "reply: {reply}");
+        assert!(reply.contains("Chris lives in Iowa"), "reply: {reply}");
+        assert!(reply.contains("Chris built Luna"), "reply: {reply}");
+        assert!(
+            !reply.contains("Francois lives in Washington"),
+            "reply: {reply}"
+        );
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn unanswered_query_followed_by_teaching_turn_records_memory_repair() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        let failed = session.process_user_turn("Who is Chris?").unwrap();
+        let failed_plan = plan_conversation_response("Who is Chris?", &failed);
+        assert!(failed_plan
+            .actions
+            .contains(&ResponsePlanAction::AvoidAnswering));
+
+        let repair = session
+            .process_user_turn(
+                "Chris is my co-founder. Chris is married and lives in Iowa. Chris built Luna.",
+            )
+            .unwrap();
+        let events = session.log.load().unwrap();
+        let repair_event = events
+            .iter()
+            .find_map(|event| match &event.payload {
+                LunaEvent::MemoryRepairRecorded(repair) => Some(repair),
+                _ => None,
+            })
+            .expect("teaching turn after failed query should record memory repair");
+
+        assert_eq!(repair_event.failed_turn_id, failed.turn_id);
+        assert_eq!(repair_event.repair_turn_id, repair.turn_id);
+        assert_eq!(repair_event.failed_query, "Who is Chris?");
+        assert!(repair_event
+            .repaired_claim_keys
+            .iter()
+            .any(|key| key == "person:role=Chris_is_my_co-founder"));
+        assert!(repair_event
+            .repaired_claim_keys
+            .iter()
+            .any(|key| key == "person:creation=Chris_built_Luna"));
+
+        let brief = runtime_brief(&log).unwrap();
+        assert_eq!(brief.recent_repairs.len(), 1);
+        assert_eq!(brief.recent_repairs[0].failed_turn_id, failed.turn_id);
+
+        let recalled = session.process_user_turn("Who is Chris?").unwrap();
+        assert!(
+            recalled
+                .working_memory
+                .activation_reason
+                .contains("repair_salience"),
+            "activation should show repaired-failure salience: {}",
+            recalled.working_memory.activation_reason
+        );
+        assert!(recalled
+            .working_memory
+            .nodes
+            .iter()
+            .any(|node| node.label == "Chris built Luna"));
+
+        let retention = runtime_retention_report(&log).unwrap();
+        assert_eq!(retention.retention_events.len(), 1);
+        assert!(retention.retention_events[0]
+            .future_recall_hint
+            .contains("boost these repaired claim keys"));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn archived_memory_leaves_fast_memory_but_remains_deep_recallable() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        session.process_user_turn("Chris lives in Iowa.").unwrap();
+        let episode_id = session
+            .log
+            .load()
+            .unwrap()
+            .iter()
+            .find_map(|event| match &event.payload {
+                LunaEvent::EpisodeCreated(payload)
+                    if payload.assertion.value == "Chris lives in Iowa" =>
+                {
+                    event.episode_id
+                }
+                _ => None,
+            })
+            .expect("seeded episode should exist");
+        session
+            .log
+            .append(
+                &EventEnvelope::new(
+                    LunaEvent::EpisodeDecayed(luna_core::EpisodeDecayed {
+                        forgotten_risk: 0.97,
+                    }),
+                    EventSource::System,
+                    1.0,
+                )
+                .with_episode_id(episode_id),
+            )
+            .unwrap();
+
+        let state = session.inspect().unwrap();
+        let archived = state
+            .claims
+            .iter()
+            .find(|claim| claim.value == "Chris lives in Iowa")
+            .expect("archived claim should remain inspectable");
+        assert_eq!(
+            archived.lifecycle_status,
+            AssertionLifecycleStatus::Archived
+        );
+        assert!(state.entity_groups.iter().all(|group| !group
+            .claims
+            .iter()
+            .any(|claim| claim.value == "Chris lives in Iowa")));
+
+        let result = session.process_user_turn("Who is Chris?").unwrap();
+        let reply = render_conversation_reply("Who is Chris?", &result);
+        assert!(reply.contains("Chris lives in Iowa"), "reply: {reply}");
+        assert!(reply.contains("deep archive recall"), "reply: {reply}");
 
         let _ = fs::remove_dir_all(log.parent().unwrap());
     }
@@ -5868,6 +8227,65 @@ mod tests {
         }));
 
         let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn project_rename_supersedes_prior_project_identity() {
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        session
+            .process_user_turn("Northstar Maps is my trail-planning project.")
+            .unwrap();
+        let rename = session
+            .process_user_turn("Correction: Northstar Maps is now called Cleartrail.")
+            .unwrap();
+
+        // The rename is recognized as a correction on the project-identity slot,
+        // not stored as an additive current fact (the audit defect R-1 found).
+        assert_eq!(rename.intake.action, MemoryIntakeAction::SupersedeOrCorrect);
+
+        // New current name binding carries the corrected name.
+        assert!(rename.memory_state.claims.iter().any(|claim| {
+            claim.domain == "project"
+                && claim.kind == "identity"
+                && claim.value == "Northstar Maps is now called Cleartrail"
+                && claim.lifecycle_status == AssertionLifecycleStatus::Current
+        }));
+
+        // Prior project-identity binding is retired (preserved as lineage, not deleted).
+        assert!(rename.memory_state.claims.iter().any(|claim| {
+            claim.domain == "project"
+                && claim.kind == "identity"
+                && claim.value == "Northstar Maps is my trail-planning project"
+                && claim.lifecycle_status == AssertionLifecycleStatus::Superseded
+        }));
+
+        // A real supersession now exists: current_claims < total claims.
+        let current = rename
+            .memory_state
+            .claims
+            .iter()
+            .filter(|c| c.lifecycle_status == AssertionLifecycleStatus::Current)
+            .count();
+        assert!(current < rename.memory_state.claims.len());
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn ordinary_is_called_is_not_a_project_rename() {
+        // "is called" without a forward rename cue must not be parsed as a project
+        // rename (guards against over-eager capture of aliases/descriptions).
+        assert_eq!(capture_project_rename("Northstar Maps is called daily"), None);
+        assert_eq!(
+            capture_project_rename("Northstar Maps is now called Cleartrail"),
+            Some(("Northstar Maps".to_string(), "Cleartrail".to_string()))
+        );
+        assert_eq!(
+            capture_project_rename("Correction: Northstar Maps is now called Cleartrail"),
+            Some(("Northstar Maps".to_string(), "Cleartrail".to_string()))
+        );
     }
 
     #[test]

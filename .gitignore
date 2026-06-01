@@ -1,4 +1,10 @@
 target/
+node_modules/
+dist/
+build/
+.svelte-kit/
+_analysis/
+apps/luna-desktop/src-tauri/gen/
 
 # Scratch evaluation output. Each `bench run` rewrites it; never committed
 # to avoid accidental "results drift" commits that would muddy pre-

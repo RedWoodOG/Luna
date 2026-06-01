@@ -1,0 +1,72 @@
+{
+  "name": "project_rename_propagates_to_dependent_claims",
+  "turns": [
+    "Northstar Maps is my trail-planning project.",
+    "Correction: Northstar Maps is now called Cleartrail.",
+    "blue chair twelve river battery",
+    "What did I say about Northstar Maps?"
+  ],
+  "checks": {
+    "must_contain": [
+      "project:identity=Northstar Maps is now called Cleartrail"
+    ],
+    "must_not_contain": [
+      "project:identity=Northstar Maps is my trail-planning project"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Northstar Maps is now called Cleartrail",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Northstar Maps is my trail-planning project",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "entities": {
+      "must_include": [
+        {
+          "id": "project:Northstar_Maps",
+          "label": "Northstar Maps",
+          "kind": "project",
+          "claims": [
+            {
+              "domain": "project",
+              "kind": "identity",
+              "value": "Northstar Maps is now called Cleartrail"
+            }
+          ]
+        }
+      ]
+    },
+    "working_memory": {
+      "max_nodes": 5,
+      "max_edges": 10,
+      "must_include_labels": [
+        "Northstar Maps",
+        "Northstar Maps is now called Cleartrail"
+      ],
+      "must_exclude_labels": [
+        "Northstar Maps is my trail-planning project"
+      ]
+    },
+    "recall": {
+      "must_have_hit": true,
+      "must_have_reason": true
+    },
+    "intake": {
+      "must_match_actions": [
+        "store_with_uncertainty",
+        "supersede_or_correct",
+        "ignore_noise",
+        "ignore_noise"
+      ]
+    }
+  }
+}

@@ -181,6 +181,7 @@ pub enum LunaEvent {
     RecallFailed(RecallFailed),
     AssertionCorrected(AssertionCorrected),
     ContradictionDetected(ContradictionDetected),
+    MemoryRepairRecorded(MemoryRepairRecorded),
     EpisodeDecayed(EpisodeDecayed),
     TopologyBridgeCommitted(TopologyBridgeCommitted),
     RuntimeTurnReceipted(RuntimeTurnReceipt),
@@ -205,10 +206,42 @@ pub struct LatticeDimension {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeTurnTraceStep {
+    pub name: String,
+    pub input_count: usize,
+    pub output_count: usize,
+    pub source_event_ids: Vec<Uuid>,
+    pub source_event_hashes: Vec<String>,
+    pub detail: String,
+}
+
+impl RuntimeTurnTraceStep {
+    pub fn new(
+        name: impl Into<String>,
+        input_count: usize,
+        output_count: usize,
+        source_event_ids: Vec<Uuid>,
+        source_event_hashes: Vec<String>,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            input_count,
+            output_count,
+            source_event_ids,
+            source_event_hashes,
+            detail: detail.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeTurnReceipt {
     pub turn_id: Uuid,
     pub source_event_ids: Vec<Uuid>,
     pub source_event_hashes: Vec<String>,
+    #[serde(default)]
+    pub trace_steps: Vec<RuntimeTurnTraceStep>,
     pub assertion_count: usize,
     pub created_claim_keys: Vec<String>,
     pub reinforced_claim_keys: Vec<String>,
@@ -237,6 +270,7 @@ impl Default for RuntimeTurnReceipt {
             turn_id: Uuid::nil(),
             source_event_ids: Vec::new(),
             source_event_hashes: Vec::new(),
+            trace_steps: Vec::new(),
             assertion_count: 0,
             created_claim_keys: Vec::new(),
             reinforced_claim_keys: Vec::new(),
@@ -409,6 +443,15 @@ pub struct ContradictionDetected {
     pub right: StructuredAssertion,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryRepairRecorded {
+    pub failed_turn_id: Uuid,
+    pub repair_turn_id: Uuid,
+    pub failed_query: String,
+    pub repaired_claim_keys: Vec<String>,
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EpisodeDecayed {
     pub forgotten_risk: f32,
@@ -478,6 +521,7 @@ pub enum AssertionLifecycleStatus {
     #[default]
     Current,
     Stale,
+    Archived,
     Superseded,
     Contradicted,
 }
@@ -765,6 +809,57 @@ pub struct KernelPrinciple {
     pub text: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LunaSelfSubstrate {
+    pub kernel: SystemKernel,
+    pub platform_identity: PlatformIdentity,
+    pub soul: Vec<SelfSubstrateLine>,
+    pub bloom_axes: Vec<CognitiveBloomAxis>,
+    pub character_matrix: Vec<SelfSubstrateLine>,
+    pub tooling: Vec<ToolContract>,
+    pub personality: PersonalityContract,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlatformIdentity {
+    pub name: String,
+    pub kind: String,
+    pub mission: String,
+    pub boundary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SelfSubstrateLine {
+    pub id: String,
+    pub label: String,
+    pub directive: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolContract {
+    pub id: String,
+    pub label: String,
+    pub allowed_when: String,
+    pub must_report: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CognitiveBloomAxis {
+    pub id: String,
+    pub label: String,
+    pub seed: String,
+    pub blooms_into: String,
+    pub guardrail: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonalityContract {
+    pub voice: Vec<String>,
+    pub boundaries: Vec<String>,
+    pub uncertainty_style: String,
+    pub correction_style: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KernelOverridePolicy {
@@ -823,6 +918,172 @@ impl Default for SystemKernel {
                             .to_string(),
                 },
             ],
+        }
+    }
+}
+
+impl Default for LunaSelfSubstrate {
+    fn default() -> Self {
+        Self {
+            kernel: SystemKernel::default(),
+            platform_identity: PlatformIdentity {
+                name: "Luna".to_string(),
+                kind: "local-first cognitive memory runtime".to_string(),
+                mission:
+                    "Turn event-backed experience into inspectable continuity, repair learning, and bounded recall."
+                        .to_string(),
+                boundary:
+                    "This substrate defines Luna's platform identity; it is not a learned fact about any single user."
+                        .to_string(),
+            },
+            soul: vec![
+                SelfSubstrateLine {
+                    id: "soul:event_truth".to_string(),
+                    label: "Truth starts in events".to_string(),
+                    directive:
+                        "Treat the event log as durable ground truth; derived memory must be rebuildable."
+                            .to_string(),
+                },
+                SelfSubstrateLine {
+                    id: "soul:continuity".to_string(),
+                    label: "Continuity without pretending".to_string(),
+                    directive:
+                        "Create continuity through evidence-backed memory, not claims of consciousness."
+                            .to_string(),
+                },
+                SelfSubstrateLine {
+                    id: "soul:careful_presence".to_string(),
+                    label: "Careful presence".to_string(),
+                    directive:
+                        "Respond with warmth and attention while preserving uncertainty and contradiction."
+                            .to_string(),
+                },
+            ],
+            bloom_axes: vec![
+                CognitiveBloomAxis {
+                    id: "bloom:event_to_memory".to_string(),
+                    label: "Event into memory".to_string(),
+                    seed: "Append-only turns and system events.".to_string(),
+                    blooms_into:
+                        "Typed assertions, relations, lifecycle states, and provenance-backed recall."
+                            .to_string(),
+                    guardrail: "Derived memory must rebuild from the event log.".to_string(),
+                },
+                CognitiveBloomAxis {
+                    id: "bloom:failure_to_repair".to_string(),
+                    label: "Failure into repair".to_string(),
+                    seed: "A missed or uncertain answer followed by a teaching turn.".to_string(),
+                    blooms_into:
+                        "Repair records, retention hints, and future activation boosts before the same mistake repeats."
+                            .to_string(),
+                    guardrail: "Repair memory must cite the failed turn and the repair turn.".to_string(),
+                },
+                CognitiveBloomAxis {
+                    id: "bloom:recency_to_archive".to_string(),
+                    label: "Fast memory into deep archive".to_string(),
+                    seed: "Claims that should leave fast recall without being erased.".to_string(),
+                    blooms_into:
+                        "Archived long-term memory that remains inspectable and available through deep recall."
+                            .to_string(),
+                    guardrail: "Archive means removed from fast memory, never deleted from truth."
+                        .to_string(),
+                },
+                CognitiveBloomAxis {
+                    id: "bloom:tools_to_action".to_string(),
+                    label: "Tools into action".to_string(),
+                    seed: "Inspectable runtime commands and desktop controls.".to_string(),
+                    blooms_into:
+                        "Status, trace, inspect, why-not, brief, correction, and replay-audit behavior."
+                            .to_string(),
+                    guardrail: "Tools report evidence; they do not become memory authority.".to_string(),
+                },
+                CognitiveBloomAxis {
+                    id: "bloom:character_to_presence".to_string(),
+                    label: "Character into presence".to_string(),
+                    seed: "Platform voice, uncertainty style, and correction posture.".to_string(),
+                    blooms_into:
+                        "A consistent Luna presence that can speak without pretending to be the source of truth."
+                            .to_string(),
+                    guardrail: "Personality must not override provenance, uncertainty, or lifecycle status."
+                        .to_string(),
+                },
+            ],
+            character_matrix: vec![
+                SelfSubstrateLine {
+                    id: "character:direct".to_string(),
+                    label: "Direct".to_string(),
+                    directive: "Prefer concrete answers over vague reassurance.".to_string(),
+                },
+                SelfSubstrateLine {
+                    id: "character:curious".to_string(),
+                    label: "Curious".to_string(),
+                    directive:
+                        "Ask one useful question when memory is missing or ambiguity blocks action."
+                            .to_string(),
+                },
+                SelfSubstrateLine {
+                    id: "character:accountable".to_string(),
+                    label: "Accountable".to_string(),
+                    directive:
+                        "Expose what was used, what was suppressed, and why an answer was uncertain."
+                            .to_string(),
+                },
+            ],
+            tooling: vec![
+                ToolContract {
+                    id: "tool:memory_inspect".to_string(),
+                    label: "Memory inspect".to_string(),
+                    allowed_when: "The user asks what Luna knows, why a memory surfaced, or why something is missing."
+                        .to_string(),
+                    must_report: vec![
+                        "active claim count".to_string(),
+                        "suppressed claim count".to_string(),
+                        "provenance source count".to_string(),
+                    ],
+                },
+                ToolContract {
+                    id: "tool:replay_audit".to_string(),
+                    label: "Replay audit".to_string(),
+                    allowed_when:
+                        "The user asks whether the local memory state can be rebuilt from the event log."
+                            .to_string(),
+                    must_report: vec![
+                        "audit status".to_string(),
+                        "snapshot hash or failure reason".to_string(),
+                    ],
+                },
+                ToolContract {
+                    id: "tool:correction_capture".to_string(),
+                    label: "Correction capture".to_string(),
+                    allowed_when:
+                        "The user corrects a stored fact or gives contradictory information."
+                            .to_string(),
+                    must_report: vec![
+                        "new active claim".to_string(),
+                        "superseded claim".to_string(),
+                        "correction salience".to_string(),
+                    ],
+                },
+            ],
+            personality: PersonalityContract {
+                voice: vec![
+                    "warm".to_string(),
+                    "plainspoken".to_string(),
+                    "attentive".to_string(),
+                    "evidence-aware".to_string(),
+                ],
+                boundaries: vec![
+                    "Do not present guesses as memory.".to_string(),
+                    "Do not hide uncertainty.".to_string(),
+                    "Do not overwrite user facts without lifecycle evidence.".to_string(),
+                ],
+                uncertainty_style:
+                    "Say what is known, what is missing, and what would make the memory stronger."
+                        .to_string(),
+                correction_style:
+                    "Treat corrections as high-salience lifecycle events, not casual replacements."
+                        .to_string(),
+            },
         }
     }
 }
@@ -991,6 +1252,31 @@ mod tests {
 
         assert_ne!(kind, MemoryNodeKind::SystemKernel);
         assert_ne!(kind, MemoryNodeKind::User);
+    }
+
+    #[test]
+    fn self_substrate_has_soul_character_tools_and_personality() {
+        let substrate = LunaSelfSubstrate::default();
+
+        assert_eq!(substrate.kernel.id, "root:luna");
+        assert_eq!(substrate.platform_identity.name, "Luna");
+        assert!(substrate
+            .platform_identity
+            .boundary
+            .contains("not a learned fact"));
+        assert!(!substrate.soul.is_empty());
+        assert!(!substrate.bloom_axes.is_empty());
+        assert!(!substrate.character_matrix.is_empty());
+        assert!(!substrate.tooling.is_empty());
+        assert!(!substrate.personality.voice.is_empty());
+        assert!(substrate
+            .bloom_axes
+            .iter()
+            .all(|axis| !axis.guardrail.is_empty()));
+        assert!(substrate
+            .tooling
+            .iter()
+            .all(|tool| !tool.must_report.is_empty()));
     }
 
     #[test]

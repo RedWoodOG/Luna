@@ -8,8 +8,11 @@ use luna_extract::{
 use luna_gauges::{calibrate_thresholds, GaugeReadingLog};
 use luna_metrics::{BenchmarkReport, BenchmarkSubreport};
 use luna_runtime::{
-    audit_runtime_log, default_runtime_log_path, render_conversation_reply,
-    render_runtime_markdown, LocalProductSmokePhrases, RuntimeExtractor, RuntimeSession,
+    audit_runtime_log, default_runtime_log_path, import_onboarding_seed, latest_runtime_trace,
+    render_conversation_reply, render_runtime_markdown, runtime_brief, runtime_inspect_claim,
+    runtime_inspect_event, runtime_inspect_turn, runtime_retention_report, runtime_status_report,
+    runtime_trace_for_turn, runtime_why_not, LocalProductSmokePhrases, RuntimeExtractor,
+    RuntimeSession,
 };
 use std::{
     fs,
@@ -110,6 +113,26 @@ enum RuntimeCommand {
         #[arg(long)]
         include_reply: bool,
     },
+    /// Import a dense author onboarding seed as event-backed runtime memory.
+    ImportOnboarding {
+        /// Markdown onboarding seed file.
+        file: PathBuf,
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
+    /// Export the rebuilt runtime memory state as event-backed JSON.
+    ExportMemory {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "json")]
+        format: ReportFormat,
+    },
     /// Start an interactive runtime loop. Type `exit` or `quit` to stop.
     Chat {
         /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
@@ -146,9 +169,18 @@ enum RuntimeCommand {
         /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
         #[arg(long)]
         log: Option<PathBuf>,
+        /// Inspect one claim by exact claim key.
+        #[arg(long)]
+        claim: Option<String>,
         /// Show only one entity group, for example `--entity Chris`.
         #[arg(long)]
         entity: Option<String>,
+        /// Inspect one turn by exact turn id.
+        #[arg(long)]
+        turn: Option<uuid::Uuid>,
+        /// Inspect one event by exact event id.
+        #[arg(long)]
+        event: Option<uuid::Uuid>,
         /// Show only current claims.
         #[arg(long)]
         current: bool,
@@ -174,9 +206,74 @@ enum RuntimeCommand {
         #[arg(long, value_enum, default_value = "markdown")]
         format: ReportFormat,
     },
+    /// Startup integrity gate: replay-audit the log before normal answering.
+    StartupCheck {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
+    /// Summarize runtime health, replay status, topology evidence, and latest turn trace.
+    Status {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
+    /// Inspect one persisted runtime turn trace from the event log.
+    Trace {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Return the latest persisted runtime turn receipt.
+        #[arg(long)]
+        latest: bool,
+        /// Return the persisted runtime turn receipt for this turn id.
+        #[arg(long)]
+        turn: Option<uuid::Uuid>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
+    /// Explain why a memory query may not produce an answer.
+    WhyNot {
+        query: String,
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
     /// Local product-memory loop without scenario JSON: seed → audit → reopen → retrieve →
     /// correct → retrieve → audit. Dialogue defaults to `crates/luna-cli/smoke-dialog.json`
-    /// (override with `--dialog`).
+    /// Event-derived reconnect briefing: replay status, recent turns, corrections, and suppressed memory.
+    Brief {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+    },
+    /// Export Luna's retention ledger: failed queries, repairs, and future recall hints.
+    Retention {
+        /// JSONL event log. Defaults to `.luna/runtime/events.jsonl`.
+        #[arg(long)]
+        log: Option<PathBuf>,
+        /// Output format.
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: ReportFormat,
+        /// Optional path to write JSONL retention events for downstream training datasets.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Local product-memory loop without scenario JSON: seed, audit, reopen, retrieve,
+    /// correct, retrieve, audit.
     Smoke {
         /// JSONL event log (default: temp file under %TEMP%).
         #[arg(long)]
@@ -418,6 +515,28 @@ fn main() -> anyhow::Result<ExitCode> {
                     println!("Wrote event log {}", log.display());
                 }
             }
+            RuntimeCommand::ImportOnboarding { file, log, format } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let report = import_onboarding_seed(&log, &file)?;
+                match format {
+                    ReportFormat::Markdown => print_onboarding_import_report(&report),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
+                }
+                if report.replay_audit.is_quarantined() {
+                    return Ok(ExitCode::from(4));
+                }
+            }
+            RuntimeCommand::ExportMemory { log, format } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let session = RuntimeSession::new(&log, FusedExtractor::new());
+                let state = session.inspect()?;
+                match format {
+                    ReportFormat::Markdown => {
+                        print_memory_state(&state, &InspectFilters::default())
+                    }
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
+                }
+            }
             RuntimeCommand::Chat {
                 log,
                 extractor,
@@ -448,7 +567,10 @@ fn main() -> anyhow::Result<ExitCode> {
             }
             RuntimeCommand::Inspect {
                 log,
+                claim,
                 entity,
+                turn,
+                event,
                 current,
                 superseded,
                 missing,
@@ -456,6 +578,32 @@ fn main() -> anyhow::Result<ExitCode> {
                 format,
             } => {
                 let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let targeted_selector_count = usize::from(claim.is_some())
+                    + usize::from(turn.is_some())
+                    + usize::from(event.is_some());
+                if targeted_selector_count > 1 {
+                    anyhow::bail!(
+                        "runtime inspect accepts at most one targeted selector: --claim, --turn, or --event"
+                    );
+                }
+                if targeted_selector_count == 1 {
+                    let report = if let Some(claim) = claim {
+                        runtime_inspect_claim(&log, &claim)?
+                    } else if let Some(turn_id) = turn {
+                        runtime_inspect_turn(&log, turn_id)?
+                    } else if let Some(event_id) = event {
+                        runtime_inspect_event(&log, event_id)?
+                    } else {
+                        unreachable!("targeted selector count already checked");
+                    };
+                    match format {
+                        ReportFormat::Markdown => print_runtime_inspect_report(&report),
+                        ReportFormat::Json => {
+                            println!("{}", serde_json::to_string_pretty(&report)?)
+                        }
+                    }
+                    return Ok(ExitCode::SUCCESS);
+                }
                 let session = RuntimeSession::new(&log, FusedExtractor::new());
                 let state = session.inspect()?;
                 let latest_lattice = if lattice {
@@ -497,6 +645,80 @@ fn main() -> anyhow::Result<ExitCode> {
                 }
                 if report.is_quarantined() {
                     return Ok(ExitCode::from(4));
+                }
+            }
+            RuntimeCommand::StartupCheck { log, format } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let report = audit_runtime_log(&log)?;
+                match format {
+                    ReportFormat::Markdown => print_runtime_startup_check(&log, &report),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
+                }
+                if report.is_quarantined() {
+                    return Ok(ExitCode::from(4));
+                }
+            }
+            RuntimeCommand::Status { log, format } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let report = runtime_status_report(&log)?;
+                match format {
+                    ReportFormat::Markdown => print_runtime_status(&report),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
+                }
+                if report.replay_audit.is_quarantined() {
+                    return Ok(ExitCode::from(4));
+                }
+            }
+            RuntimeCommand::Trace {
+                log,
+                latest,
+                turn,
+                format,
+            } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let report = match (latest, turn) {
+                    (true, None) => latest_runtime_trace(&log)?,
+                    (false, Some(turn_id)) => runtime_trace_for_turn(&log, turn_id)?,
+                    (true, Some(_)) => {
+                        anyhow::bail!("runtime trace requires exactly one selector: --latest or --turn <turn_id>");
+                    }
+                    (false, None) => {
+                        anyhow::bail!("runtime trace requires exactly one selector: --latest or --turn <turn_id>");
+                    }
+                };
+                match format {
+                    ReportFormat::Markdown => print_runtime_trace(&report),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
+                }
+            }
+            RuntimeCommand::WhyNot { query, log, format } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let report = runtime_why_not(&log, &query)?;
+                match format {
+                    ReportFormat::Markdown => print_runtime_why_not(&report),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
+                }
+            }
+            RuntimeCommand::Brief { log, format } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let report = runtime_brief(&log)?;
+                match format {
+                    ReportFormat::Markdown => print_runtime_brief(&report),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
+                }
+                if report.replay_audit.is_quarantined() {
+                    return Ok(ExitCode::from(4));
+                }
+            }
+            RuntimeCommand::Retention { log, format, out } => {
+                let log = log.unwrap_or_else(|| default_runtime_log_path(&PathBuf::from(".")));
+                let report = runtime_retention_report(&log)?;
+                if let Some(out) = out {
+                    write_retention_jsonl(&out, &report)?;
+                }
+                match format {
+                    ReportFormat::Markdown => print_runtime_retention(&report),
+                    ReportFormat::Json => println!("{}", serde_json::to_string_pretty(&report)?),
                 }
             }
             RuntimeCommand::Smoke {
@@ -903,6 +1125,9 @@ fn print_memory_state(state: &luna_runtime::MemoryState, filters: &InspectFilter
                     luna_core::AssertionLifecycleStatus::Stale => {
                         "would be suppressed: marked stale (decayed or unused)"
                     }
+                    luna_core::AssertionLifecycleStatus::Archived => {
+                        "would use deep recall: archived in long-term memory"
+                    }
                     luna_core::AssertionLifecycleStatus::Contradicted => {
                         "would be suppressed: contradicted by other evidence"
                     }
@@ -1108,6 +1333,356 @@ fn print_lattice_dimension(name: &str, dimension: &luna_core::LatticeDimension) 
     );
 }
 
+fn print_runtime_status(report: &luna_runtime::RuntimeStatusReport) {
+    println!("# Luna Runtime Status\n");
+    println!("Event log: {}", report.log_path.display());
+    println!("Replay status: {:?}", report.replay_audit.status);
+    println!("Stored events: {}", report.event_count);
+    println!(
+        "Last event hash: {}",
+        report.last_event_hash.as_deref().unwrap_or("none")
+    );
+    println!(
+        "Topology ledger hash: {}",
+        report
+            .topology_ledger_event_hash
+            .as_deref()
+            .unwrap_or("none")
+    );
+    println!(
+        "Snapshot: live={} replayed={}",
+        report.replay_audit.live_snapshot_hash, report.replay_audit.replayed_snapshot_hash
+    );
+    println!(
+        "\nClaims by lifecycle: current={}, superseded={}, contradicted={}, stale={}, archived={}",
+        report.lifecycle_counts.current,
+        report.lifecycle_counts.superseded,
+        report.lifecycle_counts.contradicted,
+        report.lifecycle_counts.stale,
+        report.lifecycle_counts.archived
+    );
+    println!(
+        "Claims by confidence: confirmed={}, inferred={}, unconfirmed={}, unknown={}",
+        report.confidence_counts.confirmed,
+        report.confidence_counts.inferred,
+        report.confidence_counts.unconfirmed,
+        report.confidence_counts.unknown
+    );
+    println!(
+        "\nTopology: {} node(s), {} tether(s), {} valid source event ref(s)",
+        report.replay_audit.replayed_counts.topology_nodes,
+        report.replay_audit.replayed_counts.topology_tethers,
+        report
+            .replay_audit
+            .replayed_counts
+            .valid_topology_source_event_refs
+    );
+    println!("\n## Latest Turn Trace\n");
+    if report.latest_turn_trace.is_empty() {
+        println!("(no runtime turn receipt yet)");
+        return;
+    }
+    for step in &report.latest_turn_trace {
+        println!(
+            "- {}: input={}, output={}, events={}, hashes={}",
+            step.name,
+            step.input_count,
+            step.output_count,
+            step.source_event_ids.len(),
+            step.source_event_hashes.len()
+        );
+        println!("  Detail: {}", step.detail);
+    }
+}
+
+fn print_onboarding_import_report(report: &luna_runtime::OnboardingImportReport) {
+    println!("# Luna Onboarding Import\n");
+    println!("Source: {}", report.source_path.display());
+    println!("Event log: {}", report.log_path.display());
+    println!("Imported sections: {}", report.imported_sections);
+    println!("Imported assertions: {}", report.imported_assertions);
+    println!("Claims: {}", report.claim_count);
+    println!(
+        "Memory map: {} node(s), {} edge(s)",
+        report.node_count, report.edge_count
+    );
+    println!("Replay status: {:?}", report.replay_audit.status);
+    if report.replay_audit.is_clean() {
+        println!("\nOnboarding memory is event-backed and replay-clean.");
+    } else {
+        println!("\nOnboarding import wrote events, but replay is quarantined.");
+    }
+}
+
+fn print_runtime_inspect_report(report: &luna_runtime::RuntimeInspectReport) {
+    println!("# Luna Runtime Inspect\n");
+    println!("Event log: {}", report.log_path.display());
+    println!("Selector: {}", report.selector);
+    println!("\n## Claims\n");
+    if report.claims.is_empty() {
+        println!("(no rebuilt claims matched)");
+    }
+    for claim in &report.claims {
+        println!(
+            "- {:?}/{:?}: {}:{} = {}",
+            claim.status, claim.lifecycle_status, claim.domain, claim.kind, claim.value
+        );
+        println!("  Key: {}", claim.key);
+    }
+    if !report.entity_groups.is_empty() {
+        println!("\n## Entity Groups\n");
+        for group in &report.entity_groups {
+            println!("- {group}");
+        }
+    }
+    println!("\n## Source Events\n");
+    if report.events.is_empty() {
+        println!("(no source events matched)");
+    }
+    for event in &report.events {
+        println!(
+            "- {}: {} turn={} hash={}",
+            event.payload_type,
+            event.event_id,
+            event
+                .turn_id
+                .map(|turn_id| turn_id.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+            event.event_hash.as_deref().unwrap_or("none")
+        );
+        if !event.affected_claim_keys.is_empty() {
+            println!("  Claims: {}", event.affected_claim_keys.join(", "));
+        }
+    }
+    if !report.receipt_mentions.is_empty() {
+        println!("\n## Receipt Mentions\n");
+        for mention in &report.receipt_mentions {
+            println!(
+                "- turn={} receipt={} hash={} created={} reinforced={} corrected={}",
+                mention.turn_id,
+                mention.receipt_event_id,
+                mention.receipt_event_hash.as_deref().unwrap_or("none"),
+                mention.created,
+                mention.reinforced,
+                mention.corrected
+            );
+        }
+    }
+}
+
+fn print_runtime_trace(report: &luna_runtime::RuntimeTraceReport) {
+    println!("# Luna Runtime Trace\n");
+    println!("Event log: {}", report.log_path.display());
+    println!("Turn id: {}", report.turn_id);
+    println!("Receipt event id: {}", report.receipt_event_id);
+    println!(
+        "Receipt event hash: {}",
+        report.receipt_event_hash.as_deref().unwrap_or("none")
+    );
+    println!("\n## Steps\n");
+    if report.trace_steps.is_empty() {
+        println!("(runtime receipt has no trace steps)");
+        return;
+    }
+    for step in &report.trace_steps {
+        println!(
+            "- {}: input={}, output={}, events={}, hashes={}",
+            step.name,
+            step.input_count,
+            step.output_count,
+            step.source_event_ids.len(),
+            step.source_event_hashes.len()
+        );
+        println!("  Detail: {}", step.detail);
+    }
+}
+
+fn print_runtime_why_not(report: &luna_runtime::RuntimeWhyNotReport) {
+    println!("# Luna Why-Not Diagnostic\n");
+    println!("Event log: {}", report.log_path.display());
+    println!("Query: {}", report.query);
+    println!("Summary: {}", report.summary);
+    println!("\n## Findings\n");
+    if report.findings.is_empty() {
+        println!("No matching entity or claim was found in the event-backed memory state.");
+        return;
+    }
+    for finding in &report.findings {
+        println!(
+            "- {}:{} = {}",
+            finding.claim.domain, finding.claim.kind, finding.claim.value
+        );
+        println!(
+            "  status={:?}/{:?}; answerable={}; cause={}",
+            finding.claim.status, finding.claim.lifecycle_status, finding.answerable, finding.cause
+        );
+        println!("  reason={}", finding.reason);
+    }
+}
+
+fn print_runtime_brief(report: &luna_runtime::RuntimeBriefReport) {
+    println!("# Luna Reconnect Briefing\n");
+    println!("Event log: {}", report.log_path.display());
+    println!("Replay status: {:?}", report.replay_audit.status);
+    println!("Doctrine gate: {}", report.doctrine_gate_status);
+    println!(
+        "Snapshot: live={} replayed={}",
+        report.replay_audit.live_snapshot_hash, report.replay_audit.replayed_snapshot_hash
+    );
+
+    println!("\n## Recent Turns\n");
+    if report.recent_turns.is_empty() {
+        println!("(no turns observed)");
+    }
+    for turn in &report.recent_turns {
+        println!(
+            "- {} turn={} event={} hash={}: {}",
+            turn.timestamp,
+            turn.turn_id,
+            turn.event_id,
+            turn.event_hash.as_deref().unwrap_or("none"),
+            brief_text(&turn.content)
+        );
+    }
+
+    println!("\n## Current High-Confidence Claims\n");
+    if report.current_high_confidence_claims.is_empty() {
+        println!("(none)");
+    }
+    for claim in &report.current_high_confidence_claims {
+        print_brief_claim(claim);
+    }
+
+    println!("\n## Recent Corrections\n");
+    if report.recent_corrections.is_empty() {
+        println!("(none)");
+    }
+    for correction in &report.recent_corrections {
+        println!(
+            "- event={} hash={} turn={}: {} -> {}",
+            correction.event_id,
+            correction.event_hash.as_deref().unwrap_or("none"),
+            correction
+                .turn_id
+                .map(|turn_id| turn_id.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+            correction.old_value,
+            correction.new_value
+        );
+        println!(
+            "  claims: {} -> {}",
+            correction.old_claim_key, correction.new_claim_key
+        );
+    }
+
+    println!("\n## Memory Repairs\n");
+    if report.recent_repairs.is_empty() {
+        println!("(none)");
+    }
+    for repair in &report.recent_repairs {
+        println!(
+            "- failed_turn={} repaired_by={}: {}",
+            repair.failed_turn_id,
+            repair.repair_turn_id,
+            brief_text(&repair.failed_query)
+        );
+        println!("  claims: {}", repair.repaired_claim_keys.join(", "));
+        println!("  reason: {}", repair.reason);
+    }
+
+    println!("\n## Open Ambiguities\n");
+    if report.open_questions.is_empty() {
+        println!("(none)");
+    }
+    for question in &report.open_questions {
+        println!("- {}", brief_text(question));
+    }
+
+    println!("\n## Suppressed Memory\n");
+    if report.suppressed_claims.is_empty() {
+        println!("(none)");
+    }
+    for claim in &report.suppressed_claims {
+        print_brief_claim(claim);
+    }
+
+    println!("\n## Latest Working Memory Frame\n");
+    if let Some(step) = &report.latest_working_memory_trace {
+        println!(
+            "- {}: input={}, output={}, events={}, hashes={}",
+            step.name,
+            step.input_count,
+            step.output_count,
+            step.source_event_ids.len(),
+            step.source_event_hashes.len()
+        );
+        println!("  Detail: {}", step.detail);
+    } else {
+        println!("(no persisted working-memory trace yet)");
+    }
+}
+
+fn print_runtime_retention(report: &luna_runtime::RuntimeRetentionReport) {
+    println!("# Luna Retention Ledger\n");
+    println!("Event log: {}", report.log_path.display());
+    println!("Retention events: {}", report.retention_events.len());
+    if report.retention_events.is_empty() {
+        println!("\n(none)");
+        return;
+    }
+    println!("\n## Repairs\n");
+    for event in &report.retention_events {
+        println!(
+            "- failed_turn={} repaired_by={}: {}",
+            event.failed_turn_id,
+            event.repair_turn_id,
+            brief_text(&event.failed_query)
+        );
+        println!("  claims: {}", event.repaired_claim_keys.join(", "));
+        println!("  hint: {}", event.future_recall_hint);
+        println!("  reason: {}", event.reason);
+    }
+}
+
+fn write_retention_jsonl(
+    path: &Path,
+    report: &luna_runtime::RuntimeRetentionReport,
+) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create retention output dir {}", parent.display()))?;
+    }
+    let mut body = String::new();
+    for event in &report.retention_events {
+        body.push_str(&serde_json::to_string(event)?);
+        body.push('\n');
+    }
+    fs::write(path, body).with_context(|| format!("write retention JSONL {}", path.display()))
+}
+
+fn print_brief_claim(claim: &luna_runtime::MemoryClaim) {
+    println!(
+        "- {:?}/{:?}: {}:{} = {}",
+        claim.status, claim.lifecycle_status, claim.domain, claim.kind, claim.value
+    );
+    println!("  Key: {}", claim.key);
+}
+
+fn brief_text(value: &str) -> String {
+    const MAX_BRIEF_TEXT_CHARS: usize = 140;
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut chars = normalized.chars();
+    let shortened = chars
+        .by_ref()
+        .take(MAX_BRIEF_TEXT_CHARS)
+        .collect::<String>();
+    if chars.next().is_some() {
+        format!("{shortened}...")
+    } else {
+        normalized
+    }
+}
+
 fn print_runtime_replay_audit(log: &Path, report: &luna_runtime::RuntimeReplayAuditReport) {
     println!("# Luna Runtime Replay Audit\n");
     println!("Event log: {}", log.display());
@@ -1125,6 +1700,30 @@ fn print_runtime_replay_audit(log: &Path, report: &luna_runtime::RuntimeReplayAu
     );
     println!("Live snapshot: {}", report.live_snapshot_hash);
     println!("Replayed snapshot: {}", report.replayed_snapshot_hash);
+    if let Some(error) = &report.replay_error {
+        println!("Replay error: {error}");
+    }
+}
+
+fn print_runtime_startup_check(log: &Path, report: &luna_runtime::RuntimeReplayAuditReport) {
+    println!("# Luna Runtime Startup Check\n");
+    println!("Event log: {}", log.display());
+    println!("Status: {:?}", report.status);
+    println!("Hash version: {}", report.hash_version);
+    println!("Stored events: {}", report.replayed_counts.stored_events);
+    println!("Current claims: {}", report.replayed_counts.current_claims);
+    println!(
+        "Topology source refs: {}/{} valid",
+        report.replayed_counts.valid_topology_source_event_refs,
+        report.replayed_counts.topology_source_event_refs
+    );
+    println!("Live snapshot: {}", report.live_snapshot_hash);
+    println!("Replayed snapshot: {}", report.replayed_snapshot_hash);
+    if report.is_quarantined() {
+        println!("\nMemory state quarantined. Luna can inspect/audit this log, but normal answering should not continue from it.");
+    } else {
+        println!("\nStartup check passed. Runtime log is clean for normal answering.");
+    }
     if let Some(error) = &report.replay_error {
         println!("Replay error: {error}");
     }

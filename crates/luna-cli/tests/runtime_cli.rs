@@ -648,6 +648,177 @@ fn runtime_turn_json_can_include_conversation_reply() {
 }
 
 #[test]
+fn runtime_trace_cli_reads_latest_and_named_turn_receipts() {
+    let root = temp_root("trace");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    let mut first_turn = Command::new(luna_bin());
+    first_turn
+        .args([
+            "runtime",
+            "turn",
+            "Morgan lives in Iowa.",
+            "--format",
+            "json",
+            "--log",
+        ])
+        .arg(&log);
+    let first_stdout = assert_success(first_turn);
+    let first_payload: Value =
+        serde_json::from_str(&first_stdout).expect("first turn JSON should parse");
+    let first_turn_id = first_payload["turn_id"]
+        .as_str()
+        .expect("first turn id")
+        .to_string();
+
+    let mut second_turn = Command::new(luna_bin());
+    second_turn
+        .args([
+            "runtime",
+            "turn",
+            "Morgan moved to Ohio.",
+            "--format",
+            "json",
+            "--log",
+        ])
+        .arg(&log);
+    let second_stdout = assert_success(second_turn);
+    let second_payload: Value =
+        serde_json::from_str(&second_stdout).expect("second turn JSON should parse");
+    let second_turn_id = second_payload["turn_id"]
+        .as_str()
+        .expect("second turn id")
+        .to_string();
+
+    let mut latest = Command::new(luna_bin());
+    latest
+        .args(["runtime", "trace", "--latest", "--format", "json", "--log"])
+        .arg(&log);
+    let latest_stdout = assert_success(latest);
+    let latest_json: Value = serde_json::from_str(&latest_stdout).expect("latest trace JSON");
+    assert_eq!(
+        latest_json["turn_id"],
+        Value::String(second_turn_id.clone())
+    );
+    assert_eq!(
+        latest_json["receipt_event_hash"]
+            .as_str()
+            .expect("receipt hash")
+            .len(),
+        64
+    );
+    assert!(latest_json["trace_steps"]
+        .as_array()
+        .expect("trace steps")
+        .iter()
+        .any(|step| step["name"] == Value::String("working_memory".to_string())));
+
+    let mut named = Command::new(luna_bin());
+    named
+        .args([
+            "runtime",
+            "trace",
+            "--turn",
+            &first_turn_id,
+            "--format",
+            "json",
+            "--log",
+        ])
+        .arg(&log);
+    let named_stdout = assert_success(named);
+    let named_json: Value = serde_json::from_str(&named_stdout).expect("named trace JSON");
+    assert_eq!(named_json["turn_id"], Value::String(first_turn_id));
+    assert_ne!(named_json["turn_id"], Value::String(second_turn_id));
+    assert!(named_json["trace_steps"]
+        .as_array()
+        .expect("trace steps")
+        .iter()
+        .any(|step| step["name"] == Value::String("extract".to_string())));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_trace_cli_requires_exactly_one_selector() {
+    let root = temp_root("trace_selector");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    let mut turn = Command::new(luna_bin());
+    turn.args(["runtime", "turn", "Morgan lives in Iowa.", "--log"])
+        .arg(&log);
+    assert_success(turn);
+
+    let mut missing_selector = Command::new(luna_bin());
+    missing_selector
+        .args(["runtime", "trace", "--log"])
+        .arg(&log);
+    let (_stdout, stderr) = assert_failure(missing_selector);
+    assert!(stderr.contains("exactly one selector"), "stderr:\n{stderr}");
+
+    let mut both_selectors = Command::new(luna_bin());
+    both_selectors
+        .args([
+            "runtime",
+            "trace",
+            "--latest",
+            "--turn",
+            "00000000-0000-0000-0000-000000000000",
+            "--log",
+        ])
+        .arg(&log);
+    let (_stdout, stderr) = assert_failure(both_selectors);
+    assert!(stderr.contains("exactly one selector"), "stderr:\n{stderr}");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_startup_check_accepts_clean_log_and_rejects_hash_tampering() {
+    let root = temp_root("startup_check");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    let mut turn = Command::new(luna_bin());
+    turn.args(["runtime", "turn", "Morgan lives in Iowa.", "--log"])
+        .arg(&log);
+    assert_success(turn);
+
+    let mut clean = Command::new(luna_bin());
+    clean
+        .args(["runtime", "startup-check", "--format", "json", "--log"])
+        .arg(&log);
+    let stdout = assert_success(clean);
+    let clean_json: Value = serde_json::from_str(&stdout).expect("startup JSON");
+    assert_eq!(clean_json["status"], Value::String("clean".to_string()));
+
+    let mut first_line: Value =
+        serde_json::from_str(fs::read_to_string(&log).unwrap().lines().next().unwrap())
+            .expect("first log line JSON");
+    first_line["event_hash"] = Value::String("0".repeat(64));
+    let mut lines = fs::read_to_string(&log)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    lines[0] = serde_json::to_string(&first_line).unwrap();
+    fs::write(&log, format!("{}\n", lines.join("\n"))).unwrap();
+
+    let mut tampered = Command::new(luna_bin());
+    tampered
+        .args(["runtime", "startup-check", "--log"])
+        .arg(&log);
+    let (_stdout, stderr) = assert_failure(tampered);
+    assert!(
+        stderr.contains("event hash mismatch") || stderr.contains("hash mismatch"),
+        "stderr:\n{stderr}"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn runtime_inspect_filters_by_entity_and_lifecycle_status() {
     let root = temp_root("inspect_filters");
     fs::create_dir_all(&root).unwrap();
@@ -698,6 +869,131 @@ fn runtime_inspect_filters_by_entity_and_lifecycle_status() {
 }
 
 #[test]
+fn runtime_inspect_targeted_reports_are_event_backed() {
+    let root = temp_root("inspect_targeted");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    let mut seed = Command::new(luna_bin());
+    seed.args([
+        "runtime",
+        "turn",
+        "Morgan lives in Iowa.",
+        "--format",
+        "json",
+        "--log",
+    ])
+    .arg(&log);
+    let seed_stdout = assert_success(seed);
+    let seed_json: Value = serde_json::from_str(&seed_stdout).expect("seed turn JSON");
+    let seed_turn_id = seed_json["turn_id"].as_str().expect("seed turn id");
+
+    let mut correction = Command::new(luna_bin());
+    correction
+        .args([
+            "runtime",
+            "turn",
+            "Actually Morgan lives in Ohio now.",
+            "--log",
+        ])
+        .arg(&log);
+    assert_success(correction);
+
+    let old_key = "person:location=Morgan_lives_in_Iowa";
+    let mut claim = Command::new(luna_bin());
+    claim
+        .args([
+            "runtime", "inspect", "--claim", old_key, "--format", "json", "--log",
+        ])
+        .arg(&log);
+    let claim_stdout = assert_success(claim);
+    let claim_json: Value = serde_json::from_str(&claim_stdout).expect("claim inspect JSON");
+    assert_eq!(
+        claim_json["selector"],
+        Value::String(format!("claim:{old_key}"))
+    );
+    assert_eq!(
+        claim_json["claims"][0]["lifecycle_status"],
+        Value::String("superseded".to_string())
+    );
+    assert!(claim_json["events"]
+        .as_array()
+        .expect("claim events")
+        .iter()
+        .any(|event| event["payload_type"] == Value::String("assertion_corrected".to_string())));
+    assert!(claim_json["events"]
+        .as_array()
+        .expect("claim events")
+        .iter()
+        .all(|event| event["event_hash"].as_str().unwrap_or_default().len() == 64));
+
+    let mut turn = Command::new(luna_bin());
+    turn.args([
+        "runtime",
+        "inspect",
+        "--turn",
+        seed_turn_id,
+        "--format",
+        "json",
+        "--log",
+    ])
+    .arg(&log);
+    let turn_stdout = assert_success(turn);
+    let turn_json: Value = serde_json::from_str(&turn_stdout).expect("turn inspect JSON");
+    assert_eq!(
+        turn_json["selector"],
+        Value::String(format!("turn:{seed_turn_id}"))
+    );
+    let events = turn_json["events"].as_array().expect("turn events");
+    assert!(!events.is_empty());
+    assert!(events
+        .iter()
+        .all(|event| event["turn_id"] == Value::String(seed_turn_id.to_string())));
+    let first_event_id = events[0]["event_id"]
+        .as_str()
+        .expect("turn inspect event id")
+        .to_string();
+
+    let mut event = Command::new(luna_bin());
+    event
+        .args([
+            "runtime",
+            "inspect",
+            "--event",
+            &first_event_id,
+            "--format",
+            "json",
+            "--log",
+        ])
+        .arg(&log);
+    let event_stdout = assert_success(event);
+    let event_json: Value = serde_json::from_str(&event_stdout).expect("event inspect JSON");
+    assert_eq!(
+        event_json["selector"],
+        Value::String(format!("event:{first_event_id}"))
+    );
+    assert_eq!(event_json["events"].as_array().expect("events").len(), 1);
+
+    let mut unknown_turn = Command::new(luna_bin());
+    unknown_turn
+        .args([
+            "runtime",
+            "inspect",
+            "--turn",
+            "00000000-0000-0000-0000-000000000000",
+            "--log",
+        ])
+        .arg(&log);
+    let (_stdout, stderr) = assert_failure(unknown_turn);
+    assert!(
+        stderr.contains("no events found for turn"),
+        "stderr:\n{stderr}"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn runtime_inspect_missing_explains_why_not_remembered() {
     let root = temp_root("inspect_missing");
     fs::create_dir_all(&root).unwrap();
@@ -741,6 +1037,326 @@ fn runtime_inspect_missing_explains_why_not_remembered() {
         .arg(&log);
     let stdout = assert_success(unknown);
     assert!(stdout.contains("No claims found"), "stdout:\n{stdout}");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_why_not_reports_missing_superseded_and_unconfirmed_causes() {
+    let root = temp_root("why_not");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    for turn in [
+        "Morgan lives in Iowa.",
+        "Actually Morgan lives in Ohio now.",
+    ] {
+        let mut command = Command::new(luna_bin());
+        command
+            .args(["runtime", "turn", turn])
+            .args(["--log"])
+            .arg(&log);
+        assert_success(command);
+    }
+
+    let mut superseded = Command::new(luna_bin());
+    superseded
+        .args(["runtime", "why-not", "Iowa", "--format", "json", "--log"])
+        .arg(&log);
+    let stdout = assert_success(superseded);
+    let report: Value = serde_json::from_str(&stdout).expect("why-not superseded JSON");
+    assert_eq!(
+        report["summary"],
+        Value::String("memory_exists_but_is_not_answerable".to_string())
+    );
+    assert!(report["findings"]
+        .as_array()
+        .expect("findings")
+        .iter()
+        .any(|finding| finding["cause"] == Value::String("claim_superseded".to_string())));
+
+    let unconfirmed_log = root.join("unconfirmed-events.jsonl");
+    let mut seed_unconfirmed = Command::new(luna_bin());
+    seed_unconfirmed
+        .args(["runtime", "turn", "Morgan lives in Iowa.", "--log"])
+        .arg(&unconfirmed_log);
+    assert_success(seed_unconfirmed);
+
+    let mut unconfirmed = Command::new(luna_bin());
+    unconfirmed
+        .args(["runtime", "why-not", "Iowa", "--format", "json", "--log"])
+        .arg(&unconfirmed_log);
+    let stdout = assert_success(unconfirmed);
+    let report: Value = serde_json::from_str(&stdout).expect("why-not unconfirmed JSON");
+    assert!(report["findings"]
+        .as_array()
+        .expect("findings")
+        .iter()
+        .any(|finding| finding["cause"]
+            == Value::String("confidence_below_answer_threshold".to_string())));
+
+    let mut missing = Command::new(luna_bin());
+    missing
+        .args([
+            "runtime",
+            "why-not",
+            "rocket_ship",
+            "--format",
+            "json",
+            "--log",
+        ])
+        .arg(&log);
+    let stdout = assert_success(missing);
+    let report: Value = serde_json::from_str(&stdout).expect("why-not missing JSON");
+    assert_eq!(
+        report["summary"],
+        Value::String("no_matching_entity_or_claim".to_string())
+    );
+    assert!(report["findings"].as_array().expect("findings").is_empty());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_brief_is_event_derived_and_marks_corrections() {
+    let root = temp_root("brief");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    for turn in [
+        "Morgan lives in Iowa.",
+        "Actually Morgan lives in Ohio now.",
+        "Where does Morgan live?",
+    ] {
+        let mut command = Command::new(luna_bin());
+        command
+            .args(["runtime", "turn", turn])
+            .args(["--log"])
+            .arg(&log);
+        assert_success(command);
+    }
+
+    let mut brief = Command::new(luna_bin());
+    brief
+        .args(["runtime", "brief", "--format", "json", "--log"])
+        .arg(&log);
+    let stdout = assert_success(brief);
+    let report: Value = serde_json::from_str(&stdout).expect("brief JSON");
+    assert_eq!(
+        report["doctrine_gate_status"],
+        Value::String("replay_clean".to_string())
+    );
+    assert!(
+        report["recent_turns"]
+            .as_array()
+            .expect("recent turns")
+            .len()
+            >= 3
+    );
+    assert!(report["recent_turns"]
+        .as_array()
+        .expect("recent turns")
+        .iter()
+        .all(|turn| turn["event_hash"]
+            .as_str()
+            .is_some_and(|hash| hash.len() == 64)));
+
+    let corrections = report["recent_corrections"]
+        .as_array()
+        .expect("recent corrections");
+    assert!(
+        corrections.iter().any(|correction| {
+            correction["old_value"]
+                .as_str()
+                .is_some_and(|value| value.contains("Iowa"))
+                && correction["new_value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("Ohio"))
+                && correction["event_hash"]
+                    .as_str()
+                    .is_some_and(|hash| hash.len() == 64)
+        }),
+        "report:\n{stdout}"
+    );
+
+    assert!(report["suppressed_claims"]
+        .as_array()
+        .expect("suppressed claims")
+        .iter()
+        .any(|claim| claim["value"]
+            .as_str()
+            .is_some_and(|value| value.contains("Iowa"))
+            && claim["lifecycle_status"] == Value::String("superseded".to_string())));
+    assert!(!report["current_high_confidence_claims"]
+        .as_array()
+        .expect("current high confidence claims")
+        .iter()
+        .any(|claim| claim["value"]
+            .as_str()
+            .is_some_and(|value| value.contains("Iowa"))));
+    assert!(report["latest_working_memory_trace"].is_object());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_brief_shows_memory_repairs_after_failed_query() {
+    let root = temp_root("brief_repairs");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+
+    for turn in [
+        "Who is Chris?",
+        "Chris is my co-founder. Chris is married and lives in Iowa. Chris built Luna.",
+    ] {
+        let mut command = Command::new(luna_bin());
+        command
+            .args(["runtime", "turn", turn])
+            .args(["--log"])
+            .arg(&log);
+        assert_success(command);
+    }
+
+    let mut brief = Command::new(luna_bin());
+    brief
+        .args(["runtime", "brief", "--format", "json", "--log"])
+        .arg(&log);
+    let stdout = assert_success(brief);
+    let report: Value = serde_json::from_str(&stdout).expect("brief JSON");
+    let repairs = report["recent_repairs"].as_array().expect("repairs");
+    assert_eq!(repairs.len(), 1, "report:\n{stdout}");
+    assert_eq!(
+        repairs[0]["failed_query"],
+        Value::String("Who is Chris?".to_string())
+    );
+    assert!(repairs[0]["repaired_claim_keys"]
+        .as_array()
+        .expect("repair claims")
+        .iter()
+        .any(|key| key == "person:role=Chris_is_my_co-founder"));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_retention_exports_repair_ledger_jsonl() {
+    let root = temp_root("retention");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+    let retention_log = root.join("retention.jsonl");
+
+    for turn in [
+        "Who is Chris?",
+        "Chris is my co-founder. Chris is married and lives in Iowa. Chris built Luna.",
+    ] {
+        let mut command = Command::new(luna_bin());
+        command
+            .args(["runtime", "turn", turn])
+            .args(["--log"])
+            .arg(&log);
+        assert_success(command);
+    }
+
+    let mut retention = Command::new(luna_bin());
+    retention
+        .args(["runtime", "retention", "--format", "json", "--out"])
+        .arg(&retention_log)
+        .args(["--log"])
+        .arg(&log);
+    let stdout = assert_success(retention);
+    let report: Value = serde_json::from_str(&stdout).expect("retention JSON");
+    assert_eq!(
+        report["retention_events"]
+            .as_array()
+            .expect("retention events")
+            .len(),
+        1
+    );
+    assert!(report["retention_events"][0]["future_recall_hint"]
+        .as_str()
+        .expect("future recall hint")
+        .contains("boost these repaired claim keys"));
+    let jsonl = fs::read_to_string(&retention_log).expect("retention JSONL");
+    assert!(jsonl.contains("\"failed_query\":\"Who is Chris?\""));
+    assert!(jsonl.contains("person:creation=Chris_built_Luna"));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn runtime_import_onboarding_creates_replay_clean_memory_graph() {
+    let root = temp_root("import_onboarding");
+    fs::create_dir_all(&root).unwrap();
+    let log = root.join("events.jsonl");
+    let seed = root.join("seed.md");
+    fs::write(
+        &seed,
+        r#"# Luna Onboarding Memory Seed
+
+## User Identity
+
+Name:
+Joseph White.
+
+Preferred name:
+Joe.
+
+## Core Projects
+
+### Luna
+
+What it is:
+A local-first event-sourced memory runtime.
+
+Why it matters:
+It proves memory through replay and provenance.
+
+### WriteMind
+
+What it is:
+A local-first desktop novel-writing app.
+"#,
+    )
+    .unwrap();
+
+    let mut import = Command::new(luna_bin());
+    import
+        .args(["runtime", "import-onboarding", "--format", "json"])
+        .arg(&seed)
+        .args(["--log"])
+        .arg(&log);
+    let stdout = assert_success(import);
+    let report: Value = serde_json::from_str(&stdout).expect("import JSON");
+    assert_eq!(
+        report["replay_audit"]["status"],
+        Value::String("clean".to_string())
+    );
+    assert!(
+        report["imported_assertions"].as_u64().unwrap_or_default() >= 3,
+        "report:\n{stdout}"
+    );
+    assert!(
+        report["node_count"].as_u64().unwrap_or_default() >= 3,
+        "report:\n{stdout}"
+    );
+
+    let mut status = Command::new(luna_bin());
+    status
+        .args(["runtime", "status", "--format", "json", "--log"])
+        .arg(&log);
+    let status_stdout = assert_success(status);
+    let status_report: Value = serde_json::from_str(&status_stdout).expect("status JSON");
+    assert_eq!(
+        status_report["replay_audit"]["status"],
+        Value::String("clean".to_string())
+    );
+    assert!(
+        status_report["replay_audit"]["replayed_counts"]["memory_edges"]
+            .as_u64()
+            .unwrap_or_default()
+            > 0,
+        "status:\n{status_stdout}"
+    );
 
     let _ = fs::remove_dir_all(root);
 }

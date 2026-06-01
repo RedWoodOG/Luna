@@ -13,6 +13,7 @@ manuscript_one_read_protocol.json
 manuscript_open_arc.json
 manuscript_scene_chronology_flashback.json
 project_identity_correction.json
+project_rename_propagates_to_dependent_claims.json
 project_graph_hardening.json
 real_conversation_gate.json
 output_boundary_leak.json

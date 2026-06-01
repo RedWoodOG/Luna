@@ -1,5 +1,10 @@
 [workspace]
 resolver = "2"
+exclude = [
+  # Desktop app has its own Tauri crate and dependency graph. Keep it outside
+  # the Luna workspace gate until its Rust surface is deliberately promoted.
+  "apps/luna-desktop/src-tauri",
+]
 members = [
   # Pre-existing Luna product-track crates. They are not Milestone 0 topology
   # stubs; they remain workspace members because the repo CI covers them with

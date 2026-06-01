@@ -843,7 +843,7 @@ pub fn formation_markdown(report: &FormationReport) -> String {
          | Total turns | {} |\n{}\n\
          _Formation does not call any recall engine. Formation green is\n\
          a precondition for proof runs; formation red means fix\n\
-         extraction or case wording, never TCF scoring._\n",
+         extraction or case wording, never scoring-engine tuning._\n",
         total,
         report.formation_eligible,
         report.proof_eligible_total,

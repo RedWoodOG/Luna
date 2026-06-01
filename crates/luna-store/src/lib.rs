@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 const STALE_FORGOTTEN_RISK_THRESHOLD: f32 = 0.80;
+const ARCHIVE_FORGOTTEN_RISK_THRESHOLD: f32 = 0.95;
 
 pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
     let mut episodes: BTreeMap<Uuid, Episode> = BTreeMap::new();
@@ -157,7 +158,9 @@ pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
                 {
                     episode.forgotten_risk = payload.forgotten_risk.clamp(0.0, 1.0);
                     episode.updated_at = event.timestamp;
-                    if episode.forgotten_risk >= STALE_FORGOTTEN_RISK_THRESHOLD {
+                    if episode.forgotten_risk >= ARCHIVE_FORGOTTEN_RISK_THRESHOLD {
+                        mark_recallable_assertions_archived(&mut episode.assertions);
+                    } else if episode.forgotten_risk >= STALE_FORGOTTEN_RISK_THRESHOLD {
                         mark_current_assertions_stale(&mut episode.assertions);
                     }
                     episode.coherence_score = luna_match::coherence_score(
@@ -170,6 +173,7 @@ pub fn rebuild_episodes(events: &[StoredEvent]) -> Result<Vec<Episode>> {
             LunaEvent::TurnObserved(_)
             | LunaEvent::MemoryIntakeDecided(_)
             | LunaEvent::AssertionExtracted(_)
+            | LunaEvent::MemoryRepairRecorded(_)
             | LunaEvent::TopologyBridgeCommitted(_)
             | LunaEvent::RuntimeTurnReceipted(_)
             | LunaEvent::LatticeComputed(_) => {}
@@ -208,6 +212,17 @@ fn mark_current_assertions_stale(assertions: &mut [StructuredAssertion]) {
     for assertion in assertions {
         if assertion.lifecycle_status == AssertionLifecycleStatus::Current {
             assertion.lifecycle_status = AssertionLifecycleStatus::Stale;
+        }
+    }
+}
+
+fn mark_recallable_assertions_archived(assertions: &mut [StructuredAssertion]) {
+    for assertion in assertions {
+        if matches!(
+            assertion.lifecycle_status,
+            AssertionLifecycleStatus::Current | AssertionLifecycleStatus::Stale
+        ) {
+            assertion.lifecycle_status = AssertionLifecycleStatus::Archived;
         }
     }
 }
@@ -430,6 +445,60 @@ mod tests {
         assert_eq!(
             episodes[0].assertions[0].lifecycle_status,
             AssertionLifecycleStatus::Stale
+        );
+    }
+
+    #[test]
+    fn archive_decay_moves_assertions_to_long_term_without_deleting() {
+        let episode_id = Uuid::from_u128(20);
+        let turn_id = Uuid::from_u128(21);
+        let created_at = Utc.with_ymd_and_hms(2026, 5, 9, 11, 0, 0).unwrap();
+        let decayed_at = Utc.with_ymd_and_hms(2026, 5, 9, 12, 0, 0).unwrap();
+        let assertion = StructuredAssertion::inferred("person", "location", "Chris lives in Iowa");
+        let observation = TurnReading {
+            turn_id,
+            semantic: None,
+            intent: None,
+            attention: Some(Signal::new(0.8, 0.9, SignalReliability::Heuristic)),
+            goal_pressure: None,
+            emotional_valence: None,
+            emotional_arousal: None,
+            identity_relevance: None,
+            trust_relevance: None,
+            social_frame: None,
+            temporal_relevance: None,
+            uncertainty: Signal::new(0.2, 0.9, SignalReliability::Heuristic),
+            cue_terms: vec!["chris".to_string()],
+            query_intents: Vec::new(),
+            assertions: vec![assertion.clone()],
+        };
+
+        let events = vec![
+            event_at(
+                LunaEvent::EpisodeCreated(EpisodeCreated {
+                    assertion: assertion.clone(),
+                    observation,
+                }),
+                episode_id,
+                created_at,
+            ),
+            event_at(
+                LunaEvent::EpisodeDecayed(EpisodeDecayed {
+                    forgotten_risk: 0.97,
+                }),
+                episode_id,
+                decayed_at,
+            ),
+        ];
+
+        let episodes = rebuild_episodes(&events).unwrap();
+
+        assert_eq!(episodes.len(), 1);
+        assert_eq!(episodes[0].assertions.len(), 1);
+        assert_eq!(episodes[0].assertions[0].value, "Chris lives in Iowa");
+        assert_eq!(
+            episodes[0].assertions[0].lifecycle_status,
+            AssertionLifecycleStatus::Archived
         );
     }
 
