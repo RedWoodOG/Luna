@@ -5593,30 +5593,38 @@ fn desired_entity_claim_kinds(query: &str) -> Vec<&'static str> {
     }
 }
 
-fn supported_memory_values(result: &RuntimeTurnResult) -> Vec<String> {
+fn supported_memory_values_for_query(query: &str, result: &RuntimeTurnResult) -> Vec<String> {
+    let manuscript = supported_manuscript_values_for_query(query, result);
+    if !manuscript.is_empty() {
+        return manuscript;
+    }
+
+    // Precision: prefer activated memory whose value mentions a query content
+    // term over unrelated activated memory. Falls back to the unfiltered set when
+    // no value lexically matches, so this never reduces recall to nothing.
     let supported_keys = supported_assertion_keys(result);
-    let mut values = result
-        .memory_state
-        .claims
-        .iter()
-        .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
-        .filter(|claim| claim_is_answerable_memory(claim))
-        .filter(|claim| supported_keys.contains(&claim.key))
-        .map(|claim| claim.value.clone())
-        .collect::<Vec<_>>();
+    let terms = diagnostic_terms(query);
+    let mut matching = Vec::new();
+    let mut fallback = Vec::new();
+    for claim in &result.memory_state.claims {
+        if claim.lifecycle_status != AssertionLifecycleStatus::Current
+            || !claim_is_answerable_memory(claim)
+            || !supported_keys.contains(&claim.key)
+        {
+            continue;
+        }
+        let normalized = normalize_for_match(&claim.value);
+        if !terms.is_empty() && terms.iter().any(|term| normalized.contains(term.as_str())) {
+            matching.push(claim.value.clone());
+        } else {
+            fallback.push(claim.value.clone());
+        }
+    }
+    let mut values = if matching.is_empty() { fallback } else { matching };
     values.sort();
     values.dedup();
     values.truncate(5);
     values
-}
-
-fn supported_memory_values_for_query(query: &str, result: &RuntimeTurnResult) -> Vec<String> {
-    let manuscript = supported_manuscript_values_for_query(query, result);
-    if !manuscript.is_empty() {
-        manuscript
-    } else {
-        supported_memory_values(result)
-    }
 }
 
 fn archived_memory_values_for_query(query: &str, result: &RuntimeTurnResult) -> Vec<String> {

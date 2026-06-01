@@ -14,9 +14,16 @@
 
 use luna_core::StructuredAssertion;
 
-/// Extract third-person narrative assertions (manuscript domain) from prose.
+/// Extract third-person narrative assertions from prose.
+///
+/// Emits `manuscript:character_*` claims for proper-noun subjects/aliases (with
+/// `He/She` coreference to the most recent subject) and `concept:definition`
+/// claims for "A/An <concept> is <predicate>" definitions.
 pub fn narrative_assertions(input: &str) -> Vec<StructuredAssertion> {
     let mut out = Vec::new();
+    // Coreference anchor: the most recent proper-noun subject in reading order.
+    let mut last_subject: Option<String> = None;
+
     for sentence in split_sentences(input) {
         let sentence = sentence.trim();
         if sentence.len() < 5 || is_question(sentence) {
@@ -26,6 +33,7 @@ pub fn narrative_assertions(input: &str) -> Vec<StructuredAssertion> {
         // Alias: "<Name> also known as <Alias>", "<Name> is called <Alias>".
         if let Some((name, alias)) = capture_alias(sentence) {
             push(&mut out, "character_alias", &format!("{name} is called {alias}"));
+            last_subject = Some(name);
         }
 
         // Subject linking-verb fact: "<Proper Subject> is/are/was <predicate>".
@@ -35,9 +43,81 @@ pub fn narrative_assertions(input: &str) -> Vec<StructuredAssertion> {
                 "character_identity",
                 &format!("{subject} is {predicate}"),
             );
+            last_subject = Some(subject);
+            continue;
+        }
+
+        // Pronoun coreference: "He/She is/was <predicate>" attributes the fact to
+        // the most recent proper subject (e.g. "...is Jax. He is human" -> "Jax is
+        // human"). Restricted to singular personal pronouns + copular verbs to stay
+        // high-precision and avoid misattribution.
+        if let Some(predicate) = capture_pronoun_fact(sentence) {
+            if let Some(subject) = &last_subject {
+                push(
+                    &mut out,
+                    "character_identity",
+                    &format!("{subject} is {predicate}"),
+                );
+            }
+            continue;
+        }
+
+        // Concept definition: "A/An <concept> is <predicate>" (lowercase common
+        // noun subject) -> a concept claim, distinct from named entities.
+        if let Some((concept, predicate)) = capture_concept_definition(sentence) {
+            push_concept(&mut out, &format!("{concept} is {predicate}"));
         }
     }
     dedupe(out)
+}
+
+fn push_concept(out: &mut Vec<StructuredAssertion>, value: &str) {
+    if out.len() >= 32 || value.trim().is_empty() {
+        return;
+    }
+    out.push(StructuredAssertion::inferred("concept", "definition", value.trim()));
+}
+
+/// "He/She/It is/are/was <predicate>" -> short predicate (coref handled by caller).
+fn capture_pronoun_fact(sentence: &str) -> Option<String> {
+    let words: Vec<&str> = sentence.split_whitespace().collect();
+    let first = words.first().copied()?;
+    if !matches!(first, "He" | "She" | "It") {
+        return None;
+    }
+    if !matches!(words.get(1).copied(), Some("is") | Some("was")) {
+        return None;
+    }
+    let predicate = short_predicate(&words[2..].join(" "));
+    (predicate.len() >= 2).then_some(predicate)
+}
+
+/// "A/An <concept> is <predicate>" where the concept is a lowercase common noun.
+fn capture_concept_definition(sentence: &str) -> Option<(String, String)> {
+    let words: Vec<&str> = sentence.split_whitespace().collect();
+    if !matches!(words.first().copied(), Some("A") | Some("An")) {
+        return None;
+    }
+    let concept = clean_token(words.get(1)?);
+    // Concept noun must be a lowercase common noun (proper nouns are entities).
+    if concept.len() < 3 || is_capitalized(concept) {
+        return None;
+    }
+    if words.get(2).copied() != Some("is") {
+        return None;
+    }
+    let predicate = concept_predicate(&words[3..].join(" "));
+    (predicate.len() >= 2).then_some((concept.to_string(), predicate))
+}
+
+/// Concept predicates keep their internal commas (definitions are often lists,
+/// e.g. "not resonance, not communication, and not harmony") but are capped.
+fn concept_predicate(full: &str) -> String {
+    let clipped: Vec<&str> = full.split_whitespace().take(16).collect();
+    clipped
+        .join(" ")
+        .trim_end_matches(['.', ';', ':'])
+        .to_string()
 }
 
 fn push(out: &mut Vec<StructuredAssertion>, kind: &str, value: &str) {
@@ -274,13 +354,35 @@ mod tests {
     }
 
     #[test]
-    fn ignores_pronoun_and_lowercase_subjects() {
+    fn ignores_possessive_pronoun_subjects() {
+        // "His" is neither a tracked coref pronoun nor a proper subject nor a
+        // concept ("A/An ...") -> nothing captured.
         assert!(narrative_assertions("His body is reinforced.").is_empty());
-        assert!(narrative_assertions("A tether is load-sharing.").is_empty());
     }
 
     #[test]
     fn ignores_questions() {
         assert!(narrative_assertions("What species is Jax?").is_empty());
+    }
+
+    #[test]
+    fn pronoun_coref_attributes_to_last_subject() {
+        let a = narrative_assertions("The being inside the pod is Jax, also known as Jackson Renn. He is human.");
+        assert!(has(&a, "character_identity", "Jax is human"));
+    }
+
+    #[test]
+    fn captures_concept_definition() {
+        let a = narrative_assertions("A tether is not resonance, not communication, and not harmony.");
+        assert!(a
+            .iter()
+            .any(|x| x.domain == "concept" && x.value.contains("tether is not resonance")));
+    }
+
+    #[test]
+    fn concept_path_ignores_proper_noun_after_article() {
+        // "An Accord vessel" has a capitalized noun -> entity territory, not concept.
+        let a = narrative_assertions("An Accord ship is fast.");
+        assert!(!a.iter().any(|x| x.domain == "concept"));
     }
 }
