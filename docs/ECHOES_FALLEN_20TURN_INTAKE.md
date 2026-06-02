@@ -89,6 +89,40 @@ entity-mentioning facts (recall returns several activated claims, not a single
 targeted answer); relation/role questions about non-subject entities (Q6, Q8–Q10)
 remain uncaptured.
 
+## Measurement correction (important)
+
+The "10/25" and "11/25" figures above were **measured wrong**: they read the
+runtime *workbench* (the Context Packet's recall-activation line), not the actual
+conversational answer. Re-measured with `runtime turn --include-reply` (the real
+reply via `render_conversation_reply` + `plan_conversation_response`):
+
+| Metric | Previously reported | **Actual (corrected)** |
+|---|---|---|
+| Questions replied from memory | 10–11 / 25 | **19 / 25** |
+| Spot-checked correct (key term present) | ~6–7 | **11 / 17 answerable** |
+
+The entity-group answer path does **not** require a recall hit, so many questions
+that showed "No prior memory was activated" in the workbench were in fact
+answered correctly (e.g. q02 "Jax is called Jackson Renn", q06 "T'Sari is the
+commander", q07 "Viserys is T'Sari's father"). The intake is performing better
+than first reported; the error was in the measurement, not the system.
+
+The 6 unanswered (q04, q17, q21–q24) are largely **genuinely unanswerable** from
+the 20 turns (Viren/Oren roles are never described; the Orin Threshold turn-20
+detail is not yet captured) — correctly returning "I do not have enough stored
+memory" rather than inventing.
+
+### Genuine remaining bottleneck (not the answer plan)
+
+A cross-entity merge experiment (surface the *other* entity's fact for "the
+vessel that recovers Jax") was implemented and **reverted**: the right claim
+(`The Inherence is an Accord vessel…`) is simply not **recall-activated** for that
+query, so no answer-plan change can surface it — it only added noise. The real
+next lever is **recall-activation precision in `luna-recall`** (which claims
+activate for a given query), plus deep-continuity extraction for the Orin
+Threshold turn. Those are deeper than the answer-plan and are the honest next
+step, not a quick patch.
+
 ## Boundary
 
 This is a measurement of an opt-in extraction layer, not a passed trial. It is
