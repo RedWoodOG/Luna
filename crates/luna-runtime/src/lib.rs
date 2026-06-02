@@ -4612,9 +4612,11 @@ fn claim_matches_activation_query(claim: &MemoryClaim, query: &str, cue_terms: &
     (!query.is_empty()
         && (query.contains(&evidence)
             || tokens_overlap(&normalized_terms(query), &normalized_terms(&evidence))))
-        || cue_terms
-            .iter()
-            .any(|term| !term.is_empty() && evidence.contains(term))
+        || cue_terms.iter().any(|term| {
+            // Word-boundary match, not substring: a cue "ren" must not activate
+            // "Renn". Match the cue against whole evidence tokens.
+            !term.is_empty() && evidence.split(' ').any(|token| token == term)
+        })
 }
 
 fn correction_salience_summaries(state: &MemoryState, nodes: &[MemoryNode]) -> Vec<String> {
