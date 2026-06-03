@@ -5248,9 +5248,15 @@ pub fn plan_conversation_response(user_text: &str, result: &RuntimeTurnResult) -
                     remembered.append(&mut values);
                 }
             }
-            remembered.sort();
-            remembered.dedup();
             if !remembered.is_empty() {
+                // One-hop co-mention expansion (cross-entity routing): a query
+                // about entity A may seek a fact on entity B that A's claims name
+                // ("Mara is the founder of Northstar Maps" -> reach Northstar's
+                // rename). Pull query-relevant claims of co-mentioned entities.
+                let mut expansion = comention_expansion(&labels, &remembered, user_text, result);
+                remembered.append(&mut expansion);
+                remembered.sort();
+                remembered.dedup();
                 return answer_plan(Some(labels.join(" and ")), remembered, result);
             }
             // A known entity was asked about a specific attribute (e.g. location)
@@ -5593,6 +5599,55 @@ fn desired_entity_claim_kinds(query: &str) -> Vec<&'static str> {
     } else {
         Vec::new()
     }
+}
+
+/// One-hop cross-entity expansion. For each entity group whose label is
+/// co-mentioned in the primary answer values (and is not already a primary
+/// entity), return its current answerable claims that share a query content term.
+/// This lets a query about entity A surface a fact on entity B that A's claims
+/// name — e.g. "Mara's project ... called now?" reaches the project rename via
+/// "Mara is the founder of Northstar Maps".
+fn comention_expansion(
+    primary_labels: &[String],
+    primary_values: &[String],
+    query: &str,
+    result: &RuntimeTurnResult,
+) -> Vec<String> {
+    let query_terms = diagnostic_terms(query);
+    if query_terms.is_empty() {
+        return Vec::new();
+    }
+    let normalized_values: Vec<String> = primary_values
+        .iter()
+        .map(|value| normalize_for_match(value))
+        .collect();
+    let mut out = Vec::new();
+    for group in &result.memory_state.entity_groups {
+        if group.kind == "self" || primary_labels.iter().any(|label| label == &group.label) {
+            continue;
+        }
+        let label_norm = normalize_for_match(&group.label);
+        let label_terms = normalized_terms(&label_norm);
+        if label_terms.is_empty() {
+            continue;
+        }
+        let co_mentioned = normalized_values
+            .iter()
+            .any(|value| contains_all_terms(value, &label_terms));
+        if !co_mentioned {
+            continue;
+        }
+        for value in supported_entity_values(group, result, query) {
+            let normalized = normalize_for_match(&value);
+            if query_terms.iter().any(|term| normalized.contains(term.as_str()))
+                && !out.contains(&value)
+                && !primary_values.contains(&value)
+            {
+                out.push(value);
+            }
+        }
+    }
+    out
 }
 
 fn supported_memory_values_for_query(query: &str, result: &RuntimeTurnResult) -> Vec<String> {
@@ -7175,6 +7230,29 @@ Builder and storyteller.
         let reply = render_conversation_reply("What do I do for a living?", &result);
 
         assert!(reply.contains("mechanical engineer"));
+
+        let _ = fs::remove_dir_all(log.parent().unwrap());
+    }
+
+    #[test]
+    fn comention_expansion_answers_cross_entity_query() {
+        // A query about a person whose claim names a project should surface the
+        // project's fact (cross-entity routing via one-hop co-mention).
+        let log = temp_log();
+        let session = RuntimeSession::new(&log, FusedExtractor::new());
+
+        session
+            .process_user_turn("Mara is the founder of Northstar Maps.")
+            .unwrap();
+        session
+            .process_user_turn("Correction: Northstar Maps is now called Cleartrail.")
+            .unwrap();
+        let result = session
+            .process_user_turn("What is Mara's project called now?")
+            .unwrap();
+        let reply = render_conversation_reply("What is Mara's project called now?", &result);
+
+        assert!(reply.contains("Cleartrail"), "{reply}");
 
         let _ = fs::remove_dir_all(log.parent().unwrap());
     }
