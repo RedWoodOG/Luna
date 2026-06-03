@@ -7,8 +7,11 @@ without re-opening the same conflict.
 
 ## Where we are
 
-- **Trunk:** `origin/main` is canonical. Current HEAD: **`c209e9b`**
-  ("Merge codex/up-to-date-main (frozen 3392594) into main").
+- **Trunk:** `origin/main` is canonical. Whatever `origin/main` currently points
+  at is the head — take it live (`git rev-parse origin/main`), don't trust a
+  pinned SHA in this prose. The **reconciliation merge commit** is **`c209e9b`**
+  ("Merge codex/up-to-date-main (frozen 3392594) into main"); later commits
+  (these status-doc edits) sit on top of it.
 - **Local `C:\Luna` and `origin/main` are mirrored** (0 ahead / 0 behind).
 - **The merge is gate-green** on the merged tree:
   - `cargo test --workspace` → **480 passed**
