@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{error::Error, fmt};
 use uuid::Uuid;
 
@@ -174,6 +175,7 @@ pub enum LunaEvent {
     TurnObserved(TurnObserved),
     MemoryIntakeDecided(MemoryIntakeDecision),
     AssertionExtracted(AssertionExtracted),
+    DenseUpdateReceipted(SurpriseUpdateReceipt),
     EpisodeCreated(EpisodeCreated),
     EpisodeReinforced(EpisodeReinforced),
     EpisodeRecalled(EpisodeRecalled),
@@ -293,6 +295,165 @@ impl Default for RuntimeTurnReceipt {
             topology_ledger_event_hash: String::new(),
         }
     }
+}
+
+pub const SURPRISE_UPDATE_RECEIPT_SCHEMA_VERSION: &str = "luna.surprise_update_receipt.v1";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateKind {
+    ReinforceExisting,
+    NovelUpdate,
+    CorrectionPressure,
+    IgnoredLowSurprise,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SurpriseUpdateReceipt {
+    pub schema_version: String,
+    pub input_event_id: String,
+    pub input_event_hash: String,
+    pub prediction_hash: String,
+    pub surprise_score: f32,
+    pub redundancy_score: f32,
+    pub correction_pressure: f32,
+    pub update_kind: UpdateKind,
+    pub state_hash_before: String,
+    pub state_hash_after: String,
+    pub lineage_hashes: Vec<String>,
+    pub recorded_at: DateTime<Utc>,
+    pub receipt_hash: String,
+}
+
+impl SurpriseUpdateReceipt {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        input_event_id: impl Into<String>,
+        input_event_hash: impl Into<String>,
+        prediction_hash: impl Into<String>,
+        surprise_score: f32,
+        redundancy_score: f32,
+        correction_pressure: f32,
+        update_kind: UpdateKind,
+        state_hash_before: impl Into<String>,
+        state_hash_after: impl Into<String>,
+        lineage_hashes: Vec<String>,
+        recorded_at: DateTime<Utc>,
+    ) -> Result<Self> {
+        let mut receipt = Self {
+            schema_version: SURPRISE_UPDATE_RECEIPT_SCHEMA_VERSION.to_string(),
+            input_event_id: input_event_id.into(),
+            input_event_hash: input_event_hash.into(),
+            prediction_hash: prediction_hash.into(),
+            surprise_score: surprise_score.clamp(0.0, 1.0),
+            redundancy_score: redundancy_score.clamp(0.0, 1.0),
+            correction_pressure: correction_pressure.clamp(0.0, 1.0),
+            update_kind,
+            state_hash_before: state_hash_before.into(),
+            state_hash_after: state_hash_after.into(),
+            lineage_hashes,
+            recorded_at,
+            receipt_hash: String::new(),
+        };
+        receipt.validate_without_hash()?;
+        receipt.receipt_hash = receipt.compute_receipt_hash();
+        Ok(receipt)
+    }
+
+    pub fn compute_receipt_hash(&self) -> String {
+        let mut hasher = Sha256::new();
+        hash_receipt_field(
+            &mut hasher,
+            "schema_version",
+            SURPRISE_UPDATE_RECEIPT_SCHEMA_VERSION,
+        );
+        hash_receipt_field(&mut hasher, "input_event_id", &self.input_event_id);
+        hash_receipt_field(&mut hasher, "input_event_hash", &self.input_event_hash);
+        hash_receipt_field(&mut hasher, "prediction_hash", &self.prediction_hash);
+        hash_receipt_field(
+            &mut hasher,
+            "surprise_score",
+            &canonical_score(self.surprise_score),
+        );
+        hash_receipt_field(
+            &mut hasher,
+            "redundancy_score",
+            &canonical_score(self.redundancy_score),
+        );
+        hash_receipt_field(
+            &mut hasher,
+            "correction_pressure",
+            &canonical_score(self.correction_pressure),
+        );
+        hash_receipt_field(
+            &mut hasher,
+            "update_kind",
+            &format!("{:?}", self.update_kind),
+        );
+        hash_receipt_field(&mut hasher, "state_hash_before", &self.state_hash_before);
+        hash_receipt_field(&mut hasher, "state_hash_after", &self.state_hash_after);
+        let mut lineage_hashes = self.lineage_hashes.clone();
+        lineage_hashes.sort();
+        for lineage_hash in lineage_hashes {
+            hash_receipt_field(&mut hasher, "lineage_hash", &lineage_hash);
+        }
+        hash_receipt_field(&mut hasher, "recorded_at", &self.recorded_at.to_rfc3339());
+        format!("{:x}", hasher.finalize())
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.validate_without_hash()?;
+        let recomputed = self.compute_receipt_hash();
+        if self.receipt_hash != recomputed {
+            return Err(LunaError::new("surprise update receipt hash mismatch"));
+        }
+        Ok(())
+    }
+
+    fn validate_without_hash(&self) -> Result<()> {
+        if self.input_event_id.trim().is_empty() {
+            return Err(LunaError::new(
+                "surprise update receipt requires an input event id",
+            ));
+        }
+        for (label, hash) in [
+            ("input event hash", self.input_event_hash.as_str()),
+            ("prediction hash", self.prediction_hash.as_str()),
+            ("state hash before", self.state_hash_before.as_str()),
+            ("state hash after", self.state_hash_after.as_str()),
+        ] {
+            if !valid_sha256_hash(hash) {
+                return Err(LunaError::new(format!(
+                    "surprise update receipt has invalid {label}"
+                )));
+            }
+        }
+        for lineage_hash in &self.lineage_hashes {
+            if !valid_sha256_hash(lineage_hash) {
+                return Err(LunaError::new(
+                    "surprise update receipt has invalid lineage hash",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn canonical_score(score: f32) -> String {
+    format!("{:.6}", score.clamp(0.0, 1.0))
+}
+
+fn hash_receipt_field(hasher: &mut Sha256, label: &str, value: &str) {
+    hasher.update(label.as_bytes());
+    hasher.update([0]);
+    hasher.update(value.len().to_string().as_bytes());
+    hasher.update([0]);
+    hasher.update(value.as_bytes());
+    hasher.update([0xff]);
+}
+
+fn valid_sha256_hash(hash: &str) -> bool {
+    hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -1193,6 +1354,11 @@ impl RecallSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
+
+    fn test_hash(ch: char) -> String {
+        ch.to_string().repeat(64)
+    }
 
     #[test]
     fn signal_constructor_sets_reliability_and_clamps_values() {
@@ -1313,5 +1479,98 @@ mod tests {
         let r = RecallReason::new("state contour activation").unwrap();
         let json = serde_json::to_string(&r).unwrap();
         assert_eq!(json, "\"state contour activation\"");
+    }
+
+    #[test]
+    fn surprise_update_receipt_hash_is_deterministic() {
+        let recorded_at = Utc.with_ymd_and_hms(2026, 5, 14, 12, 0, 0).unwrap();
+        let first = SurpriseUpdateReceipt::new(
+            "event-1",
+            test_hash('a'),
+            test_hash('b'),
+            0.7,
+            0.1,
+            0.0,
+            UpdateKind::NovelUpdate,
+            test_hash('c'),
+            test_hash('d'),
+            vec![test_hash('e')],
+            recorded_at,
+        )
+        .unwrap();
+        let second = SurpriseUpdateReceipt::new(
+            "event-1",
+            test_hash('a'),
+            test_hash('b'),
+            0.7,
+            0.1,
+            0.0,
+            UpdateKind::NovelUpdate,
+            test_hash('c'),
+            test_hash('d'),
+            vec![test_hash('e')],
+            recorded_at,
+        )
+        .unwrap();
+
+        assert_eq!(first.receipt_hash, second.receipt_hash);
+        assert_eq!(first.compute_receipt_hash(), first.receipt_hash);
+        first.validate().unwrap();
+    }
+
+    #[test]
+    fn surprise_update_receipt_hash_changes_with_update_kind() {
+        let recorded_at = Utc.with_ymd_and_hms(2026, 5, 14, 12, 0, 0).unwrap();
+        let reinforced = SurpriseUpdateReceipt::new(
+            "event-1",
+            test_hash('a'),
+            test_hash('b'),
+            0.05,
+            0.95,
+            0.0,
+            UpdateKind::ReinforceExisting,
+            test_hash('c'),
+            test_hash('d'),
+            vec![test_hash('e')],
+            recorded_at,
+        )
+        .unwrap();
+        let novel = SurpriseUpdateReceipt::new(
+            "event-1",
+            test_hash('a'),
+            test_hash('b'),
+            0.7,
+            0.1,
+            0.0,
+            UpdateKind::NovelUpdate,
+            test_hash('c'),
+            test_hash('d'),
+            vec![test_hash('e')],
+            recorded_at,
+        )
+        .unwrap();
+
+        assert_ne!(reinforced.receipt_hash, novel.receipt_hash);
+    }
+
+    #[test]
+    fn surprise_update_receipt_rejects_bad_lineage_hash() {
+        let recorded_at = Utc.with_ymd_and_hms(2026, 5, 14, 12, 0, 0).unwrap();
+        let error = SurpriseUpdateReceipt::new(
+            "event-1",
+            test_hash('a'),
+            test_hash('b'),
+            0.7,
+            0.1,
+            0.0,
+            UpdateKind::NovelUpdate,
+            test_hash('c'),
+            test_hash('d'),
+            vec!["not-a-hash".to_string()],
+            recorded_at,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("lineage hash"));
     }
 }

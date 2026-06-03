@@ -7,7 +7,11 @@ This file is short on purpose. The canonical sources are:
 - **Memory structure contract:** [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
 - **Roadmap:** [`docs/LUNA_MEMORY_MILESTONE_ROADMAP.md`](docs/LUNA_MEMORY_MILESTONE_ROADMAP.md)
 - **Build plan:** [`docs/LUNA_BUILD_PLAN.md`](docs/LUNA_BUILD_PLAN.md)
+- **Dense reliable memory plan:** [`docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md)
+- **Aura comparison build plan:** [`docs/LUNA_OVER_AURA_BUILD_PLAN.md`](docs/LUNA_OVER_AURA_BUILD_PLAN.md)
 - **Current next artifact:** [`docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md`](docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md)
+- **Current dense-memory artifact:** C2 surprise/update receipts in
+  [`docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md)
 - **Acceptance test:** [`README.md`](README.md) (10-turn real-week -> 24h+ -> 3 questions)
 
 Read those before non-trivial work. This file tells you what is mechanically

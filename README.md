@@ -56,8 +56,9 @@ They do not yet prove:
 - long-lived external topology/cluster storage beyond the persisted runtime-log
   ledger snapshots;
 - superiority over baseline RAG, graph retrieval, or prior Luna versions;
-- superiority over issue-driven cognitive runtime claims until
-  `docs/LUNA_BUILD_PLAN.md` has implementation proof, not only design parity;
+- superiority over Aura TCF-style or issue-driven cognitive runtime claims until
+  the build plans (`docs/LUNA_BUILD_PLAN.md` / `docs/LUNA_OVER_AURA_BUILD_PLAN.md`)
+  have implementation proof, not only design parity;
 - that every documented activation component is mechanically enforced;
 - preserved gate artifacts from CI; use `scripts/testing-readiness.ps1` when an
   archive-grade evidence packet is required.
@@ -78,25 +79,32 @@ next:
 3. [`docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md`](docs/LOCAL_RUNTIME_PRODUCTIZATION_PROTOCOL.md)
    - Testing Ready product-loop protocol before 24-hour or full-manuscript
      trials.
-4. [`docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md`](docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md)
+4. [`docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](docs/LUNA_DENSE_RELIABLE_MEMORY_PLAN.md)
+   - active build track for fixed-capacity compressive memory: prediction,
+     surprise/update receipts, associative state, concept codebooks,
+     reconstruction, and miss-to-regression memory.
+5. [`docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md`](docs/CONTROLLED_HUMAN_TRIAL_PROTOCOL.md)
    - First reviewer-owned controlled trial before marathon or manuscript
      claims.
-5. [`docs/MARATHON_READY_PROTOCOL.md`](docs/MARATHON_READY_PROTOCOL.md)
+6. [`docs/MARATHON_READY_PROTOCOL.md`](docs/MARATHON_READY_PROTOCOL.md)
    - Marathon Ready packet protocol for the real 10-turn / 24-hour /
      3-question trial; eligibility only, not a passed trial.
-6. [`docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md`](docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md)
+7. [`docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md`](docs/MANUSCRIPT_ONE_READ_PROOF_PACKET.md)
    - Manuscript Ready packet template for a real one-read trial.
-7. [`docs/V1_RELEASE_EVIDENCE_PACKET.md`](docs/V1_RELEASE_EVIDENCE_PACKET.md)
+8. [`docs/V1_RELEASE_EVIDENCE_PACKET.md`](docs/V1_RELEASE_EVIDENCE_PACKET.md)
    - v1.0 Ready packet template and claim matrix.
-8. [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md) - rules that
+9. [`docs/LUNA_BUILD_DOCTRINE.md`](docs/LUNA_BUILD_DOCTRINE.md) - rules that
    prevent memory from becoming transcript stuffing or scripted answers.
-9. [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
+10. [`docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md`](docs/LUNA_MEMORY_STRUCTURE_CONTRACT.md)
    - binding contract for event log -> intake -> typed graph -> lifecycle ->
      bounded working memory -> provenance -> replay audit.
-10. [`docs/LUNA_BUILD_PLAN.md`](docs/LUNA_BUILD_PLAN.md)
+11. [`docs/LUNA_BUILD_PLAN.md`](docs/LUNA_BUILD_PLAN.md)
    - issue-driven engineering plan for making Luna vastly stronger without
      weakening the memory contract.
-11. [`docs/LUNA_DESKTOP_OXIDE_INTEGRATION.md`](docs/LUNA_DESKTOP_OXIDE_INTEGRATION.md)
+12. [`docs/LUNA_OVER_AURA_BUILD_PLAN.md`](docs/LUNA_OVER_AURA_BUILD_PLAN.md)
+   - engineering plan for making Luna stronger than Aura-style TCF systems
+     without weakening the memory contract.
+13. [`docs/LUNA_DESKTOP_OXIDE_INTEGRATION.md`](docs/LUNA_DESKTOP_OXIDE_INTEGRATION.md)
    - desktop shell adoption plan for using Oxide's Tauri/Svelte interface
      without surrendering Luna's runtime or memory contract.
 12. [`LUNA_ENGINEERING_CONSTRAINTS.md`](LUNA_ENGINEERING_CONSTRAINTS.md) -

@@ -10,10 +10,12 @@ use luna_core::{
     EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource, LatticeDimension, LunaError,
     LunaEvent, MemoryEdge, MemoryMap, MemoryNode, MemoryNodeKind, MemoryProvenance,
     MemoryRelationKind, MemoryRepairRecorded, RecallMode, RecallSet, Result, Role,
-    RuntimeTurnReceipt, RuntimeTurnTraceStep, Signal, StructuredAssertion, SystemKernel,
-    TurnObserved, TurnReading, WorkingMemory, WorkingMemoryBudget,
+    RuntimeTurnReceipt, RuntimeTurnTraceStep, Signal, StructuredAssertion, SurpriseUpdateReceipt,
+    SystemKernel, TurnObserved, TurnReading, UpdateKind, WorkingMemory, WorkingMemoryBudget,
 };
-use luna_events::{load_jsonl_events_strict, stable_stored_event_hash, JsonlEventLog};
+use luna_events::{
+    load_jsonl_events_strict, stable_stored_event_hash, with_stored_event_hash, JsonlEventLog,
+};
 use luna_extract::{ExtractionCache, FeatureExtractor, FusedExtractor, LlmBackend, LunaExtractor};
 use luna_recall::{RecallEngine, SimilarityRecallEngine};
 use serde::{Deserialize, Serialize};
@@ -148,18 +150,31 @@ where
             );
         }
 
+        let mut dense_state_before = known_before.clone();
         for assertion in &observation.assertions {
-            new_events.push(
-                EventEnvelope::new(
-                    LunaEvent::AssertionExtracted(AssertionExtracted {
-                        assertion: assertion.clone(),
-                        observation: observation.clone(),
-                    }),
-                    EventSource::ClassifierExtractor,
-                    observation.uncertainty.confidence(),
-                )
-                .with_turn_id(turn_id),
+            let dense_assessment = compute_dense_surprise(
+                assertion,
+                &dense_state_before,
+                &previous_episodes,
+                &turn.content,
             );
+            let assertion_event = EventEnvelope::new(
+                LunaEvent::AssertionExtracted(AssertionExtracted {
+                    assertion: assertion.clone(),
+                    observation: observation.clone(),
+                }),
+                EventSource::ClassifierExtractor,
+                observation.uncertainty.confidence(),
+            )
+            .with_turn_id(turn_id);
+            let hashed_assertion_event = with_stored_event_hash(assertion_event.clone())?;
+            let input_event_id = assertion_event.event_id.to_string();
+            let input_event_hash = hashed_assertion_event
+                .event_hash
+                .clone()
+                .ok_or_else(|| LunaError::new("assertion event hash was not computed"))?;
+            let assertion_recorded_at = assertion_event.timestamp;
+            new_events.push(assertion_event);
 
             let mut candidate_events = previous_events.clone();
             candidate_events.extend(new_events.clone());
@@ -221,6 +236,33 @@ where
                     .with_episode_id(episode_id),
                 );
             }
+
+            let mut dense_candidate_events = previous_events.clone();
+            dense_candidate_events.extend(new_events.clone());
+            let dense_state_after =
+                MemoryState::from_episodes(&luna_store::rebuild_episodes(&dense_candidate_events)?);
+            let receipt = SurpriseUpdateReceipt::new(
+                input_event_id,
+                input_event_hash.clone(),
+                dense_assessment.prediction_hash,
+                dense_assessment.surprise_score,
+                dense_assessment.redundancy_score,
+                dense_assessment.correction_pressure,
+                dense_assessment.update_kind,
+                dense_state_before.state_hash()?,
+                dense_state_after.state_hash()?,
+                vec![input_event_hash],
+                assertion_recorded_at,
+            )?;
+            new_events.push(
+                EventEnvelope::new(
+                    LunaEvent::DenseUpdateReceipted(receipt),
+                    EventSource::System,
+                    1.0,
+                )
+                .with_turn_id(turn_id),
+            );
+            dense_state_before = dense_state_after;
         }
 
         if let Some(repair_event) = memory_repair_event(&previous_events, turn_id, &new_events) {
@@ -1597,6 +1639,7 @@ fn event_payload_type(event: &LunaEvent) -> &'static str {
         LunaEvent::TopologyBridgeCommitted(_) => "topology_bridge_committed",
         LunaEvent::RuntimeTurnReceipted(_) => "runtime_turn_receipted",
         LunaEvent::LatticeComputed(_) => "lattice_computed",
+        LunaEvent::DenseUpdateReceipted(_) => "dense_update_receipted",
     }
 }
 
@@ -1804,6 +1847,10 @@ pub struct RuntimeReplayAuditCounts {
     pub valid_topology_source_event_refs: usize,
     #[serde(default)]
     pub topology_orbs: usize,
+    #[serde(default)]
+    pub dense_receipts: usize,
+    #[serde(default)]
+    pub dense_receipt_hash_mismatches: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1892,7 +1939,9 @@ pub fn audit_runtime_events_against_state(
     let replayed_snapshot_hash = runtime_replay_snapshot_hash(&replayed, &replayed_bridge)?;
     let live_counts = RuntimeReplayAuditCounts::from_parts(events, live, &live_bridge);
     let replayed_counts = RuntimeReplayAuditCounts::from_parts(events, &replayed, &replayed_bridge);
-    let quarantine_required = live_snapshot_hash != replayed_snapshot_hash;
+    let dense_receipts_diverged = replayed_counts.dense_receipt_hash_mismatches > 0;
+    let quarantine_required =
+        live_snapshot_hash != replayed_snapshot_hash || dense_receipts_diverged;
 
     Ok(RuntimeReplayAuditReport {
         status: if quarantine_required {
@@ -1904,7 +1953,12 @@ pub fn audit_runtime_events_against_state(
         hash_version: RUNTIME_REPLAY_AUDIT_HASH_VERSION.to_string(),
         live_snapshot_hash,
         replayed_snapshot_hash,
-        replay_error: None,
+        replay_error: dense_receipts_diverged.then(|| {
+            format!(
+                "runtime replay audit found {} dense receipt hash mismatch(es)",
+                replayed_counts.dense_receipt_hash_mismatches
+            )
+        }),
         live_counts,
         replayed_counts,
     })
@@ -2042,8 +2096,28 @@ impl RuntimeReplayAuditCounts {
             topology_source_event_refs: topology_source_event_ref_count(bridge),
             valid_topology_source_event_refs: valid_topology_source_event_ref_count(bridge),
             topology_orbs: latest_topology_orb_count(events).unwrap_or_default(),
+            dense_receipts: dense_receipt_count(events),
+            dense_receipt_hash_mismatches: dense_receipt_hash_mismatch_count(events),
         }
     }
+}
+
+fn dense_receipt_count(events: &[luna_events::StoredEvent]) -> usize {
+    events
+        .iter()
+        .filter(|event| matches!(event.payload, LunaEvent::DenseUpdateReceipted(_)))
+        .count()
+}
+
+fn dense_receipt_hash_mismatch_count(events: &[luna_events::StoredEvent]) -> usize {
+    events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::DenseUpdateReceipted(receipt) => Some(receipt),
+            _ => None,
+        })
+        .filter(|receipt| receipt.validate().is_err())
+        .count()
 }
 
 fn latest_topology_orb_count(events: &[luna_events::StoredEvent]) -> Option<usize> {
@@ -2257,6 +2331,81 @@ fn decide_memory_intake(
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct DenseSurpriseAssessment {
+    surprise_score: f32,
+    redundancy_score: f32,
+    correction_pressure: f32,
+    update_kind: UpdateKind,
+    prediction_hash: String,
+}
+
+fn compute_dense_surprise(
+    assertion: &StructuredAssertion,
+    known_before: &MemoryState,
+    previous_episodes: &[Episode],
+    turn_text: &str,
+) -> DenseSurpriseAssessment {
+    let correction_pressure =
+        correction_target_for_assertion(previous_episodes, assertion, turn_text).is_some();
+    let reinforces_existing = known_before.claims.iter().any(|claim| {
+        claim.lifecycle_status == AssertionLifecycleStatus::Current && claim.key == assertion.key()
+    });
+
+    let (surprise_score, redundancy_score, correction_score, update_kind) = if correction_pressure {
+        (0.95, 0.0, 1.0, UpdateKind::CorrectionPressure)
+    } else if reinforces_existing {
+        (0.05, 0.95, 0.0, UpdateKind::ReinforceExisting)
+    } else {
+        (0.70, 0.0, 0.0, UpdateKind::NovelUpdate)
+    };
+
+    DenseSurpriseAssessment {
+        surprise_score,
+        redundancy_score,
+        correction_pressure: correction_score,
+        update_kind,
+        prediction_hash: dense_prediction_hash(assertion, known_before, update_kind),
+    }
+}
+
+fn dense_prediction_hash(
+    assertion: &StructuredAssertion,
+    known_before: &MemoryState,
+    update_kind: UpdateKind,
+) -> String {
+    let mut related_claims = known_before
+        .claims
+        .iter()
+        .filter(|claim| {
+            claim.lifecycle_status == AssertionLifecycleStatus::Current
+                && claim.domain == assertion.domain
+                && claim.kind == assertion.kind
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    related_claims.sort_by(|left, right| {
+        left.key
+            .cmp(&right.key)
+            .then_with(|| left.value.cmp(&right.value))
+    });
+
+    let mut hasher = Sha256::new();
+    hash_receipt_field(
+        &mut hasher,
+        "prediction_version",
+        "luna.dense_prediction.v1",
+    );
+    hash_receipt_field(&mut hasher, "assertion_key", &assertion.key());
+    hash_receipt_field(&mut hasher, "update_kind", &format!("{:?}", update_kind));
+    for claim in related_claims {
+        hash_receipt_field(&mut hasher, "claim_key", &claim.key);
+        hash_receipt_field(&mut hasher, "claim_value", &claim.value);
+        hash_receipt_field(&mut hasher, "claim_status", &format!("{:?}", claim.status));
+    }
+    format!("{:x}", hasher.finalize())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct KnowledgeDelta {
     pub confirmed: Vec<MemoryClaim>,
@@ -2358,6 +2507,118 @@ impl MemoryClaim {
     }
 }
 
+pub const ASSOCIATIVE_MEMORY_DIM: usize = 16;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssociativeMemory {
+    pub dim: usize,
+    pub cells: Vec<i32>,
+    pub update_count: usize,
+}
+
+impl Default for AssociativeMemory {
+    fn default() -> Self {
+        Self {
+            dim: ASSOCIATIVE_MEMORY_DIM,
+            cells: vec![0; ASSOCIATIVE_MEMORY_DIM * ASSOCIATIVE_MEMORY_DIM],
+            update_count: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssociativeCandidate {
+    pub assertion_key: String,
+    pub value: String,
+    pub score: i32,
+}
+
+impl AssociativeMemory {
+    pub fn from_claims(claims: &[MemoryClaim]) -> Self {
+        let mut memory = Self::default();
+        for claim in claims
+            .iter()
+            .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+        {
+            memory.update_claim(claim);
+        }
+        memory
+    }
+
+    fn update_claim(&mut self, claim: &MemoryClaim) {
+        let mut buckets = associative_buckets_for_claim(claim, self.dim);
+        buckets.sort_unstable();
+        buckets.dedup();
+        for source in &buckets {
+            for target in &buckets {
+                if source == target {
+                    continue;
+                }
+                let index = source * self.dim + target;
+                self.cells[index] = self.cells[index].saturating_add(1);
+            }
+        }
+        self.update_count = self.update_count.saturating_add(1);
+    }
+
+    fn signal(&self, query_buckets: &[usize], claim_buckets: &[usize]) -> i32 {
+        query_buckets
+            .iter()
+            .flat_map(|query| {
+                claim_buckets
+                    .iter()
+                    .map(move |claim| self.cells[query * self.dim + claim])
+            })
+            .sum()
+    }
+}
+
+pub const SURPRISE_UPDATE_STATE_HASH_VERSION: &str = "luna.surprise_update_state.v1";
+
+pub fn surprise_update_state_hash(claims: &[MemoryClaim]) -> Result<String> {
+    let mut canonical = claims.to_vec();
+    canonical.sort_by(|left, right| {
+        left.key
+            .cmp(&right.key)
+            .then_with(|| left.domain.cmp(&right.domain))
+            .then_with(|| left.kind.cmp(&right.kind))
+            .then_with(|| left.value.cmp(&right.value))
+            .then_with(|| format!("{:?}", left.status).cmp(&format!("{:?}", right.status)))
+            .then_with(|| {
+                format!("{:?}", left.lifecycle_status).cmp(&format!("{:?}", right.lifecycle_status))
+            })
+    });
+
+    let mut hasher = Sha256::new();
+    hash_receipt_field(
+        &mut hasher,
+        "state_hash_version",
+        SURPRISE_UPDATE_STATE_HASH_VERSION,
+    );
+    for claim in canonical {
+        hash_receipt_field(&mut hasher, "claim_key", &claim.key);
+        hash_receipt_field(&mut hasher, "claim_domain", &claim.domain);
+        hash_receipt_field(&mut hasher, "claim_kind", &claim.kind);
+        hash_receipt_field(&mut hasher, "claim_value", &claim.value);
+        hash_receipt_field(&mut hasher, "claim_status", &format!("{:?}", claim.status));
+        hash_receipt_field(
+            &mut hasher,
+            "claim_lifecycle_status",
+            &format!("{:?}", claim.lifecycle_status),
+        );
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn hash_receipt_field(hasher: &mut Sha256, label: &str, value: &str) {
+    hasher.update(label.as_bytes());
+    hasher.update([0]);
+    hasher.update(value.len().to_string().as_bytes());
+    hasher.update([0]);
+    hasher.update(value.as_bytes());
+    hasher.update([0xff]);
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntityMemoryGroup {
     pub id: String,
@@ -2436,6 +2697,20 @@ impl MemoryState {
         }
     }
 
+    pub fn state_hash(&self) -> Result<String> {
+        let current_claims = self
+            .claims
+            .iter()
+            .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+            .cloned()
+            .collect::<Vec<_>>();
+        surprise_update_state_hash(&current_claims)
+    }
+
+    pub fn associative_memory(&self) -> AssociativeMemory {
+        AssociativeMemory::from_claims(&self.claims)
+    }
+
     pub fn has_domain_kind(&self, domain: &str, kind: &str) -> bool {
         self.claims.iter().any(|claim| {
             claim.lifecycle_status == AssertionLifecycleStatus::Current
@@ -2443,6 +2718,133 @@ impl MemoryState {
                 && claim.kind == kind
         })
     }
+}
+
+pub fn associative_candidates_for_query(
+    state: &MemoryState,
+    query: &str,
+    limit: usize,
+) -> Vec<AssociativeCandidate> {
+    let memory = state.associative_memory();
+    let query_tokens = associative_query_tokens(query);
+    let mut query_buckets = query_tokens
+        .iter()
+        .map(|token| associative_bucket(token, memory.dim))
+        .collect::<Vec<_>>();
+    query_buckets.sort_unstable();
+    query_buckets.dedup();
+
+    let mut candidates = state
+        .claims
+        .iter()
+        .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+        .filter_map(|claim| {
+            let claim_tokens = associative_tokens_for_claim(claim);
+            let claim_buckets = claim_tokens
+                .iter()
+                .map(|token| associative_bucket(token, memory.dim))
+                .collect::<Vec<_>>();
+            let lexical_score = query_tokens
+                .iter()
+                .filter(|token| claim_tokens.contains(*token))
+                .count() as i32
+                * 12;
+            let kind_score = associative_kind_score(&query_tokens, claim) * 20;
+            let matrix_score = memory.signal(&query_buckets, &claim_buckets);
+            let score = matrix_score + lexical_score + kind_score;
+            (score > 0).then(|| AssociativeCandidate {
+                assertion_key: claim.key.clone(),
+                value: claim.value.clone(),
+                score,
+            })
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .score
+            .cmp(&left.score)
+            .then_with(|| left.assertion_key.cmp(&right.assertion_key))
+    });
+    candidates.truncate(limit);
+    candidates
+}
+
+fn associative_kind_score(query_tokens: &[String], claim: &MemoryClaim) -> i32 {
+    let has = |needle: &str| query_tokens.iter().any(|token| token == needle);
+    let asks_identity = has("called") || has("name") || has("now");
+    let asks_purpose = has("help") || has("helps") || has("do") || has("purpose");
+    let asks_plan = has("pilot") || has("who") || has("with");
+    if asks_identity && claim.kind != "identity" {
+        return -3;
+    }
+    if asks_purpose && claim.kind != "purpose" {
+        return -3;
+    }
+    if asks_plan && claim.kind != "project_plan" && claim.kind != "role" {
+        return -3;
+    }
+    match claim.kind.as_str() {
+        "identity" if asks_identity => 2,
+        "purpose" if asks_purpose => 2,
+        "project_plan" if asks_plan => 2,
+        "role" if has("founder") || has("who") => 1,
+        _ => 0,
+    }
+}
+
+fn associative_buckets_for_claim(claim: &MemoryClaim, dim: usize) -> Vec<usize> {
+    associative_tokens_for_claim(claim)
+        .iter()
+        .map(|token| associative_bucket(token, dim))
+        .collect()
+}
+
+fn associative_tokens_for_claim(claim: &MemoryClaim) -> Vec<String> {
+    let mut tokens = vec![
+        format!("domain:{}", claim.domain),
+        format!("kind:{}", claim.kind),
+    ];
+    tokens.extend(memory_tokenize(&claim.domain));
+    tokens.extend(memory_tokenize(&claim.kind));
+    tokens.extend(memory_tokenize(&claim.value));
+    for (id, label, kind) in entity_keys_for_claim(claim) {
+        tokens.extend(memory_tokenize(&id));
+        tokens.extend(memory_tokenize(&label));
+        tokens.push(format!("entity_kind:{kind}"));
+    }
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
+
+fn associative_query_tokens(query: &str) -> Vec<String> {
+    let mut tokens = memory_tokenize(query);
+    if tokens.iter().any(|token| token == "project") {
+        tokens.push("entity_kind:project".to_string());
+    }
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
+
+fn associative_bucket(token: &str, dim: usize) -> usize {
+    let mut hasher = Sha256::new();
+    hash_receipt_field(&mut hasher, "associative_token", token);
+    let bytes = hasher.finalize();
+    let mut value = 0usize;
+    for byte in bytes.iter().take(std::mem::size_of::<usize>()) {
+        value = (value << 8) | (*byte as usize);
+    }
+    value % dim
+}
+
+fn memory_tokenize(text: &str) -> Vec<String> {
+    text.split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter_map(|token| {
+            let token = token.trim().to_ascii_lowercase();
+            (token.len() >= 2).then_some(token)
+        })
+        .collect()
 }
 
 fn group_claims_by_entity(claims: &[MemoryClaim]) -> Vec<EntityMemoryGroup> {
@@ -2529,18 +2931,19 @@ fn project_entity_keys(value: &str) -> Vec<(String, String, String)> {
 
 fn project_subject_from_claim_value(value: &str) -> Option<String> {
     let lower = value.to_ascii_lowercase();
-    let subject_end = [" is ", " has ", " uses ", " needs ", " does "]
-        .iter()
-        .filter_map(|needle| lower.find(needle))
-        .min()?;
-    let subject = value[..subject_end]
-        .trim()
-        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != ' ');
-    if is_project_name(subject) {
-        Some(subject.to_string())
-    } else {
-        None
-    }
+    let subject_end = [
+        " is ",
+        " has ",
+        " uses ",
+        " needs ",
+        " does ",
+        " helps ",
+        " focuses ",
+    ]
+    .iter()
+    .filter_map(|needle| lower.find(needle))
+    .min()?;
+    clean_project_subject(&value[..subject_end])
 }
 
 fn character_entity_keys(value: &str) -> Vec<(String, String, String)> {
@@ -3422,6 +3825,13 @@ fn capture_person_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) {
                     format!("{name} is {role}"),
                 ));
             }
+            if let Some(plan) = capture_person_project_plan(sentence, &lower_name) {
+                assertions.push(StructuredAssertion::new(
+                    "person",
+                    "project_plan",
+                    format!("{name} is preparing {plan}"),
+                ));
+            }
         }
 
         capture_self_build_facts(sentence, assertions);
@@ -3461,7 +3871,7 @@ fn capture_project_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) 
         // existing correction machinery supersedes the prior project-identity claim
         // for X. The value carries the new name Y so recall surfaces the current
         // name. Checked before capture_project_description so the rename connector
-        // is not mis-read as a plain description.
+        // is not mis-read as a plain description. (main: canonical rename behavior.)
         if let Some((former, current)) = capture_project_rename(sentence) {
             assertions.push(StructuredAssertion::new(
                 "project",
@@ -3469,6 +3879,11 @@ fn capture_project_facts(text: &str, assertions: &mut Vec<StructuredAssertion>) 
                 format!("{former} is now called {current}"),
             ));
             continue;
+        }
+        // Codex additive: explicit project-purpose capture ("X helps Y do Z") so
+        // project-purpose questions have stored memory to recall.
+        if let Some(value) = capture_project_purpose(sentence) {
+            assertions.push(StructuredAssertion::new("project", "purpose", value));
         }
         let Some((name, description)) = capture_project_description(sentence) else {
             continue;
@@ -3868,9 +4283,50 @@ fn capture_project_description(sentence: &str) -> Option<(String, String)> {
     }
 }
 
+
+fn capture_project_purpose(sentence: &str) -> Option<String> {
+    let lower = sentence.to_ascii_lowercase();
+    if let Some(index) = lower.find(" helps ") {
+        let name = clean_project_subject(project_subject_candidate(&sentence[..index]))?;
+        let tail = clean_relation_target_label(&sentence[index + " helps ".len()..]);
+        if !tail.is_empty() {
+            return Some(format!("{name} helps {tail}"));
+        }
+    }
+    if let Some(index) = lower.find(" focuses on ") {
+        let subject = clean_project_subject(project_subject_candidate(&sentence[..index]))?;
+        let tail = clean_relation_target_label(&sentence[index + " focuses on ".len()..]);
+        if !tail.is_empty() {
+            return Some(format!("{subject} focuses on {tail}"));
+        }
+    }
+    None
+}
+
+fn clean_project_subject(value: &str) -> Option<String> {
+    let trimmed = value
+        .trim()
+        .trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != ' ' && ch != '\'')
+        .trim();
+    let has_possessive_context = trimmed.contains("'s ");
+    let owner = trimmed
+        .split_once("'s ")
+        .map(|(owner, _)| owner)
+        .unwrap_or(trimmed)
+        .trim();
+    if is_project_name(owner) || (has_possessive_context && is_single_titlecase_token(owner)) {
+        Some(owner.to_string())
+    } else {
+        None
+    }
+}
+
 fn project_subject_candidate(prefix: &str) -> &str {
     prefix
         .rsplit([',', ';'])
+        .next()
+        .unwrap_or(prefix)
+        .rsplit(':')
         .next()
         .unwrap_or(prefix)
         .split(" but ")
@@ -4155,6 +4611,23 @@ fn capture_person_role(sentence: &str, lower_name: &str) -> Option<String> {
     }
 }
 
+fn capture_person_project_plan(sentence: &str, lower_name: &str) -> Option<String> {
+    if is_query_sentence(sentence) {
+        return None;
+    }
+    let lower = sentence.to_ascii_lowercase();
+    let needle = format!("{lower_name} is preparing ");
+    let index = lower.find(&needle)?;
+    if !sentence[..index]
+        .trim_matches(|ch: char| !ch.is_ascii_alphabetic())
+        .is_empty()
+    {
+        return None;
+    }
+    let plan = clean_relation_target_label(&sentence[index + needle.len()..]);
+    (!plan.is_empty()).then_some(plan)
+}
+
 fn clean_location_label(value: &str) -> String {
     value
         .trim()
@@ -4289,6 +4762,16 @@ fn is_single_name(value: &str) -> bool {
                 | "November"
                 | "December"
         )
+}
+
+fn is_single_titlecase_token(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    first.is_ascii_uppercase()
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit())
+        && !matches!(value, "I" | "They" | "The" | "A" | "An" | "My" | "Lives")
 }
 
 fn is_project_name(value: &str) -> bool {
@@ -4429,6 +4912,7 @@ fn activate_working_memory_with_repair_boosts(
         &query,
         &cue_terms,
     );
+    boost_project_specific_nodes(&mut scored_nodes, &query);
     scored_nodes.retain(|node| node.activation > 0.0 && node.kind != MemoryNodeKind::User);
     scored_nodes.sort_by(|left, right| {
         right
@@ -4498,6 +4982,27 @@ fn activate_working_memory_with_repair_boosts(
             &correction_salience,
             &repair_salience,
         ),
+    }
+}
+
+fn boost_project_specific_nodes(nodes: &mut [MemoryNode], query: &str) {
+    let desired = project_answer_kinds_for_query(query);
+    if desired.is_empty() {
+        return;
+    }
+    for node in nodes {
+        let direct_keys = node
+            .provenance
+            .iter()
+            .filter_map(direct_answer_assertion_key)
+            .collect::<Vec<_>>();
+        if direct_keys.iter().any(|key| {
+            desired
+                .iter()
+                .any(|kind| key.starts_with(&format!("project:{kind}=")))
+        }) {
+            node.activation += 2.0;
+        }
     }
 }
 
@@ -4795,6 +5300,7 @@ impl ContextPacket {
             .flat_map(|hit| hit.assertions.iter())
             .map(MemoryClaim::from_assertion)
             .filter(|claim| manuscript_claim_allowed_for_query(user_text, claim))
+            .filter(|claim| project_claim_allowed_for_query(user_text, claim))
             .filter(|claim| active_keys.contains(&claim.key))
             .take(budget.max_nodes)
             .collect::<Vec<_>>();
@@ -5243,6 +5749,7 @@ pub fn plan_conversation_response(user_text: &str, result: &RuntimeTurnResult) -
             let mut labels = Vec::new();
             for group in groups {
                 let mut values = supported_entity_values(group, result, &text);
+                values.extend(supported_related_project_values(group, result, &text));
                 if !values.is_empty() {
                     labels.push(group.label.clone());
                     remembered.append(&mut values);
@@ -5570,6 +6077,9 @@ fn supported_entity_values(
     result: &RuntimeTurnResult,
     query: &str,
 ) -> Vec<String> {
+    if group.kind == "person" && !project_answer_kinds_for_query(query).is_empty() {
+        return Vec::new();
+    }
     let supported_keys = supported_assertion_keys(result);
     let desired_kinds = desired_entity_claim_kinds(query);
     let mut values = group
@@ -5587,6 +6097,83 @@ fn supported_entity_values(
     values
 }
 
+fn supported_related_project_values(
+    group: &EntityMemoryGroup,
+    result: &RuntimeTurnResult,
+    query: &str,
+) -> Vec<String> {
+    if group.kind != "person" {
+        return Vec::new();
+    }
+    let lower_query = query.to_ascii_lowercase();
+    if !lower_query.contains("project") && !lower_query.contains("trail") {
+        return Vec::new();
+    }
+    let project_labels = group
+        .claims
+        .iter()
+        .flat_map(|claim| project_names_in_text(&claim.value, result))
+        .collect::<BTreeSet<_>>();
+    if project_labels.is_empty() {
+        return Vec::new();
+    }
+    let supported_keys = supported_assertion_keys(result);
+    let desired_project_kinds = project_answer_kinds_for_query(query);
+    let mut values = result
+        .memory_state
+        .claims
+        .iter()
+        .filter(|claim| claim.lifecycle_status == AssertionLifecycleStatus::Current)
+        .filter(|claim| supported_keys.contains(&claim.key))
+        .filter(|claim| claim.domain == "project")
+        .filter(|claim| {
+            project_labels
+                .iter()
+                .any(|label| claim.value.contains(label))
+        })
+        .filter(|claim| {
+            desired_project_kinds.contains(&claim.kind.as_str())
+                && (claim.kind != "identity" || contains_ci(&claim.value, "called"))
+        })
+        .map(|claim| claim.value.clone())
+        .collect::<Vec<_>>();
+    values.sort();
+    values.dedup();
+    values.truncate(3);
+    values
+}
+
+fn project_answer_kinds_for_query(query: &str) -> Vec<&'static str> {
+    // Whole-word matching, not substring: "do" must not match "does" (so
+    // "Where does Chris live?" is not misread as a project-purpose query, which
+    // would wrongly suppress the person's location answer). Preserves Codex's
+    // project-narrowing intent without leaking into ordinary person queries.
+    let lower_query = query.to_ascii_lowercase();
+    let words: Vec<&str> = lower_query
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect();
+    let has = |needle: &str| words.contains(&needle);
+    if has("called") || has("name") {
+        vec!["identity"]
+    } else if has("help") || has("helps") || has("do") {
+        vec!["purpose"]
+    } else {
+        Vec::new()
+    }
+}
+
+fn project_names_in_text(text: &str, result: &RuntimeTurnResult) -> Vec<String> {
+    result
+        .memory_state
+        .entity_groups
+        .iter()
+        .filter(|group| group.kind == "project")
+        .filter(|group| contains_ci(text, &group.label))
+        .map(|group| group.label.clone())
+        .collect()
+}
+
 fn desired_entity_claim_kinds(query: &str) -> Vec<&'static str> {
     if contains_any(query, &["where", "live", "lives", "location", "moved"]) {
         vec!["location"]
@@ -5596,6 +6183,10 @@ fn desired_entity_claim_kinds(query: &str) -> Vec<&'static str> {
         vec!["interest"]
     } else if contains_any(query, &["age", "old"]) {
         vec!["age"]
+    } else if contains_any(query, &["pilot", "with"]) {
+        vec!["project_plan"]
+    } else if contains_any(query, &["called", "name"]) {
+        vec!["project_name"]
     } else {
         Vec::new()
     }
@@ -5801,11 +6392,27 @@ fn manuscript_claim_allowed_for_query(query: &str, claim: &MemoryClaim) -> bool 
         || contains_all_terms(&normalize_for_match(&claim.value), &requested_terms)
 }
 
+fn project_claim_allowed_for_query(query: &str, claim: &MemoryClaim) -> bool {
+    let lower_query = query.to_ascii_lowercase();
+    if contains_any(&lower_query, &["help", "helps", "do"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return claim.domain != "project" || claim.kind == "purpose";
+    }
+    if contains_any(&lower_query, &["called", "name"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return claim.domain != "project" || claim.kind == "identity";
+    }
+    true
+}
+
 fn filter_working_memory_for_context(query: &str, working_memory: &WorkingMemory) -> WorkingMemory {
     let lower_query = query.to_ascii_lowercase();
     if !lower_query.contains("present")
         && !lower_query.contains("flashback")
         && !lower_query.contains("scene")
+        && !is_project_specific_query(&lower_query)
     {
         return working_memory.clone();
     }
@@ -5824,6 +6431,11 @@ fn filter_working_memory_for_context(query: &str, working_memory: &WorkingMemory
     filtered
 }
 
+fn is_project_specific_query(lower_query: &str) -> bool {
+    (lower_query.contains("project") || lower_query.contains("trail"))
+        && contains_any(lower_query, &["help", "helps", "do", "called", "name"])
+}
+
 fn working_memory_node_allowed_for_query(query: &str, node: &MemoryNode) -> bool {
     let evidence_text = format!(
         "{} {}",
@@ -5834,6 +6446,9 @@ fn working_memory_node_allowed_for_query(query: &str, node: &MemoryNode) -> bool
             .collect::<Vec<_>>()
             .join(" ")
     );
+    if !project_node_allowed_for_query(query, &evidence_text) {
+        return false;
+    }
     if !evidence_text.contains("story_time:") {
         return true;
     }
@@ -5846,6 +6461,28 @@ fn working_memory_node_allowed_for_query(query: &str, node: &MemoryNode) -> bool
         lifecycle_status: AssertionLifecycleStatus::Current,
     };
     manuscript_claim_allowed_for_query(query, &pseudo_claim)
+}
+
+fn project_node_allowed_for_query(query: &str, evidence_text: &str) -> bool {
+    let lower_query = query.to_ascii_lowercase();
+    let lower_evidence = evidence_text.to_ascii_lowercase();
+    if contains_any(&lower_query, &["help", "helps", "do"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return !contains_any(
+            &lower_evidence,
+            &["person:role=", "person:project_plan=", "project:identity="],
+        );
+    }
+    if contains_any(&lower_query, &["called", "name"])
+        && (lower_query.contains("project") || lower_query.contains("trail"))
+    {
+        return !contains_any(
+            &lower_evidence,
+            &["person:role=", "person:project_plan=", "project:purpose="],
+        );
+    }
+    true
 }
 
 fn manuscript_desired_story_time(query: &str) -> Option<&'static str> {
@@ -6623,6 +7260,45 @@ mod tests {
         std::env::temp_dir()
             .join(format!("luna_runtime_{}", Uuid::new_v4()))
             .join("events.jsonl")
+    }
+
+    #[test]
+    fn surprise_update_state_hash_is_order_independent() {
+        let first = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "purpose",
+            "Northstar Maps helps hikers plan safe trail routes",
+        ));
+        let second = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "identity",
+            "Northstar Maps is now called Cleartrail",
+        ));
+
+        let forward = surprise_update_state_hash(&[first.clone(), second.clone()]).unwrap();
+        let reversed = surprise_update_state_hash(&[second, first]).unwrap();
+
+        assert_eq!(forward, reversed);
+        assert!(valid_event_hash(&forward));
+    }
+
+    #[test]
+    fn surprise_update_state_hash_changes_when_claim_changes() {
+        let before = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "purpose",
+            "Northstar Maps helps hikers plan safe trail routes",
+        ));
+        let after = MemoryClaim::from_assertion(&StructuredAssertion::new(
+            "project",
+            "purpose",
+            "Northstar Maps helps hikers plan safer weekend routes",
+        ));
+
+        assert_ne!(
+            surprise_update_state_hash(&[before]).unwrap(),
+            surprise_update_state_hash(&[after]).unwrap()
+        );
     }
 
     #[test]

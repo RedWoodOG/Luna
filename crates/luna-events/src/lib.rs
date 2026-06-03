@@ -10,7 +10,8 @@ use std::{
 pub use luna_core::{
     AssertionCorrected, AssertionExtracted, AttentionLattice, ContradictionDetected,
     EpisodeCreated, EpisodeDecayed, EpisodeRecalled, EpisodeReinforced, EventEnvelope, EventSource,
-    LunaEvent, RecallFailed, RecallSucceeded, RuntimeTurnReceipt, StoredEvent, TurnObserved,
+    LunaEvent, RecallFailed, RecallSucceeded, RuntimeTurnReceipt, StoredEvent, SurpriseUpdateReceipt,
+    TurnObserved, UpdateKind,
 };
 
 #[derive(Debug, Clone)]

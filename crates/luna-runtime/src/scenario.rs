@@ -1,12 +1,14 @@
 use crate::{
-    bridge_runtime_events_to_topology, commit_runtime_events_to_topology_ledger,
-    ledger_events_hash, plan_conversation_response, render_conversation_reply,
-    topology_commit_from_runtime_ledger_commit, topology_node_ref_for_runtime_ref,
-    MemoryIntakeAction, ResponsePlanAction, RuntimeExtractor, RuntimeSession,
+    associative_candidates_for_query, bridge_runtime_events_to_topology,
+    commit_runtime_events_to_topology_ledger, ledger_events_hash, plan_conversation_response,
+    render_conversation_reply, topology_commit_from_runtime_ledger_commit,
+    topology_node_ref_for_runtime_ref, MemoryIntakeAction, ResponsePlanAction, RuntimeExtractor,
+    RuntimeSession,
 };
 use chrono::{DateTime, Utc};
 use luna_core::{
     AssertionConfidenceTier, AssertionLifecycleStatus, ConversationTurn, MemoryRelationKind, Role,
+    UpdateKind,
 };
 use luna_events::{JsonlEventLog, LunaEvent, StoredEvent};
 use luna_replay::ReplayAuditor;
@@ -102,6 +104,10 @@ pub struct RuntimeScenarioChecks {
 
     #[serde(default)]
     pub lattice: LatticeChecks,
+    #[serde(default, alias = "dense")]
+    pub dense_updates: DenseUpdateChecks,
+    #[serde(default)]
+    pub associative_memory: AssociativeMemoryChecks,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -276,6 +282,48 @@ pub struct RuntimeReplayAuditChecks {
     pub min_topology_tethers: Option<usize>,
     #[serde(default)]
     pub min_topology_orbs: Option<usize>,
+    #[serde(default)]
+    pub min_dense_receipts: Option<usize>,
+    #[serde(default)]
+    pub max_dense_receipt_hash_mismatches: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct DenseUpdateChecks {
+    #[serde(default)]
+    pub min_receipts: Option<usize>,
+    #[serde(default)]
+    pub require_valid_hashes: bool,
+    #[serde(default)]
+    pub must_include_kinds: Vec<UpdateKind>,
+    #[serde(default)]
+    pub min_correction_surprise_bps: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct AssociativeMemoryChecks {
+    #[serde(default)]
+    pub dim: Option<usize>,
+    #[serde(default)]
+    pub min_updates: Option<usize>,
+    #[serde(default)]
+    pub max_cells: Option<usize>,
+    #[serde(default)]
+    pub queries: Vec<AssociativeQueryCheck>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssociativeQueryCheck {
+    pub query: String,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub must_include_values: Vec<String>,
+    #[serde(default)]
+    pub must_not_include_values: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -645,6 +693,8 @@ pub fn evaluate_runtime_scenario_with_events(
         events,
         &mut failures,
     );
+    evaluate_dense_update_checks(&scenario.checks.dense_updates, events, &mut failures);
+    evaluate_associative_memory_checks(&scenario.checks.associative_memory, state, &mut failures);
     failures.extend(
         evaluate_manuscript_one_read_protocol(
             &scenario.checks.manuscript_one_read,
@@ -962,6 +1012,57 @@ pub fn scenario_check_count(scenario: &RuntimeScenarioFile) -> usize {
             .min_topology_orbs
             .map(|_| 1)
             .unwrap_or(0)
+        + scenario
+            .checks
+            .runtime_replay_audit
+            .min_dense_receipts
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .runtime_replay_audit
+            .max_dense_receipt_hash_mismatches
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .dense_updates
+            .min_receipts
+            .map(|_| 1)
+            .unwrap_or(0)
+        + usize::from(scenario.checks.dense_updates.require_valid_hashes)
+        + scenario.checks.dense_updates.must_include_kinds.len()
+        + scenario
+            .checks
+            .dense_updates
+            .min_correction_surprise_bps
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .dim
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .min_updates
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .max_cells
+            .map(|_| 1)
+            .unwrap_or(0)
+        + scenario
+            .checks
+            .associative_memory
+            .queries
+            .iter()
+            .map(|check| check.must_include_values.len() + check.must_not_include_values.len())
+            .sum::<usize>()
         + usize::from(scenario.checks.manuscript_one_read.require_source_read)
         + usize::from(scenario.checks.manuscript_one_read.require_explicit_close)
         + scenario.checks.manuscript_one_read.retrieval_turns.len()
@@ -1284,6 +1385,151 @@ fn evaluate_topology_durable_commit_checks(
     }
 }
 
+fn evaluate_dense_update_checks(
+    checks: &DenseUpdateChecks,
+    events: &[StoredEvent],
+    failures: &mut Vec<String>,
+) {
+    if checks == &DenseUpdateChecks::default() {
+        return;
+    }
+
+    let receipts = events
+        .iter()
+        .filter_map(|event| match &event.payload {
+            LunaEvent::DenseUpdateReceipted(receipt) => Some(receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(min_receipts) = checks.min_receipts {
+        if receipts.len() < min_receipts {
+            failures.push(format!(
+                "dense update expected at least {min_receipts} receipt(s), found {}",
+                receipts.len()
+            ));
+        }
+    }
+
+    for expected in &checks.must_include_kinds {
+        if !receipts
+            .iter()
+            .any(|receipt| receipt.update_kind == *expected)
+        {
+            failures.push(format!("dense update missing kind: {expected:?}"));
+        }
+    }
+
+    if checks.require_valid_hashes {
+        for receipt in &receipts {
+            if let Err(err) = receipt.validate() {
+                failures.push(format!("dense update receipt failed validation: {err}"));
+            }
+            for (label, hash) in [
+                ("input_event_hash", receipt.input_event_hash.as_str()),
+                ("prediction_hash", receipt.prediction_hash.as_str()),
+                ("state_hash_before", receipt.state_hash_before.as_str()),
+                ("state_hash_after", receipt.state_hash_after.as_str()),
+                ("receipt_hash", receipt.receipt_hash.as_str()),
+            ] {
+                if !valid_lower_hex_hash(hash) {
+                    failures.push(format!("dense update receipt has invalid {label}: {hash}"));
+                }
+            }
+            if receipt.lineage_hashes.is_empty() {
+                failures.push("dense update receipt has no lineage hashes".to_string());
+            }
+        }
+    }
+
+    if let Some(min_bps) = checks.min_correction_surprise_bps {
+        let threshold = (min_bps as f32 / 10_000.0).clamp(0.0, 1.0);
+        if !receipts.iter().any(|receipt| {
+            receipt.update_kind == UpdateKind::CorrectionPressure
+                && receipt.surprise_score >= threshold
+        }) {
+            failures.push(format!(
+                "dense update expected correction surprise >= {threshold:.4}"
+            ));
+        }
+    }
+}
+
+fn evaluate_associative_memory_checks(
+    checks: &AssociativeMemoryChecks,
+    state: &crate::MemoryState,
+    failures: &mut Vec<String>,
+) {
+    if checks == &AssociativeMemoryChecks::default() {
+        return;
+    }
+
+    let memory = state.associative_memory();
+    if let Some(expected_dim) = checks.dim {
+        if memory.dim != expected_dim {
+            failures.push(format!(
+                "associative memory dim was {}, expected {expected_dim}",
+                memory.dim
+            ));
+        }
+    }
+    if let Some(min_updates) = checks.min_updates {
+        if memory.update_count < min_updates {
+            failures.push(format!(
+                "associative memory saw {} update(s), expected at least {min_updates}",
+                memory.update_count
+            ));
+        }
+    }
+    if let Some(max_cells) = checks.max_cells {
+        if memory.cells.len() > max_cells {
+            failures.push(format!(
+                "associative memory has {} cell(s), expected at most {max_cells}",
+                memory.cells.len()
+            ));
+        }
+    }
+
+    for check in &checks.queries {
+        let candidates =
+            associative_candidates_for_query(state, &check.query, check.limit.unwrap_or(5));
+        for expected in &check.must_include_values {
+            if !candidates
+                .iter()
+                .any(|candidate| contains_ci(&candidate.value, expected))
+            {
+                failures.push(format!(
+                    "associative memory query {:?} missing candidate containing {:?}; candidates: {:?}",
+                    check.query,
+                    expected,
+                    candidates
+                        .iter()
+                        .map(|candidate| candidate.value.clone())
+                        .collect::<Vec<_>>()
+                ));
+            }
+        }
+        for forbidden in &check.must_not_include_values {
+            if candidates
+                .iter()
+                .any(|candidate| contains_ci(&candidate.value, forbidden))
+            {
+                failures.push(format!(
+                    "associative memory query {:?} included forbidden candidate {:?}",
+                    check.query, forbidden
+                ));
+            }
+        }
+    }
+}
+
+fn valid_lower_hex_hash(hash: &str) -> bool {
+    hash.len() == 64
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
 fn evaluate_runtime_replay_audit_checks(
     checks: &RuntimeReplayAuditChecks,
     state: &crate::MemoryState,
@@ -1352,6 +1598,22 @@ fn evaluate_runtime_replay_audit_checks(
             failures.push(format!(
                 "runtime replay audit saw {} topology orb(s), expected at least {min_orbs}",
                 report.replayed_counts.topology_orbs
+            ));
+        }
+    }
+    if let Some(min_dense_receipts) = checks.min_dense_receipts {
+        if report.replayed_counts.dense_receipts < min_dense_receipts {
+            failures.push(format!(
+                "runtime replay audit saw {} dense receipt(s), expected at least {min_dense_receipts}",
+                report.replayed_counts.dense_receipts
+            ));
+        }
+    }
+    if let Some(max_mismatches) = checks.max_dense_receipt_hash_mismatches {
+        if report.replayed_counts.dense_receipt_hash_mismatches > max_mismatches {
+            failures.push(format!(
+                "runtime replay audit saw {} dense receipt hash mismatch(es), expected at most {max_mismatches}",
+                report.replayed_counts.dense_receipt_hash_mismatches
             ));
         }
     }

@@ -97,9 +97,48 @@ What this milestone does not prove yet:
 - It does not prove question quality.
 - It does not prove the full documented activation formula.
 - It does not prove baseline-vs-Luna superiority.
-- It does not prove superiority over issue-driven cognitive runtime claims;
-  [`LUNA_BUILD_PLAN.md`](LUNA_BUILD_PLAN.md) defines the required Luna-native
-  build sequence and proof gates.
+- It does not prove superiority over Aura TCF-style or issue-driven cognitive
+  runtime claims; [`LUNA_BUILD_PLAN.md`](LUNA_BUILD_PLAN.md) and
+  [`LUNA_OVER_AURA_BUILD_PLAN.md`](LUNA_OVER_AURA_BUILD_PLAN.md) define the
+  required Luna-native build sequence and proof gates.
+
+## Active Dense Memory Track
+
+The current build direction is dense, reliable memory: Luna should move from
+plain store-and-retrieve toward fixed-capacity compressive memory. The active
+primitive is prediction -> surprise -> bounded update -> reconstruction ->
+lineage proof. The canonical build plan is
+[`LUNA_DENSE_RELIABLE_MEMORY_PLAN.md`](LUNA_DENSE_RELIABLE_MEMORY_PLAN.md).
+
+The first controlled-trial miss loop has landed as
+`scenarios/runtime/controlled_trial_project_memory_regression.json`. It proves a
+trial miss can become a manifest-registered regression, then a generic runtime
+fix, then a cleaner rerun. Continue this pattern for surprise/update receipts,
+fixed associative state, concept codebooks, reconstruction gates, and product
+consolidation receipts.
+
+Current dense-memory slice:
+
+| Slice | Status | Description |
+|-------|--------|-------------|
+| C2a | LANDED | `SurpriseUpdateReceipt` type plus deterministic framed state/receipt hashing. |
+| C2b | LANDED | Emit surprise/update receipts from runtime turns. |
+| C2c | LANDED | Replay/audit surprise/update receipt hashes and quarantine mismatches. |
+| C2d | LANDED | Scenario proves repeated facts reinforce, novel facts update, corrections create pressure. |
+| C3 | LANDED | Fixed-size associative matrix derives bounded hint candidates for requested memory slices. |
+| C4 | PLANNED | Fixed-size concept codebook for project/person/manuscript gist. |
+
+Planning lock:
+
+- Do not redesign dense memory before C4 opens under the fixed concept-codebook
+  constraints in the canonical dense memory plan.
+- Dense memory grows from the existing runtime/event-log path first.
+- New learned substrates must plug into the receipt contract; they do not
+  replace event-log lineage.
+- A separate `luna-dense` crate waits until there is a real reusable bounded
+  learned-state module and no dependency cycle against `luna-runtime`.
+- `MemoryState` remains the product recall path until a denser substrate proves
+  itself with scenarios, replay/audit checks, and inspectable lineage.
 
 ## Current Proof Boundary
 

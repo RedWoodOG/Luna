@@ -1,0 +1,63 @@
+{
+  "name": "dense_surprise_gate_baseline",
+  "turns": [
+    "Atlas Loom is my planning engine.",
+    "Atlas Loom is my planning engine.",
+    "Atlas Loom is my project workspace. Correction.",
+    "What did I say about Atlas Loom?"
+  ],
+  "checks": {
+    "must_contain": [
+      "project:identity=Atlas Loom is my project workspace"
+    ],
+    "must_not_contain": [
+      "project:identity=Atlas Loom is my planning engine"
+    ],
+    "claims": {
+      "must_include": [
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Atlas Loom is my project workspace",
+          "lifecycle_status": "current"
+        },
+        {
+          "domain": "project",
+          "kind": "identity",
+          "value": "Atlas Loom is my planning engine",
+          "lifecycle_status": "superseded"
+        }
+      ]
+    },
+    "dense_updates": {
+      "min_receipts": 3,
+      "require_valid_hashes": true,
+      "must_include_kinds": [
+        "novel_update",
+        "reinforce_existing",
+        "correction_pressure"
+      ],
+      "min_correction_surprise_bps": 9000
+    },
+    "runtime_replay_audit": {
+      "require_clean": true,
+      "min_dense_receipts": 3,
+      "max_dense_receipt_hash_mismatches": 0
+    },
+    "answers": [
+      {
+        "turn_index": 4,
+        "must_contain": [
+          "Atlas Loom is my project workspace"
+        ],
+        "must_not_contain": [
+          "Atlas Loom is my planning engine"
+        ],
+        "must_have_recall_hit": true,
+        "must_have_recall_reason": true,
+        "max_working_nodes": 5,
+        "max_working_edges": 10
+      }
+    ]
+  }
+}
