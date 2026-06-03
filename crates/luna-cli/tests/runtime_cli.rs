@@ -81,6 +81,12 @@ if ($Mode -eq "invalid_schema") {
 '@
     exit 0
 }
+if ($Mode -eq "formation_valid") {
+@'
+{"assertions":[{"domain":"identity","kind":"profession","value":"mechanical engineer","confidence":0.92,"evidence_span":"mechanical engineer"}],"signals":{"emotional_arousal":null,"goal_pressure":null,"identity_relevance":{"value":0.88,"confidence":0.84,"reliability":"learned","evidence":"I work as a mechanical engineer"},"temporal_relevance":null}}
+'@
+    exit 0
+}
 @'
 {"assertions":[{"domain":"person","kind":"location","value":"Chris lives in Iowa","confidence":0.92,"evidence_span":"Chris lives in Iowa"}],"signals":{"emotional_arousal":null,"goal_pressure":null,"identity_relevance":null,"temporal_relevance":null}}
 '@
@@ -123,6 +129,10 @@ if [ "$mode" = "fail" ]; then
 fi
 if [ "$mode" = "invalid_schema" ]; then
   printf '%s\n' '{"assertions":[{"domain":"vibe","kind":"location","value":"Chris lives in Iowa","confidence":0.92,"evidence_span":"Chris lives in Iowa"}],"signals":{"emotional_arousal":null,"goal_pressure":null,"identity_relevance":null,"temporal_relevance":null}}'
+  exit 0
+fi
+if [ "$mode" = "formation_valid" ]; then
+  printf '%s\n' '{"assertions":[{"domain":"identity","kind":"profession","value":"mechanical engineer","confidence":0.92,"evidence_span":"mechanical engineer"}],"signals":{"emotional_arousal":null,"goal_pressure":null,"identity_relevance":{"value":0.88,"confidence":0.84,"reliability":"learned","evidence":"I work as a mechanical engineer"},"temporal_relevance":null}}'
   exit 0
 fi
 printf '%s\n' '{"assertions":[{"domain":"person","kind":"location","value":"Chris lives in Iowa","confidence":0.92,"evidence_span":"Chris lives in Iowa"}],"signals":{"emotional_arousal":null,"goal_pressure":null,"identity_relevance":null,"temporal_relevance":null}}'
@@ -188,6 +198,62 @@ fn add_command_extractor_args(
         .arg(program)
         .args(["--model-id", model_id, "--cache"])
         .arg(cache)
+        .args(["--timeout-secs", "10"]);
+    for arg in args {
+        command.arg(format!("--command-arg={arg}"));
+    }
+}
+
+fn write_formation_benchmark_case(root: &Path) -> PathBuf {
+    let benchmarks = root.join("benchmarks");
+    fs::create_dir_all(&benchmarks).unwrap();
+    let case = benchmarks.join("command_backend_case.json");
+    fs::write(
+        &case,
+        r#"{
+  "schema_version": 1,
+  "id": "command_backend_case",
+  "proof_category": "cli_backend_selection",
+  "proof_eligible": true,
+  "category": "cli_backend_selection",
+  "target_dimensions": ["identity_relevance"],
+  "timestamp_origin": "cli_test",
+  "turns": [
+    {
+      "content": "I work as a mechanical engineer?",
+      "role": "user",
+      "timestamp": "2026-05-10T12:00:00Z"
+    }
+  ],
+  "expected": {
+    "must_recall": ["mechanical engineer"],
+    "must_not_claim": ["software engineer"]
+  }
+}
+"#,
+    )
+    .unwrap();
+    benchmarks
+}
+
+fn add_formation_command_backend_args(
+    command: &mut Command,
+    benchmarks: &Path,
+    cache: &Path,
+    out: &Path,
+    model_id: &str,
+    program: &Path,
+    args: &[String],
+) {
+    command
+        .args(["bench", "formation"])
+        .arg(benchmarks)
+        .args(["--backend", "command", "--command"])
+        .arg(program)
+        .args(["--model-id", model_id, "--cache"])
+        .arg(cache)
+        .args(["--out"])
+        .arg(out)
         .args(["--timeout-secs", "10"]);
     for arg in args {
         command.arg(format!("--command-arg={arg}"));
@@ -290,6 +356,71 @@ fn runtime_smoke_cli_writes_log_and_report() {
     let report_json: Value =
         serde_json::from_str(&fs::read_to_string(&report).unwrap()).expect("report JSON");
     assert_eq!(report_json["success"], Value::Bool(true));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn bench_formation_command_backend_validates_and_reuses_cache() {
+    let root = temp_root("formation_command_backend");
+    fs::create_dir_all(&root).unwrap();
+    let benchmarks = write_formation_benchmark_case(&root);
+    let cache = root.join("cache");
+    let out = root.join("formation-out");
+    let call_log = root.join("command-calls.txt");
+    let (program, args) = write_command_extractor_fixture(&root, "formation_valid", &call_log);
+
+    let mut first = Command::new(luna_bin());
+    add_formation_command_backend_args(
+        &mut first,
+        &benchmarks,
+        &cache,
+        &out,
+        "local-formation-command@valid-v1",
+        &program,
+        &args,
+    );
+    let stdout = assert_success(first);
+    assert!(
+        stdout.contains("Formation eligible: 1"),
+        "formation stdout:\n{stdout}"
+    );
+    assert_eq!(
+        call_count(&call_log),
+        1,
+        "first run should call helper once"
+    );
+    assert!(
+        cache_file_count(&cache) > 0,
+        "valid command formation should populate cache"
+    );
+    let report_path = out.join("formation.json");
+    assert!(
+        report_path.exists(),
+        "expected formation report at {}",
+        report_path.display()
+    );
+
+    let mut second = Command::new(luna_bin());
+    add_formation_command_backend_args(
+        &mut second,
+        &benchmarks,
+        &cache,
+        &out,
+        "local-formation-command@valid-v1",
+        &program,
+        &args,
+    );
+    let stdout = assert_success(second);
+    assert!(
+        stdout.contains("Cache hit rate, second run | 100%"),
+        "formation stdout:\n{stdout}"
+    );
+    assert_eq!(
+        call_count(&call_log),
+        1,
+        "second CLI run with same schema/model/prompt/timestamp should hit cache"
+    );
 
     let _ = fs::remove_dir_all(root);
 }
