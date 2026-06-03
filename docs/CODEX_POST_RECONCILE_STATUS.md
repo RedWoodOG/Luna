@@ -108,20 +108,43 @@ Success criterion for any future merge (unchanged): resolve `lib.rs` **by design
 not text convenience**; main canonical; union of scenarios, none dropped; regress
 no previously-passing claim on either side; preserve the dense-memory track.
 
-## Next reconciliation unit
+## Next unit — PORT/EXTRACTION, not a merge
 
-`codex/safety-pr-0.11-case-cleanup` (PR 0.6→0.11: CommandBackend + `--backend`,
-detector-vocabulary, prompt v2/v3 formation, must_recall diagnostics, lifecycle
-reasons + inspect filters). This is the next merge, using the **same playbook**:
+**Corrected ref.** The branch is **`origin/pr-0.11/case-cleanup`** @
+**`7f8fce4c54254b28f46e833f9badbdaa7c93b4cc`** (the name
+`codex/safety-pr-0.11-case-cleanup` no longer exists on the remote).
 
-- **Freeze it at a named SHA** before the main-side resolution so it stops moving.
-- Same canonical rules above apply: main owns the recall/answer path and the
-  single correction lifecycle; your PR-sequence capabilities (backends, prompt
-  formation, detector vocabulary, inspect filters) come in as additive surfaces.
-- It heavily edits `lib.rs`, `luna-cli/src/main.rs`, and
-  `luna-cli/tests/runtime_cli.rs` again — expect the same `lib.rs` design-merge.
-  When you're ready, publish the frozen SHA and I'll run the main-side merge in an
-  isolated worktree and validate the full gate before fast-forwarding `main`.
+**It has NO merge base with `origin/main` — unrelated histories.** Verified:
+`git merge-base origin/main origin/pr-0.11/case-cleanup` returns nothing, and a
+tree-to-tree diff marks **110 of 149 files as DELETED** from main (runtime
+modules, docs, scenarios, scripts, the entire dense-memory track, etc.).
 
-Until then: **branch all new work from `origin/main` (`c209e9b`), not from
-`up-to-date-main` or `master`.**
+**Therefore: do NOT rebase or merge `pr-0.11/case-cleanup` wholesale.** Any
+normal merge/rebase/`merge -X theirs` would gut current `main`. This unit is a
+**capability port/extraction**, cherry-picked surface by surface onto `main`,
+each validated against the full gate before it lands.
+
+PR 0.6→0.11 capabilities to extract (and only these — the surrounding tree is
+stale and must not come along):
+
+- **backend selection** — `CommandBackend` + `--backend` dispatch
+- **detector vocabulary** expansion
+- **prompt v2/v3 formation**
+- **must-recall diagnostics**
+- **case cleanup**
+- the **related CLI / test surfaces** for the above
+
+Canonical-preservation rules (unchanged) apply to every extracted piece: main's
+runtime/recall/correction/dense-memory path stays canonical; extracted
+capabilities come in as **additive** surfaces; word-boundary (not substring)
+matching; single correction lifecycle; scenario union, none dropped; full gate
+green after each landed piece.
+
+**Operating rules from here (agreed):**
+
+- Branch all new Codex work from `C:\Luna` / `origin/main` — **not** OneDrive
+  Luna, **not** `up-to-date-main`, **not** `master`.
+- Do **not** touch `codex/up-to-date-main` (already merged, frozen `3392594`).
+- Do **not** merge `origin/pr-0.11/case-cleanup` directly — extract only.
+- Preserve main's current runtime / recall / correction / dense-memory path as
+  canonical.
