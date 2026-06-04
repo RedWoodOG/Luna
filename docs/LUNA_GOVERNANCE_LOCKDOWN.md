@@ -81,21 +81,53 @@ For any `pr-0.x` branch:
 
 No direct merge, no rebase, no wholesale cherry-pick series.
 
-## Initial Triage
+## Corrected Triage
 
 The already-landed PR #3 covers the backend-selection guardrail on current
 `main`, but it does not make the stale `origin/pr-0.6/command-backend` branch
 safe to merge or safe to delete.
 
-Recommended extraction order:
+The first-pass extraction queue was corrected after a deeper branch payload
+review:
 
-1. `origin/pr-0.7/detector-vocabulary`
-2. `origin/pr-0.8/must-recall-diagnostics`
-3. `origin/pr-0.9/prompt-v2`
-4. `origin/pr-0.10/prompt-v3`
-5. `origin/pr-0.11/case-cleanup`
+- `origin/pr-0.7/detector-vocabulary` is superseded by current `main`.
+- `origin/pr-0.8/must-recall-diagnostics` is superseded by current `main`.
+- `origin/pr-0.9/prompt-v2` is superseded by current `main`.
+- `origin/pr-0.10/prompt-v3` is superseded by current `main`; current `main`
+  is newer on the prompt surface.
+- `origin/pr-0.11/case-cleanup` remains useful only as historical reference,
+  not as a branch to port wholesale.
 
-Older branches should be audited for reusable schema/cache/formation pieces
-only after the active extraction queue above is resolved. Delete none of these
-remote branches until the repo has an explicit "ported or abandoned" note for
-that branch.
+Do not open detector-vocabulary, must-recall, prompt-v2, prompt-v3, or
+case-cleanup extraction PRs unless a fresh file-level diff proves a still-missing
+capability against current `origin/main`.
+
+## Transparent Scoring Clarification
+
+The `origin/pr-0.11/case-cleanup` branch contains
+`crates/luna-tcf/src/lib.rs`, an older transparent scoring implementation built
+around obsolete `luna_core` names such as `CognitiveObservation` and
+`EpisodeContour`.
+
+Current `origin/main` already carries the active transparent scoring surface as
+`crates/luna-match/src/lib.rs`:
+
+- `MatchBreakdown` records per-dimension contributions.
+- `match_breakdown` exposes `contradiction_gate` and `forgotten_risk_gate`.
+- `profile_from_reading`, `profile_similarity`, and `coherence_score` are wired
+  into `luna-store`, `luna-recall`, and `luna-bench`.
+
+So the old `luna-tcf` file is not missing product capability to copy. The
+correct next cleanup is either:
+
+1. leave `luna-match` as the canonical scoring crate and archive/delete the
+   stale `pr-0.x` references, or
+2. deliberately rename/re-home `luna-match` into a tracked `luna-tcf` crate in a
+   dedicated PR with tests proving the public API and all callers survived.
+
+Until that decision is made, `luna-match` is the canonical implementation and
+`luna-tcf` is not a merge target.
+
+Delete none of the remote `pr-0.x` branches until the repo has an explicit
+"superseded, ported, or abandoned" note for that branch and a provenance tag for
+the `origin/pr-0.11/case-cleanup` tip.
